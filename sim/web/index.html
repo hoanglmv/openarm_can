@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenArm CAN Simulator & Digital Twin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-left">
+            <div class="brand-logo">
+                <div class="brand-hex"></div>
+                <div class="brand-text">
+                    <h1>OPENARM <span>CAN-FD</span></h1>
+                    <span class="subtext">Damiao Multi-Motor Realtime Twin & Simulator</span>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="badge badge-primary"><span class="pulse-dot"></span> SocketCAN: <strong id="iface-name">vcan0</strong></span>
+                <span class="badge badge-accent">Mode: <strong>CAN-FD (1M / 5M)</strong></span>
+                <span class="badge badge-success" id="bus-health-badge">Bus: <strong>HEALTHY</strong></span>
+                <span class="badge badge-info" id="ws-status-badge">WebSocket: <strong>CONNECTING</strong></span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="btn-theme-toggle" class="btn-theme" title="Switch Theme">☀️ Studio Bright</button>
+            <div class="header-stats">
+                <div class="stat-item"><span class="stat-label">CAN RX:</span> <span class="stat-val" id="stat-rx">0</span></div>
+                <div class="stat-item"><span class="stat-label">CAN TX:</span> <span class="stat-val" id="stat-tx">0</span></div>
+                <div class="stat-item"><span class="stat-label">RATE:</span> <span class="stat-val" id="stat-rate">500 Hz</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- LEFT COLUMN: CONTROLS & JOINT TUNING -->
+        <section class="panel control-panel">
+            <div class="panel-header">
+                <h2>Master Control & Trajectories</h2>
+                <span class="panel-tag">HARDWARE CONTROL</span>
+            </div>
+
+            <div class="master-action-grid">
+                <button class="btn btn-success" id="btn-enable-all">
+                    <span class="btn-icon">⚡</span> Enable All (Torque ON)
+                </button>
+                <button class="btn btn-danger" id="btn-disable-all">
+                    <span class="btn-icon">🛑</span> Disarm All (Torque OFF)
+                </button>
+                <button class="btn btn-secondary" id="btn-zero-all">
+                    <span class="btn-icon">🎯</span> Set Current as Zero
+                </button>
+                <button class="btn btn-secondary" id="btn-clear-err">
+                    <span class="btn-icon">🔄</span> Clear Error Flags
+                </button>
+            </div>
+
+            <div class="preset-section">
+                <h3>Automated Trajectory Presets</h3>
+                <div class="preset-btn-group">
+                    <button class="btn-preset" data-preset="home">🏠 Home (0 rad)</button>
+                    <button class="btn-preset" data-preset="wave">👋 Wave Motion</button>
+                    <button class="btn-preset" data-preset="reach">🦾 Reach & Grab</button>
+                    <button class="btn-preset" data-preset="sine">🌊 Multi-Joint Sine</button>
+                    <button class="btn-preset btn-preset-stop" data-preset="stop">⏹️ Stop Trajectory</button>
+                </div>
+            </div>
+
+            <div class="gripper-box">
+                <div class="slider-header">
+                    <span class="joint-title">Gripper Position (Motor 8 / DM4310)</span>
+                    <span class="joint-val" id="gripper-val-display">0.00 rad (Open)</span>
+                </div>
+                <input type="range" id="slider-gripper" min="0" max="1.0" step="0.01" value="0.0">
+                <div class="gripper-tags">
+                    <span>Open (0.0)</span>
+                    <span>Closed (1.0)</span>
+                </div>
+            </div>
+
+            <div class="joint-sliders-container">
+                <div class="section-subhead">
+                    <h3>Arm Joint Angles (MIT Impedance Mode)</h3>
+                    <span class="badge badge-outline">Kp=25 Kd=1.2</span>
+                </div>
+                <div id="sliders-list" class="sliders-list">
+                    <!-- Sliders injected by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- CENTER COLUMN: 3D VIEW & TELEMETRY -->
+        <section class="center-col">
+            <div class="panel viewport-panel">
+                <div class="viewport-header">
+                    <div class="viewport-title">
+                        <h2>3D Digital Twin Viewport</h2>
+                        <span class="badge badge-accent">Three.js Kinetic Engine</span>
+                    </div>
+                    <div class="viewport-actions">
+                        <button class="btn-tool" id="btn-reset-cam" title="Reset Camera">Reset Camera</button>
+                        <button class="btn-tool" id="btn-toggle-grid" title="Toggle Grid">Grid: ON</button>
+                        <button class="btn-tool" id="btn-toggle-axes" title="Toggle Axes">Axes: ON</button>
+                    </div>
+                </div>
+                <div id="three-container" class="three-container">
+                    <div class="viewport-overlay-hint">Left Click: Orbit | Right Click: Pan | Scroll: Zoom</div>
+                </div>
+            </div>
+
+            <div class="panel telemetry-panel">
+                <div class="panel-header">
+                    <h2>Live Motor Telemetry (8 CAN Nodes)</h2>
+                    <span class="panel-tag">50 Hz CAN FEEDBACK</span>
+                </div>
+                <div class="telemetry-grid" id="telemetry-grid">
+                    <!-- 8 Telemetry Cards injected by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: CAN BUS TRAFFIC & CLI RUNNER -->
+        <section class="right-col">
+            <div class="panel cli-panel">
+                <div class="panel-header">
+                    <h2>OpenArm CAN CLI Runner</h2>
+                    <span class="panel-tag">BINARY: openarm-can-cli</span>
+                </div>
+                <div class="cli-actions">
+                    <button class="btn-cli" data-cmd="show_param">📋 show_param (ID 1)</button>
+                    <button class="btn-cli" data-cmd="monitor">📊 monitor (2s)</button>
+                    <button class="btn-cli" data-cmd="diagnose">🩺 diagnose (2s)</button>
+                    <button class="btn-cli" data-cmd="clear_term">🧹 Clear</button>
+                </div>
+                <div class="terminal-window">
+                    <div class="terminal-bar">
+                        <span class="term-dot dot-red"></span>
+                        <span class="term-dot dot-yellow"></span>
+                        <span class="term-dot dot-green"></span>
+                        <span class="term-title">openarm-can-cli -i vcan0</span>
+                    </div>
+                    <pre class="terminal-body" id="term-output">Ready to execute OpenArm CAN CLI commands.
+Click any of the buttons above to test the CLI interacting with the simulated CAN hardware.</pre>
+                </div>
+            </div>
+
+            <div class="panel traffic-panel">
+                <div class="panel-header">
+                    <h2>CAN-FD Packet Inspector</h2>
+                    <span class="panel-tag">SOCKETCAN REALTIME STREAM</span>
+                </div>
+                <div class="traffic-table-wrapper">
+                    <table class="traffic-table">
+                        <thead>
+                            <tr>
+                                <th>Dir</th>
+                                <th>CAN ID</th>
+                                <th>DLC</th>
+                                <th>Payload (Hex)</th>
+                                <th>Decoded Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="traffic-tbody">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <span>OpenArm Robotics • High-Speed CAN/CAN-FD Damiao Motor Controller</span>
+        <span>Linux SocketCAN • Powered by C++ <code>openarm_can</code> and Nanobind</span>
+    </footer>
+
+    <!-- Three.js + OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
