@@ -3,161 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenArm Bimanual 7DOF Digital Twin & CAN-FD Simulator</title>
+    <title>OpenArm Bimanual 7-DOF Digital Twin & CAN-FD Simulator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="theme-light">
+    <!-- TOP NAVIGATION & STATUS BAR -->
     <header class="app-header">
         <div class="header-left">
             <div class="brand-logo">
-                <div class="brand-hex"></div>
+                <div class="brand-mark">7D</div>
                 <div class="brand-text">
-                    <h1>OPENARM <span>BIMANUAL</span></h1>
-                    <span class="subtext">Dual 7-DOF Robotic Arms & Grippers (16 CAN-FD Nodes)</span>
+                    <h1>OPENARM <span>DUAL 7-DOF</span></h1>
+                    <span class="subtext">Bimanual Manipulator (7 DOF Left + 7 DOF Right + 2 Grippers • 16 CAN Nodes)</span>
                 </div>
             </div>
             <div class="header-badges">
                 <span class="badge badge-primary"><span class="pulse-dot"></span> SocketCAN: <strong id="iface-name">vcan0</strong></span>
                 <span class="badge badge-accent">Mode: <strong>CAN-FD (1M / 5M)</strong></span>
-                <span class="badge badge-purple">Setup: <strong>7DOF x 2 Arms (606mm)</strong></span>
+                <span class="badge badge-purple">Arch: <strong>7-DOF x 2 Arms (606mm Reach)</strong></span>
                 <span class="badge badge-success" id="bus-health-badge">Bus: <strong>HEALTHY</strong></span>
                 <span class="badge badge-info" id="ws-status-badge">WebSocket: <strong>CONNECTING</strong></span>
             </div>
         </div>
         <div class="header-right">
+            <button id="btn-toggle-inspector" class="btn-theme" title="Toggle Terminal & CAN-FD Inspector">📊 Terminal</button>
             <button id="btn-theme-toggle" class="btn-theme" title="Switch Theme">☀️ Studio Bright</button>
             <div class="header-stats">
-                <div class="stat-item"><span class="stat-label">CAN RX:</span> <span class="stat-val" id="stat-rx">0</span></div>
-                <div class="stat-item"><span class="stat-label">CAN TX:</span> <span class="stat-val" id="stat-tx">0</span></div>
-                <div class="stat-item"><span class="stat-label">ACTIVE NODES:</span> <span class="stat-val" id="stat-nodes">16</span></div>
-                <div class="stat-item"><span class="stat-label">PHYSICS:</span> <span class="stat-val" id="stat-rate">500 Hz</span></div>
+                <div class="stat-item"><span class="stat-label">RX:</span> <span class="stat-val" id="stat-rx">0</span></div>
+                <div class="stat-item"><span class="stat-label">TX:</span> <span class="stat-val" id="stat-tx">0</span></div>
+                <div class="stat-item"><span class="stat-label">NODES:</span> <span class="stat-val" id="stat-nodes">16</span></div>
+                <div class="stat-item"><span class="stat-label">CONTROL:</span> <span class="stat-val" id="stat-rate">400 Hz</span></div>
             </div>
         </div>
     </header>
 
+    <!-- 3-COLUMN INDUSTRIAL WORKSPACE -->
     <main class="dashboard-grid">
-        <!-- LEFT COLUMN: CONTROLS & JOINT TUNING -->
+        <!-- LEFT COLUMN: 7-DOF ARM CONTROLS & END-EFFECTORS -->
         <section class="panel control-panel">
             <div class="panel-header">
-                <h2>Bimanual Master Control</h2>
+                <h2>7-DOF Arm & Master Control</h2>
                 <span class="panel-tag">16 ACTUATORS</span>
             </div>
 
+            <!-- Master Action Grid (Solid Clean Colors) -->
             <div class="master-action-grid">
                 <button class="btn btn-success" id="btn-enable-all">
-                    <span class="btn-icon">⚡</span> Enable Both Arms
+                    <span>⚡</span> Enable Both Arms
                 </button>
                 <button class="btn btn-danger" id="btn-disable-all">
-                    <span class="btn-icon">🛑</span> Disarm All (Torque OFF)
+                    <span>🛑</span> Disarm All (Torque OFF)
                 </button>
                 <button class="btn btn-secondary" id="btn-zero-all">
-                    <span class="btn-icon">🎯</span> Set Zero All
+                    <span>🎯</span> Set Zero All
                 </button>
                 <button class="btn btn-secondary" id="btn-clear-err">
-                    <span class="btn-icon">🔄</span> Clear Errors
+                    <span>🔄</span> Clear Errors
                 </button>
             </div>
 
+            <!-- Trajectory Presets -->
             <div class="preset-section">
                 <h3>Bimanual Trajectory Presets</h3>
                 <div class="preset-btn-group">
-                    <button class="btn-preset active" data-preset="home">🏠 Rest (Hanging Down)</button>
+                    <button class="btn-preset active" data-preset="home">🏠 Rest / Hang (0 rad)</button>
                     <button class="btn-preset" data-preset="ready">🦾 Ready Stance</button>
-                    <button class="btn-preset" data-preset="wave">👋 Bimanual Wave</button>
-                    <button class="btn-preset" data-preset="clap">🤝 Handshake / Clasp</button>
-                    <button class="btn-preset" data-preset="carry">📦 Dual-Arm Lift & Hold</button>
+                    <button class="btn-preset" data-preset="wave">👋 Wave Motion</button>
+                    <button class="btn-preset" data-preset="clap">🤝 Handshake</button>
+                    <button class="btn-preset" data-preset="carry">📦 Dual-Arm Lift</button>
                     <button class="btn-preset" data-preset="sine">🌊 Coordinated Sine</button>
-                    <button class="btn-preset btn-preset-stop" data-preset="stop">⏹️ Stop Trajectory</button>
+                    <button class="btn-preset btn-preset-stop" data-preset="stop">⏹️ Stop</button>
                 </div>
             </div>
 
-            <!-- DUAL GRIPPER CONTROLS -->
+            <!-- Motion Speed & Velocity Control -->
+            <div class="velocity-control-section">
+                <div class="section-subhead">
+                    <h3>⚡ Tốc Độ Di Chuyển (Velocity Limit)</h3>
+                    <span class="badge badge-accent" id="disp-speed-mode">🐢 0.25 rad/s (14°/s)</span>
+                </div>
+                <div class="speed-presets-row">
+                    <button class="btn-speed-preset" data-speed="0.10">🐢 Rất Chậm (0.10)</button>
+                    <button class="btn-speed-preset active" data-speed="0.25">🐢 Chậm An Toàn (0.25)</button>
+                    <button class="btn-speed-preset" data-speed="0.50">🚶 Vừa Phải (0.50)</button>
+                    <button class="btn-speed-preset" data-speed="1.00">🏃 Tiêu Chuẩn (1.00)</button>
+                </div>
+                <div class="speed-slider-row">
+                    <span class="range-bound">0.05</span>
+                    <input type="range" id="slider-max-velocity" min="0.05" max="1.50" step="0.05" value="0.25">
+                    <span class="range-bound">1.50 rad/s</span>
+                </div>
+            </div>
+
+            <!-- DUAL END-EFFECTOR GRIPPERS -->
             <div class="gripper-section">
                 <div class="section-subhead">
-                    <h3>End-Effector Grippers</h3>
+                    <h3>End-Effector Grippers (Joint 8)</h3>
                     <label class="sync-checkbox-label">
-                        <input type="checkbox" id="sync-grippers-check" checked> Sync Both Grippers
+                        <input type="checkbox" id="sync-grippers-check" checked> Sync Grippers
                     </label>
                 </div>
                 <div class="dual-gripper-container">
-                    <div class="gripper-box">
+                    <div class="gripper-box left-box">
                         <div class="slider-header">
-                            <span class="joint-title"><span class="arm-tag arm-tag-left">L</span> Left Gripper (M8)</span>
-                            <span class="joint-val" id="left-gripper-val-display">0.00 rad (Open)</span>
+                            <span class="joint-title"><span class="arm-tag arm-tag-left">L</span> Left Gripper</span>
+                            <span class="joint-val" id="left-gripper-val-display">0.00 rad</span>
                         </div>
                         <input type="range" id="slider-gripper-left" min="0" max="1.0" step="0.01" value="0.0">
-                        <div class="gripper-tags">
-                            <span>Open (0.0)</span>
-                            <span>Grasp (1.0)</span>
+                        <div class="gripper-quick-actions">
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0)">Close</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.5)">50%</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 1.0)">Open</button>
                         </div>
                     </div>
-                    <div class="gripper-box">
+                    <div class="gripper-box right-box">
                         <div class="slider-header">
-                            <span class="joint-title"><span class="arm-tag arm-tag-right">R</span> Right Gripper (M16)</span>
-                            <span class="joint-val" id="right-gripper-val-display">0.00 rad (Open)</span>
+                            <span class="joint-title"><span class="arm-tag arm-tag-right">R</span> Right Gripper</span>
+                            <span class="joint-val" id="right-gripper-val-display">0.00 rad</span>
                         </div>
                         <input type="range" id="slider-gripper-right" min="0" max="1.0" step="0.01" value="0.0">
-                        <div class="gripper-tags">
-                            <span>Open (0.0)</span>
-                            <span>Grasp (1.0)</span>
+                        <div class="gripper-quick-actions">
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0)">Close</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.5)">50%</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 1.0)">Open</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ARM SELECTOR TABS FOR JOINT SLIDERS -->
+            <!-- 7-DOF JOINT ANGLE CONTROLS -->
             <div class="joint-sliders-container">
                 <div class="section-subhead">
-                    <h3>Joint Angles (MIT Impedance)</h3>
+                    <h3>Joint & Gripper Controls (J1 - J8)</h3>
                     <span class="badge badge-outline">Kp=30 Kd=1.2</span>
                 </div>
 
+                <!-- Arm Selection Tab Bar -->
                 <div class="arm-tab-bar">
-                    <button class="arm-tab-btn active" id="tab-arm-left">Left Arm (L1..L7)</button>
-                    <button class="arm-tab-btn" id="tab-arm-right">Right Arm (R1..R7)</button>
-                    <button class="arm-tab-btn" id="tab-arm-sync">⚡ Bimanual Sync</button>
+                    <button class="arm-tab-btn active tab-left" id="tab-arm-left">Left Arm (J1-J8)</button>
+                    <button class="arm-tab-btn" id="tab-arm-right">Right Arm (J1-J8)</button>
+                    <button class="arm-tab-btn" id="tab-arm-both">Dual View (J1-J8)</button>
+                    <button class="arm-tab-btn" id="tab-arm-sync">⚡ Sync Mode</button>
                 </div>
 
-                <div id="sliders-list" class="sliders-list">
-                    <!-- Dynamic joint sliders injected by JS -->
-                </div>
+                <!-- Dynamic 8 Joint Sliders injected by JS -->
+                <div id="sliders-list" class="sliders-list"></div>
             </div>
         </section>
 
-        <!-- CENTER COLUMN: 3D VIEW & TELEMETRY -->
+        <!-- CENTER COLUMN: 3D DIGITAL TWIN & REALTIME TELEMETRY -->
         <section class="center-col">
+            <!-- 3D VIEWPORT -->
             <div class="panel viewport-panel">
                 <div class="viewport-header">
                     <div class="viewport-title">
                         <h2>OpenArm Bimanual 3D Digital Twin</h2>
-                        <span class="badge badge-accent">Kinematics & Dual Arm Twin</span>
+                        <span class="badge badge-accent">7 DOF + 7 DOF Robot Kinematics</span>
                     </div>
                     <div class="viewport-actions">
                         <button class="btn-tool" id="btn-reset-cam" title="Reset Camera">Reset Cam</button>
-                        <button class="btn-tool" id="btn-front-view" title="Front View">Front View</button>
+                        <button class="btn-tool" id="btn-front-view" title="Front View">Front</button>
+                        <button class="btn-tool" id="btn-left-view" title="Left Arm Close-up">Left Arm</button>
+                        <button class="btn-tool" id="btn-right-view" title="Right Arm Close-up">Right Arm</button>
+                        <button class="btn-tool" id="btn-top-view" title="Top View">Top</button>
                         <button class="btn-tool" id="btn-toggle-grid" title="Toggle Grid">Grid: ON</button>
                         <button class="btn-tool" id="btn-toggle-axes" title="Toggle Axes">Axes: ON</button>
                     </div>
                 </div>
                 <div id="three-container" class="three-container">
-                    <div class="viewport-overlay-hint">Left Click: Orbit | Right Click: Pan | Scroll: Zoom</div>
+                    <div class="viewport-overlay-hint">Rotate: Left Click + Drag | Pan: Right Click | Zoom: Scroll</div>
                     <div class="model-spec-overlay">
-                        <span>7-DOF Bimanual</span> • <span>606mm Reach</span> • <span>CAN-FD 1 kHz</span>
+                        <span>Dual 7-DOF Arms</span> • <span>DM8009 / DM4340 / DM4310</span> • <span>606mm Reach</span> • <span>CAN-FD 1 kHz</span>
                     </div>
                 </div>
             </div>
 
+            <!-- MOTOR TELEMETRY GRID -->
             <div class="panel telemetry-panel">
                 <div class="panel-header">
                     <div class="telem-header-left">
-                        <h2>Live Motor Telemetry (16 CAN Nodes)</h2>
+                        <h2>Live Telemetry (16 Actuators)</h2>
                         <div class="telem-tabs">
                             <button class="telem-tab-btn active" data-filter="all">All (16)</button>
-                            <button class="telem-tab-btn" data-filter="left">Left Arm (8)</button>
-                            <button class="telem-tab-btn" data-filter="right">Right Arm (8)</button>
+                            <button class="telem-tab-btn" data-filter="left">Left Arm (7+1)</button>
+                            <button class="telem-tab-btn" data-filter="right">Right Arm (7+1)</button>
                         </div>
                     </div>
                     <span class="panel-tag">40 Hz REALTIME STREAM</span>
@@ -168,12 +200,13 @@
             </div>
         </section>
 
-        <!-- RIGHT COLUMN: CAN BUS TRAFFIC & CLI RUNNER -->
+        <!-- RIGHT COLUMN: CAN-FD PACKET INSPECTOR & CLI RUNNER -->
         <section class="right-col">
+            <!-- CLI RUNNER -->
             <div class="panel cli-panel">
                 <div class="panel-header">
                     <h2>OpenArm CAN CLI Runner</h2>
-                    <span class="panel-tag">CLI INTERACTION</span>
+                    <span class="panel-tag">DIAGNOSTICS</span>
                 </div>
                 <div class="cli-actions">
                     <button class="btn-cli" data-cmd="discover">🔍 discover (16 Nodes)</button>
@@ -194,6 +227,7 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
                 </div>
             </div>
 
+            <!-- CAN-FD PACKET INSPECTOR -->
             <div class="panel traffic-panel">
                 <div class="panel-header">
                     <h2>CAN-FD Packet Inspector</h2>
@@ -215,7 +249,7 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
                             </tr>
                         </thead>
                         <tbody id="traffic-tbody">
-                            <tr><td colspan="5" class="traffic-empty">Waiting for CAN traffic...</td></tr>
+                            <tr><td colspan="5" class="traffic-empty">Waiting for CAN-FD traffic...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -223,9 +257,9 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
         </section>
     </main>
 
-    <!-- Three.js and OrbitControls from CDN with fallback -->
+    <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=7"></script>
 </body>
 </html>

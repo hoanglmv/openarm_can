@@ -255,7 +255,7 @@ class DamiaoArmSimulator:
             self.sock.close()
 
     def _physics_loop(self):
-        dt = 0.002 # 500 Hz
+        dt = 0.0025 # 400 Hz
         while self.running:
             with self.lock:
                 for motor in self.motors.values():

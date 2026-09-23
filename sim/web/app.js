@@ -2,25 +2,25 @@
 // Supports Dual 7-DOF Robotic Arms (Left & Right) + Dual Grippers (16 CAN Nodes)
 
 const LEFT_JOINTS = [
-    { id: 1, name: "L-Joint 1 (Shoulder Yaw)",   arm: "left",  idx: 0, type: "DM8009", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 2, name: "L-Joint 2 (Shoulder Pitch)", arm: "left",  idx: 1, type: "DM8009", min: -2.00, max: 2.00, default: 0.0 },
-    { id: 3, name: "L-Joint 3 (Elbow Roll)",     arm: "left",  idx: 2, type: "DM4340", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min: -2.20, max: 2.20, default: 0.0 },
-    { id: 5, name: "L-Joint 5 (Wrist Roll)",     arm: "left",  idx: 4, type: "DM4310", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -1.80, max: 1.80, default: 0.0 },
-    { id: 7, name: "L-Joint 7 (Wrist Yaw)",      arm: "left",  idx: 6, type: "DM4310", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 8, name: "L-Gripper (Linear Finger)",  arm: "left",  idx: 7, type: "DM4310", min: 0.0,   max: 1.0,  default: 0.0 }
+    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
+    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
+    { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
+    { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
+    { id: 7, name: "L-Joint 7 (Wrist Roll)",     arm: "left",  idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 8, name: "L-Gripper (Kẹp gắp)",        arm: "left",  idx: 7, type: "DM4310", min:  0.000, max: 1.000, default: 0.0 }
 ];
 
 const RIGHT_JOINTS = [
-    { id: 9,  name: "R-Joint 1 (Shoulder Yaw)",   arm: "right", idx: 0, type: "DM8009", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 10, name: "R-Joint 2 (Shoulder Pitch)", arm: "right", idx: 1, type: "DM8009", min: -2.00, max: 2.00, default: 0.0 },
-    { id: 11, name: "R-Joint 3 (Elbow Roll)",     arm: "right", idx: 2, type: "DM4340", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min: -2.20, max: 2.20, default: 0.0 },
-    { id: 13, name: "R-Joint 5 (Wrist Roll)",     arm: "right", idx: 4, type: "DM4310", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -1.80, max: 1.80, default: 0.0 },
-    { id: 15, name: "R-Joint 7 (Wrist Yaw)",      arm: "right", idx: 6, type: "DM4310", min: -3.14, max: 3.14, default: 0.0 },
-    { id: 16, name: "R-Gripper (Linear Finger)",  arm: "right", idx: 7, type: "DM4310", min: 0.0,   max: 1.0,  default: 0.0 }
+    { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
+    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
+    { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
+    { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
+    { id: 15, name: "R-Joint 7 (Wrist Roll)",     arm: "right", idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
+    { id: 16, name: "R-Gripper (Kẹp gắp)",        arm: "right", idx: 7, type: "DM4310", min:  0.000, max: 1.000, default: 0.0 }
 ];
 
 const ALL_JOINTS = [...LEFT_JOINTS, ...RIGHT_JOINTS];
@@ -57,55 +57,137 @@ document.addEventListener("DOMContentLoaded", () => {
     setupEventHandlers();
 });
 
-// Build Sliders for Arm Joints
+let jointLockStates = {};
+for (let i = 1; i <= 16; i++) {
+    jointLockStates[i] = true;
+}
+
+// Build Sliders for Arm Joints & Gripper (J1-J7 + J8 Gripper) - Ultra Compact & Fitted with Joint Safety Locks
 function buildJointSliders() {
     const list = document.getElementById("sliders-list");
     list.innerHTML = "";
 
-    const activeList = currentArmTab === 'right' ? RIGHT_JOINTS.slice(0, 7) : LEFT_JOINTS.slice(0, 7);
+    let itemsToRender = [];
 
-    activeList.forEach((j, index) => {
+    if (currentArmTab === 'both') {
+        // Dual view: Show Left (J1..J8) and Right (J1..J8)
+        itemsToRender = [
+            ...LEFT_JOINTS.map(j => ({ ...j, group: 'left' })),
+            ...RIGHT_JOINTS.map(j => ({ ...j, group: 'right' }))
+        ];
+    } else if (currentArmTab === 'right') {
+        itemsToRender = RIGHT_JOINTS.map(j => ({ ...j, group: 'right' }));
+    } else if (currentArmTab === 'sync') {
+        itemsToRender = LEFT_JOINTS.map((j, idx) => ({ ...j, group: 'sync', syncIdx: idx }));
+    } else {
+        // Default left (J1..J8)
+        itemsToRender = LEFT_JOINTS.map(j => ({ ...j, group: 'left' }));
+    }
+
+    const JOINT_NAMES = [
+        "Shoulder Pitch",
+        "Shoulder Roll (Abduct)",
+        "Arm Twist",
+        "Elbow Pitch",
+        "Forearm Twist",
+        "Wrist Pitch",
+        "Wrist Roll",
+        "Gripper (Kẹp gắp)"
+    ];
+
+    itemsToRender.forEach((j) => {
         const card = document.createElement("div");
-        card.className = "joint-slider-card";
+        const isLeft = j.group === 'left';
+        const isRight = j.group === 'right';
+        const isSync = j.group === 'sync';
+        const isLocked = jointLockStates[j.id] === false;
+        const isGripper = (j.idx === 7);
 
-        const labelPrefix = currentArmTab === 'sync' ? "Dual J" + (index + 1) : (currentArmTab === 'right' ? "R-J" + (index + 1) : "L-J" + (index + 1));
-        const subName = j.name.split("(")[1] ? "(" + j.name.split("(")[1] : "";
+        card.className = `joint-slider-card ${isLeft ? 'left-arm-joint' : (isRight ? 'right-arm-joint' : 'sync-joint')} ${isLocked ? 'joint-locked' : 'joint-active'} ${isGripper ? 'gripper-joint-card' : ''}`;
+
+        const uniqueKey = `${j.group}-${j.idx}`;
+        const armTagClass = isSync ? "arm-tag-sync" : (isRight ? "arm-tag-right" : "arm-tag-left");
+        const armTagText = isSync ? "L+R" : (isRight ? "R" : "L");
+        const jNum = `J${j.idx + 1}`;
+        const cleanName = JOINT_NAMES[j.idx] || `Joint ${j.idx + 1}`;
+        const valUnitText = isGripper ? "0.00 rad (Open)" : "0.00 rad (0°)";
 
         card.innerHTML = `
-            <div class="slider-header">
-                <span class="joint-title">
-                    <span class="arm-tag ${currentArmTab === 'right' ? 'arm-tag-right' : 'arm-tag-left'}">${currentArmTab === 'sync' ? 'L+R' : (currentArmTab === 'right' ? 'R' : 'L')}</span>
-                    ${labelPrefix} ${subName} • ${j.type}
-                </span>
-                <span class="joint-val" id="val-disp-j${index}">0.00 rad (0°)</span>
+            <div class="slider-header-compact">
+                <div class="joint-title-row">
+                    <button class="btn-joint-power ${isLocked ? 'power-off' : 'power-on'}" 
+                            title="${isLocked ? 'Khóa bảo vệ: Đang KHÓA (Bấm để MỞ KHÓA)' : 'Khớp đang BẬT sẵn sàng (Bấm để KHÓA an toàn)'}" 
+                            onclick="toggleJointLock(${j.id}, '${uniqueKey}', '${j.group}', ${j.idx})">
+                        ${isLocked ? '🔒 KHÓA (OFF)' : '⚡ BẬT (ON)'}
+                    </button>
+                    <span class="arm-tag ${armTagClass}">${armTagText}</span>
+                    <span class="joint-id-badge">${jNum}</span>
+                    <span class="joint-name-text">${cleanName}</span>
+                    <span class="joint-motor-tag">${j.type}</span>
+                </div>
+                <div class="joint-val-row">
+                    <span class="joint-val" id="val-disp-${uniqueKey}">${valUnitText}</span>
+                    <button class="btn-zero-single" title="Reset to 0 rad" onclick="resetSingleJoint(${j.id}, '${uniqueKey}', '${j.group}', ${j.idx})" ${isLocked ? 'disabled' : ''}>0</button>
+                </div>
             </div>
-            <input type="range" id="slider-j${index}" min="${j.min}" max="${j.max}" step="0.01" value="0.0">
-            <div class="gripper-tags">
-                <span>${j.min.toFixed(1)} rad</span>
-                <span>${j.max.toFixed(1)} rad</span>
+            <div class="slider-track-row">
+                <span class="range-bound">${j.min.toFixed(2)}</span>
+                <input type="range" class="joint-slider-input" id="slider-${uniqueKey}" min="${j.min}" max="${j.max}" step="0.005" value="0.0" ${isLocked ? 'disabled' : ''}>
+                <span class="range-bound">+${j.max.toFixed(2)}</span>
             </div>
         `;
         list.appendChild(card);
 
-        const slider = card.querySelector(`#slider-j${index}`);
+        const slider = card.querySelector(`#slider-${uniqueKey}`);
         slider.addEventListener("input", (e) => {
+            if (jointLockStates[j.id] === false) return;
             const val = parseFloat(e.target.value);
-            const deg = (val * 180 / Math.PI).toFixed(0);
-            document.getElementById(`val-disp-j${index}`).textContent = `${val.toFixed(2)} rad (${deg}°)`;
 
-            if (currentArmTab === 'left') {
-                sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-            } else if (currentArmTab === 'right') {
-                sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-            } else { // sync
-                // Left arm joint
-                const leftMotorId = LEFT_JOINTS[index].id;
-                // Right arm joint (mirrored yaw/roll joints for symmetrical motion)
-                const rightMotorId = RIGHT_JOINTS[index].id;
-                const mirrorSign = (index === 0 || index === 2 || index === 4 || index === 6) ? -1.0 : 1.0;
+            if (isGripper) {
+                const statusText = val > 0.4 ? 'Grasping' : 'Open';
+                document.getElementById(`val-disp-${uniqueKey}`).textContent = `${val.toFixed(2)} rad (${statusText})`;
 
-                sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-                sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
+                if (isLeft) {
+                    sendAction("set_gripper", { id: 8, arm: "left", pos: val });
+                    const topSlider = document.getElementById("slider-gripper-left");
+                    if (topSlider) topSlider.value = val;
+                    const topDisp = document.getElementById("left-gripper-val-display");
+                    if (topDisp) topDisp.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                } else if (isRight) {
+                    sendAction("set_gripper", { id: 16, arm: "right", pos: val });
+                    const topSlider = document.getElementById("slider-gripper-right");
+                    if (topSlider) topSlider.value = val;
+                    const topDisp = document.getElementById("right-gripper-val-display");
+                    if (topDisp) topDisp.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                } else { // sync
+                    sendAction("set_gripper", { id: 8, arm: "left", pos: val });
+                    sendAction("set_gripper", { id: 16, arm: "right", pos: val });
+                    const topL = document.getElementById("slider-gripper-left");
+                    const topR = document.getElementById("slider-gripper-right");
+                    if (topL) topL.value = val;
+                    if (topR) topR.value = val;
+                    const dispL = document.getElementById("left-gripper-val-display");
+                    const dispR = document.getElementById("right-gripper-val-display");
+                    if (dispL) dispL.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                    if (dispR) dispR.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                }
+            } else {
+                const deg = (val * 180 / Math.PI).toFixed(0);
+                document.getElementById(`val-disp-${uniqueKey}`).textContent = `${val.toFixed(2)} rad (${deg}°)`;
+
+                if (isLeft) {
+                    sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
+                } else if (isRight) {
+                    sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
+                } else { // sync
+                    const leftMotorId = LEFT_JOINTS[j.idx].id;
+                    const rightMotorId = RIGHT_JOINTS[j.idx].id;
+                    // Mirrored yaw/roll for symmetrical bimanual gestures
+                    const mirrorSign = (j.idx === 0 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+
+                    sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
+                    sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
+                }
             }
         });
     });
@@ -184,24 +266,103 @@ function setupEventHandlers() {
     document.getElementById("tab-arm-right").addEventListener("click", (e) => {
         setArmTab("right", e.target);
     });
+    document.getElementById("tab-arm-both").addEventListener("click", (e) => {
+        setArmTab("both", e.target);
+    });
     document.getElementById("tab-arm-sync").addEventListener("click", (e) => {
         setArmTab("sync", e.target);
     });
 
     // Master actions
     document.getElementById("btn-enable-all").addEventListener("click", () => {
+        for (let i = 1; i <= 16; i++) jointLockStates[i] = true;
         sendAction("enable_all");
+        buildJointSliders();
     });
     document.getElementById("btn-disable-all").addEventListener("click", () => {
         stopPresets();
+        for (let i = 1; i <= 16; i++) jointLockStates[i] = false;
         sendAction("disable_all");
+        buildJointSliders();
     });
     document.getElementById("btn-zero-all").addEventListener("click", () => {
+        // 1. Reset all joint slider bars in the list to 0.0
+        document.querySelectorAll(".joint-slider-input").forEach(slider => {
+            slider.value = 0.0;
+        });
+        document.querySelectorAll(".joint-val").forEach(disp => {
+            if (disp.id.startsWith("val-disp-")) {
+                if (disp.id.includes("-7")) {
+                    disp.textContent = "0.00 rad (Open)";
+                } else {
+                    disp.textContent = "0.00 rad (0°)";
+                }
+            }
+        });
+
+        // 2. Reset top-level gripper sliders and displays
+        const leftG = document.getElementById("slider-gripper-left");
+        const rightG = document.getElementById("slider-gripper-right");
+        if (leftG) leftG.value = 0.0;
+        if (rightG) rightG.value = 0.0;
+        const leftGDisp = document.getElementById("left-gripper-val-display");
+        const rightGDisp = document.getElementById("right-gripper-val-display");
+        if (leftGDisp) leftGDisp.textContent = "0.00 rad (Open)";
+        if (rightGDisp) rightGDisp.textContent = "0.00 rad (Open)";
+
+        // 3. Immediately reset 3D Digital Twin model to natural 0 rad resting pose
+        leftArmJoints.forEach(j => {
+            if (j && j.group) j.group.rotation.set(0, 0, 0);
+        });
+        rightArmJoints.forEach(j => {
+            if (j && j.group) j.group.rotation.set(0, 0, 0);
+        });
+        if (leftGripperFingers.left && leftGripperFingers.right) {
+            leftGripperFingers.left.position.x = -0.018;
+            leftGripperFingers.right.position.x = 0.018;
+        }
+        if (rightGripperFingers.left && rightGripperFingers.right) {
+            rightGripperFingers.left.position.x = -0.018;
+            rightGripperFingers.right.position.x = 0.018;
+        }
+
+        // 4. Send zero calibration sequence to server & physical motors
         sendAction("set_zero_all");
     });
     document.getElementById("btn-clear-err").addEventListener("click", () => {
         sendAction("clear_error_all");
     });
+
+    // Motion Speed / Velocity Limit Controls
+    const speedSlider = document.getElementById("slider-max-velocity");
+    const speedDisp = document.getElementById("disp-speed-mode");
+    const speedBtns = document.querySelectorAll(".btn-speed-preset");
+
+    function applyVelocityLimit(val, activeBtn = null) {
+        speedBtns.forEach(b => b.classList.remove("active"));
+        if (activeBtn) activeBtn.classList.add("active");
+        if (speedSlider) speedSlider.value = val;
+        const degS = (val * 180 / Math.PI).toFixed(0);
+        let icon = "🐢";
+        if (val > 0.8) icon = "🏃";
+        else if (val > 0.4) icon = "🚶";
+        if (speedDisp) speedDisp.textContent = `${icon} ${val.toFixed(2)} rad/s (${degS}°/s)`;
+        sendAction("set_velocity_limit", { v_limit: val });
+    }
+
+    speedBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const spd = parseFloat(btn.dataset.speed);
+            applyVelocityLimit(spd, btn);
+        });
+    });
+
+    if (speedSlider) {
+        speedSlider.addEventListener("input", (e) => {
+            const spd = parseFloat(e.target.value);
+            applyVelocityLimit(spd);
+        });
+    }
 
     // Grippers
     const syncCheck = document.getElementById("sync-grippers-check");
@@ -212,13 +373,22 @@ function setupEventHandlers() {
     const leftGripperSlider = document.getElementById("slider-gripper-left");
     leftGripperSlider.addEventListener("input", (e) => {
         const val = parseFloat(e.target.value);
-        document.getElementById("left-gripper-val-display").textContent = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        const text = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        document.getElementById("left-gripper-val-display").textContent = text;
+        const j8Slider = document.getElementById("slider-left-7");
+        if (j8Slider) j8Slider.value = val;
+        const j8Disp = document.getElementById("val-disp-left-7");
+        if (j8Disp) j8Disp.textContent = text;
         sendAction("set_gripper", { id: 8, arm: "left", pos: val });
 
         if (syncGrippers) {
             const rightSlider = document.getElementById("slider-gripper-right");
             rightSlider.value = val;
-            document.getElementById("right-gripper-val-display").textContent = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+            document.getElementById("right-gripper-val-display").textContent = text;
+            const rJ8Slider = document.getElementById("slider-right-7");
+            if (rJ8Slider) rJ8Slider.value = val;
+            const rJ8Disp = document.getElementById("val-disp-right-7");
+            if (rJ8Disp) rJ8Disp.textContent = text;
             sendAction("set_gripper", { id: 16, arm: "right", pos: val });
         }
     });
@@ -226,13 +396,22 @@ function setupEventHandlers() {
     const rightGripperSlider = document.getElementById("slider-gripper-right");
     rightGripperSlider.addEventListener("input", (e) => {
         const val = parseFloat(e.target.value);
-        document.getElementById("right-gripper-val-display").textContent = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        const text = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        document.getElementById("right-gripper-val-display").textContent = text;
+        const j8Slider = document.getElementById("slider-right-7");
+        if (j8Slider) j8Slider.value = val;
+        const j8Disp = document.getElementById("val-disp-right-7");
+        if (j8Disp) j8Disp.textContent = text;
         sendAction("set_gripper", { id: 16, arm: "right", pos: val });
 
         if (syncGrippers) {
             const leftSlider = document.getElementById("slider-gripper-left");
             leftSlider.value = val;
-            document.getElementById("left-gripper-val-display").textContent = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+            document.getElementById("left-gripper-val-display").textContent = text;
+            const lJ8Slider = document.getElementById("slider-left-7");
+            if (lJ8Slider) lJ8Slider.value = val;
+            const lJ8Disp = document.getElementById("val-disp-left-7");
+            if (lJ8Disp) lJ8Disp.textContent = text;
             sendAction("set_gripper", { id: 8, arm: "left", pos: val });
         }
     });
@@ -249,10 +428,12 @@ function setupEventHandlers() {
 
     // Viewport tools
     document.getElementById("btn-reset-cam").addEventListener("click", resetCamera);
-    document.getElementById("btn-front-view").addEventListener("click", () => {
-        camera.position.set(0, 0.70, 1.45);
-        if (controls) controls.target.set(0, 0.55, 0);
-    });
+    document.getElementById("btn-front-view").addEventListener("click", setFrontView);
+    const btnLeftView = document.getElementById("btn-left-view");
+    if (btnLeftView) btnLeftView.addEventListener("click", setLeftArmView);
+    const btnRightView = document.getElementById("btn-right-view");
+    if (btnRightView) btnRightView.addEventListener("click", setRightArmView);
+    document.getElementById("btn-top-view").addEventListener("click", setTopView);
     document.getElementById("btn-toggle-grid").addEventListener("click", (e) => {
         gridHelper.visible = !gridHelper.visible;
         e.target.textContent = `Grid: ${gridHelper.visible ? 'ON' : 'OFF'}`;
@@ -261,6 +442,28 @@ function setupEventHandlers() {
         axesHelper.visible = !axesHelper.visible;
         e.target.textContent = `Axes: ${axesHelper.visible ? 'ON' : 'OFF'}`;
     });
+
+    // Inspector toggle
+    const btnInspector = document.getElementById("btn-toggle-inspector");
+    if (btnInspector) {
+        btnInspector.addEventListener("click", () => {
+            const grid = document.querySelector(".dashboard-grid");
+            const rightCol = document.querySelector(".right-col");
+            if (grid && rightCol) {
+                const isHidden = window.getComputedStyle(rightCol).display === "none";
+                if (isHidden) {
+                    rightCol.style.display = "flex";
+                    grid.classList.remove("right-col-hidden");
+                    btnInspector.classList.remove("active");
+                } else {
+                    rightCol.style.display = "none";
+                    grid.classList.add("right-col-hidden");
+                    btnInspector.classList.add("active");
+                }
+                setTimeout(onWindowResize, 50);
+            }
+        });
+    }
 
     // Telemetry filters
     document.querySelectorAll(".telem-tab-btn").forEach(btn => {
@@ -296,14 +499,131 @@ function setupEventHandlers() {
 
 function setArmTab(tab, element) {
     currentArmTab = tab;
-    document.querySelectorAll(".arm-tab-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".arm-tab-btn").forEach(btn => {
+        btn.classList.remove("active", "tab-left", "tab-right", "tab-sync");
+    });
     element.classList.add("active");
+    if (tab === 'left') element.classList.add("tab-left");
+    else if (tab === 'right') element.classList.add("tab-right");
+    else if (tab === 'sync') element.classList.add("tab-sync");
     buildJointSliders();
 }
 
+// Toggle Safety Lock / Enable switch for individual joint
+window.toggleJointLock = function(id, key, group, idx) {
+    if (group === 'sync') {
+        const leftId = LEFT_JOINTS[idx].id;
+        const rightId = RIGHT_JOINTS[idx].id;
+        const currentVal = jointLockStates[leftId] !== false;
+        const newState = !currentVal;
+        jointLockStates[leftId] = newState;
+        jointLockStates[rightId] = newState;
+        sendAction(newState ? "enable_motor" : "disable_motor", { id: leftId });
+        sendAction(newState ? "enable_motor" : "disable_motor", { id: rightId });
+    } else {
+        const currentVal = jointLockStates[id] !== false;
+        const newState = !currentVal;
+        jointLockStates[id] = newState;
+        sendAction(newState ? "enable_motor" : "disable_motor", { id });
+    }
+    buildJointSliders();
+};
+
+// Quick individual joint zeroing
+window.resetSingleJoint = function(id, key, group, idx) {
+    if (jointLockStates[id] === false) return; // Do not zero locked joints
+    const slider = document.getElementById(`slider-${key}`);
+    if (slider) slider.value = 0.0;
+    const disp = document.getElementById(`val-disp-${key}`);
+    const isGripper = (idx === 7);
+
+    if (isGripper) {
+        if (disp) disp.textContent = "0.00 rad (Open)";
+        if (group === 'sync') {
+            sendAction("set_zero_single", { id: 8 });
+            sendAction("set_zero_single", { id: 16 });
+            sendAction("set_gripper", { id: 8, arm: "left", pos: 0.0 });
+            sendAction("set_gripper", { id: 16, arm: "right", pos: 0.0 });
+            const topL = document.getElementById("slider-gripper-left");
+            const topR = document.getElementById("slider-gripper-right");
+            if (topL) topL.value = 0.0;
+            if (topR) topR.value = 0.0;
+            const dL = document.getElementById("left-gripper-val-display");
+            const dR = document.getElementById("right-gripper-val-display");
+            if (dL) dL.textContent = "0.00 rad (Open)";
+            if (dR) dR.textContent = "0.00 rad (Open)";
+        } else {
+            const arm = (id === 8) ? "left" : "right";
+            sendAction("set_zero_single", { id });
+            sendAction("set_gripper", { id, arm, pos: 0.0 });
+            const topSlider = document.getElementById(arm === 'left' ? "slider-gripper-left" : "slider-gripper-right");
+            if (topSlider) topSlider.value = 0.0;
+            const topDisp = document.getElementById(arm === 'left' ? "left-gripper-val-display" : "right-gripper-val-display");
+            if (topDisp) topDisp.textContent = "0.00 rad (Open)";
+        }
+    } else {
+        if (disp) disp.textContent = "0.00 rad (0°)";
+        if (group === 'sync') {
+            const leftId = LEFT_JOINTS[idx].id;
+            const rightId = RIGHT_JOINTS[idx].id;
+            sendAction("set_zero_single", { id: leftId });
+            sendAction("set_zero_single", { id: rightId });
+            sendAction("set_mit", { id: leftId, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
+            sendAction("set_mit", { id: rightId, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
+        } else {
+            sendAction("set_zero_single", { id });
+            sendAction("set_mit", { id, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
+        }
+    }
+};
+
+// Quick gripper actions (Open / 50% / Close)
+window.setGripperDirect = function(arm, val) {
+    const isLeft = arm === 'left';
+    const sliderId = isLeft ? 'slider-gripper-left' : 'slider-gripper-right';
+    const dispId = isLeft ? 'left-gripper-val-display' : 'right-gripper-val-display';
+    const motorId = isLeft ? 8 : 16;
+    const text = `${val.toFixed(2)} rad (${val >= 0.4 ? 'Grasping' : 'Open'})`;
+
+    const slider = document.getElementById(sliderId);
+    if (slider) slider.value = val;
+    const disp = document.getElementById(dispId);
+    if (disp) disp.textContent = text;
+
+    // Also sync J8 slider in the joint sliders list
+    const j8Key = isLeft ? "left-7" : "right-7";
+    const j8Slider = document.getElementById(`slider-${j8Key}`);
+    if (j8Slider) j8Slider.value = val;
+    const j8Disp = document.getElementById(`val-disp-${j8Key}`);
+    if (j8Disp) j8Disp.textContent = text;
+
+    sendAction("set_gripper", { id: motorId, arm, pos: val });
+
+    if (syncGrippers) {
+        const otherSliderId = isLeft ? 'slider-gripper-right' : 'slider-gripper-left';
+        const otherDispId = isLeft ? 'right-gripper-val-display' : 'left-gripper-val-display';
+        const otherMotorId = isLeft ? 16 : 8;
+        const otherArm = isLeft ? 'right' : 'left';
+
+        const otherSlider = document.getElementById(otherSliderId);
+        if (otherSlider) otherSlider.value = val;
+        const otherDisp = document.getElementById(otherDispId);
+        if (otherDisp) otherDisp.textContent = text;
+
+        const otherJ8Key = isLeft ? "right-7" : "left-7";
+        const otherJ8Slider = document.getElementById(`slider-${otherJ8Key}`);
+        if (otherJ8Slider) otherJ8Slider.value = val;
+        const otherJ8Disp = document.getElementById(`val-disp-${otherJ8Key}`);
+        if (otherJ8Disp) otherJ8Disp.textContent = text;
+
+        sendAction("set_gripper", { id: otherMotorId, arm: otherArm, pos: val });
+    }
+};
+
 // WebSocket Connection
 function initWebSocket() {
-    const wsUrl = `ws://${window.location.hostname}:8889`;
+    const wsHost = window.location.hostname || "127.0.0.1";
+    const wsUrl = `ws://${wsHost}:8889`;
     ws = new WebSocket(wsUrl);
 
     const badge = document.getElementById("ws-status-badge");
@@ -400,18 +720,35 @@ function handleTelemetry(data) {
             const jEntry = armJoints[jointIndex];
             if (jEntry && jEntry.group) {
                 const angle = m.q;
-                if (jEntry.axis === 'y') {
-                    jEntry.group.rotation.y = angle;
-                } else if (jEntry.axis === 'z') {
-                    jEntry.group.rotation.z = angle;
-                } else if (jEntry.axis === 'x') {
-                    jEntry.group.rotation.x = angle;
+                if (jointIndex === 0) {
+                    // J1: Shoulder Pitch (swings arm forward/backward around X)
+                    jEntry.group.rotation.x = -angle;
+                } else if (jointIndex === 1) {
+                    // J2: Shoulder Roll / Abduction (swings arm outward away from torso around Z)
+                    // Left arm swings outward to -X (+Z rotation)
+                    // Right arm swings outward to +X (-Z rotation)
+                    jEntry.group.rotation.z = isLeft ? angle : -angle;
+                } else if (jointIndex === 2) {
+                    // J3: Arm Twist (humeral twist around Y axis)
+                    jEntry.group.rotation.y = isLeft ? angle : -angle;
+                } else if (jointIndex === 3) {
+                    // J4: Elbow Pitch (flexion forward around X)
+                    jEntry.group.rotation.x = -angle;
+                } else if (jointIndex === 4) {
+                    // J5: Forearm Twist (pronation/supination around Y)
+                    jEntry.group.rotation.y = isLeft ? angle : -angle;
+                } else if (jointIndex === 5) {
+                    // J6: Wrist Pitch (tilts up/down around X)
+                    jEntry.group.rotation.x = -angle;
+                } else if (jointIndex === 6) {
+                    // J7: Wrist Roll (gripper rotation around tool axis Y)
+                    jEntry.group.rotation.y = isLeft ? angle : -angle;
                 }
             }
         } else if (jointIndex === 7) {
-            // Gripper opening/closing (0.0: fully open, 1.0: grasp)
-            const stroke = Math.max(0.0, Math.min(1.0, m.q));
-            const fingerOffset = 0.038 - stroke * 0.024;
+            // Gripper opening/closing (0.0: closed beak at center, 1.0: open wide)
+            const stroke = Math.max(0.0, Math.min(1.0, Math.abs(m.q)));
+            const fingerOffset = 0.018 + stroke * 0.024;
             if (gripperFingers.left && gripperFingers.right) {
                 gripperFingers.left.position.x = -fingerOffset;
                 gripperFingers.right.position.x = fingerOffset;
@@ -479,7 +816,7 @@ function initThreeJS() {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.target.set(0, 0.55, 0);
+    controls.target.set(0, 0.40, 0);
 
     // Studio Lighting Setup
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
@@ -529,8 +866,28 @@ function initThreeJS() {
 }
 
 function resetCamera() {
-    camera.position.set(0.85, 0.85, 1.45);
-    if (controls) controls.target.set(0, 0.55, 0);
+    camera.position.set(0.0, 0.46, 1.25);
+    if (controls) controls.target.set(0, 0.40, 0);
+}
+
+function setFrontView() {
+    camera.position.set(0, 0.42, 1.20);
+    if (controls) controls.target.set(0, 0.40, 0);
+}
+
+function setLeftArmView() {
+    camera.position.set(-0.28, 0.38, 0.65);
+    if (controls) controls.target.set(-0.11, 0.35, 0);
+}
+
+function setRightArmView() {
+    camera.position.set(0.28, 0.38, 0.65);
+    if (controls) controls.target.set(0.11, 0.35, 0);
+}
+
+function setTopView() {
+    camera.position.set(0, 1.35, 0.05);
+    if (controls) controls.target.set(0, 0.40, 0);
 }
 
 function onWindowResize() {
@@ -543,300 +900,571 @@ function onWindowResize() {
 
 // Construct Bimanual Robot Assembly Matching Reference Image
 function buildBimanualOpenArm() {
-    // Premium Industrial Materials (Stealth Matte Black + Metallic Silver Rings)
+    // High-definition Materials (Matte Black, Machined Silver Aluminum, Motor Casings)
     const matteBlackMat = new THREE.MeshStandardMaterial({
-        color: 0x18191d,
-        roughness: 0.35,
-        metalness: 0.25
+        color: 0x1d1f25,
+        roughness: 0.38,
+        metalness: 0.18
+    });
+    const motorCasingMat = new THREE.MeshStandardMaterial({
+        color: 0x131417,
+        roughness: 0.28,
+        metalness: 0.55
     });
     const silverMetalMat = new THREE.MeshStandardMaterial({
-        color: 0xd8d8de,
+        color: 0xdde2ea,
         roughness: 0.18,
-        metalness: 0.92
+        metalness: 0.90
     });
     const darkExtrusionMat = new THREE.MeshStandardMaterial({
-        color: 0x22242a,
+        color: 0x22252c,
         roughness: 0.45,
-        metalness: 0.7
+        metalness: 0.65
     });
     const basePlateMat = new THREE.MeshStandardMaterial({
-        color: 0xb5b9c0,
-        roughness: 0.25,
+        color: 0xbac0ca,
+        roughness: 0.22,
         metalness: 0.85
     });
-    const cyanGlowMat = new THREE.MeshStandardMaterial({
-        color: 0x0284c7,
-        emissive: 0x00f0ff,
-        emissiveIntensity: 0.45,
-        roughness: 0.2
+    const cableMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0b0d,
+        roughness: 0.85,
+        metalness: 0.05
+    });
+    const labelMat = new THREE.MeshBasicMaterial({
+        color: 0xf3f4f6
     });
 
     const rootGroup = new THREE.Group();
     scene.add(rootGroup);
 
-    // 1. Heavy Machined Base Plate
-    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.018, 0.38), basePlateMat);
-    basePlate.position.y = 0.009;
+    // 1. Heavy Machined Base Plate (Silver aluminum plate as in photo)
+    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.02, 0.40), basePlateMat);
+    basePlate.position.y = 0.01;
     basePlate.castShadow = true;
     basePlate.receiveShadow = true;
     rootGroup.add(basePlate);
 
-    // Base Mounting Bolts
-    [-0.14, 0.14].forEach(x => {
-        [-0.16, 0.16].forEach(z => {
-            const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.015, 12), silverMetalMat);
-            bolt.position.set(x, 0.02, z);
-            rootGroup.add(bolt);
-        });
+    // Base Mounting Holes & Counter-sunk Bolts
+    [[-0.15, -0.17], [-0.15, 0.17], [0.15, -0.17], [0.15, 0.17]].forEach(([bx, bz]) => {
+        const holeRing = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.021, 16), darkExtrusionMat);
+        holeRing.position.set(bx, 0.01, bz);
+        rootGroup.add(holeRing);
     });
 
-    // 2. Central Vertical Pillar (Black Anodized Extrusion Profile)
-    const pillarHeight = 0.70;
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, pillarHeight, 0.08), darkExtrusionMat);
-    pillar.position.y = 0.018 + pillarHeight / 2;
-    pillar.castShadow = true;
-    rootGroup.add(pillar);
+    // Optical Breadboard Grid of Tapped Holes on Silver Base Plate (as in photo)
+    const breadboardHoleMat = new THREE.MeshBasicMaterial({ color: 0x22262e });
+    for (let hx = -0.15; hx <= 0.151; hx += 0.05) {
+        for (let hz = -0.16; hz <= 0.161; hz += 0.04) {
+            if (Math.abs(hx) < 0.055 && Math.abs(hz) < 0.065) continue; // under pillar
+            const holeDot = new THREE.Mesh(new THREE.CircleGeometry(0.0035, 12), breadboardHoleMat);
+            holeDot.rotation.x = -Math.PI / 2;
+            holeDot.position.set(hx, 0.0205, hz);
+            rootGroup.add(holeDot);
+        }
+    }
 
-    // Column T-slot Grooves
-    const slotMat = new THREE.MeshBasicMaterial({ color: 0x0f1115 });
-    [-0.041, 0.041].forEach(x => {
-        const slot = new THREE.Mesh(new THREE.BoxGeometry(0.004, pillarHeight, 0.016), slotMat);
-        slot.position.set(x, 0.018 + pillarHeight / 2, 0);
-        rootGroup.add(slot);
+    // Front Machined Silver Curved Mounting Bracket (as in photo)
+    const frontBracket = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.065, 0.008), silverMetalMat);
+    frontBracket.position.set(0, 0.052, 0.044);
+    rootGroup.add(frontBracket);
+
+    const frontFoot = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.008, 0.040), silverMetalMat);
+    frontFoot.position.set(0, 0.024, 0.060);
+    rootGroup.add(frontFoot);
+
+    // Socket screws on front foot
+    [-0.012, 0.012].forEach(fx => {
+        const scr = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.006, 12), darkExtrusionMat);
+        scr.position.set(fx, 0.0285, 0.065);
+        rootGroup.add(scr);
     });
 
-    // Base Support Triangular Gussets / Brackets
-    [-0.065, 0.065].forEach(x => {
+    // Triangular Gusset Corner Brackets (Holding column to base plate)
+    [-0.065, 0.065].forEach(gx => {
         const gussetGeo = new THREE.BufferGeometry();
-        // Triangle shape
-        const vertices = new Float32Array([
-            x, 0.018, -0.04,
-            x, 0.018,  0.04,
-            x * 0.7, 0.14, -0.04,
-            x * 0.7, 0.14, -0.04,
-            x, 0.018,  0.04,
-            x * 0.7, 0.14,  0.04,
+        const verts = new Float32Array([
+            gx, 0.02, -0.045,
+            gx, 0.02,  0.045,
+            gx * 0.72, 0.15, -0.045,
+            gx * 0.72, 0.15, -0.045,
+            gx, 0.02,  0.045,
+            gx * 0.72, 0.15,  0.045,
         ]);
-        gussetGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        gussetGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
         gussetGeo.computeVertexNormals();
         const gussetMesh = new THREE.Mesh(gussetGeo, silverMetalMat);
         rootGroup.add(gussetMesh);
+
+        // Mounting bolt head on gusset
+        const gBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.015, 12), silverMetalMat);
+        gBolt.rotation.z = Math.PI / 2;
+        gBolt.position.set(gx * 1.05, 0.05, 0);
+        rootGroup.add(gBolt);
     });
 
-    // 3. Central Torso / Head Unit (at top of pillar)
-    const torsoY = 0.018 + pillarHeight;
+    // Main Power / CAN Cable coming from base to the left (as in photo)
+    const baseCable = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.35, 12), cableMat);
+    baseCable.rotation.z = Math.PI / 2;
+    baseCable.position.set(-0.25, 0.015, -0.05);
+    rootGroup.add(baseCable);
+
+    // 2. Central Pillar (Heavy Black T-slot Aluminum Extrusion Profile)
+    const pillarHeight = 0.68;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, pillarHeight, 0.08), darkExtrusionMat);
+    pillar.position.y = 0.02 + pillarHeight / 2;
+    pillar.castShadow = true;
+    rootGroup.add(pillar);
+
+    // Extrusion T-slot Grooves on all 4 faces
+    const slotMat = new THREE.MeshBasicMaterial({ color: 0x0c0e12 });
+    [-0.041, 0.041].forEach(x => {
+        const slot = new THREE.Mesh(new THREE.BoxGeometry(0.003, pillarHeight, 0.014), slotMat);
+        slot.position.set(x, 0.02 + pillarHeight / 2, 0);
+        rootGroup.add(slot);
+    });
+    [-0.041, 0.041].forEach(z => {
+        const slot = new THREE.Mesh(new THREE.BoxGeometry(0.014, pillarHeight, 0.003), slotMat);
+        slot.position.set(0, 0.02 + pillarHeight / 2, z);
+        rootGroup.add(slot);
+    });
+
+    // Black Pillar Cable Strap (around mid-height, as in photo)
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.084, 0.025, 0.084), cableMat);
+    strap.position.y = 0.02 + pillarHeight * 0.45;
+    rootGroup.add(strap);
+
+    // 3. Central Torso Unit (At top of column)
+    const torsoY = 0.02 + pillarHeight;
     const torso = new THREE.Group();
     torso.position.y = torsoY;
     rootGroup.add(torso);
 
-    const torsoBody = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.13, 0.16), matteBlackMat);
-    torsoBody.position.y = 0.04;
+    // Main Torso Housing - Sleek sculpted matte black cowl (matching photo width)
+    const torsoBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.13, 0.14), matteBlackMat);
+    torsoBody.position.y = 0.05;
     torsoBody.castShadow = true;
     torso.add(torsoBody);
 
-    // Torso Chamfered Top Shell
-    const torsoTop = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.04, 32), matteBlackMat);
-    torsoTop.position.y = 0.12;
-    torso.add(torsoTop);
+    // Torso Beveled Top Cap (Trapezoidal crown)
+    const torsoCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.045, 32), matteBlackMat);
+    torsoCrown.scale.set(1.0, 1.0, 0.85);
+    torsoCrown.position.y = 0.13;
+    torsoCrown.castShadow = true;
+    torso.add(torsoCrown);
 
-    // OpenArm Distinctive Chest Emblem Logo (white 3-node connected glyph)
+    // Center Front Lower Lip / Chin Notch
+    const torsoChin = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.035, 0.015), matteBlackMat);
+    torsoChin.position.set(0, -0.01, 0.072);
+    torso.add(torsoChin);
+
+    // Torso Front Logo (Authentic OpenArm 3-Node Connected Network Emblem as in photo)
     const logoGroup = new THREE.Group();
-    logoGroup.position.set(0, 0.05, 0.082);
-
-    const nodeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const n1 = new THREE.Mesh(new THREE.CircleGeometry(0.008, 16), nodeMat);
-    n1.position.set(-0.015, 0, 0);
-    const n2 = new THREE.Mesh(new THREE.CircleGeometry(0.008, 16), nodeMat);
-    n2.position.set(0.015, 0, 0);
-    const n3 = new THREE.Mesh(new THREE.CircleGeometry(0.007, 16), nodeMat);
-    n3.position.set(0, 0.014, 0);
-    logoGroup.add(n1, n2, n3);
+    logoGroup.position.set(0, 0.065, 0.072);
     torso.add(logoGroup);
 
-    // 4. Build Left Arm and Right Arm
-    buildSingleArm(torso, "left",  -0.145, 0.04, 0, matteBlackMat, silverMetalMat, cyanGlowMat);
-    buildSingleArm(torso, "right",  0.145, 0.04, 0, matteBlackMat, silverMetalMat, cyanGlowMat);
+    const logoMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const n1 = new THREE.Mesh(new THREE.CircleGeometry(0.005, 16), logoMat);
+    n1.position.set(-0.014, 0.012, 0.001);
+    logoGroup.add(n1);
+
+    const n2 = new THREE.Mesh(new THREE.CircleGeometry(0.005, 16), logoMat);
+    n2.position.set(0.000, -0.010, 0.001);
+    logoGroup.add(n2);
+
+    const n3 = new THREE.Mesh(new THREE.CircleGeometry(0.005, 16), logoMat);
+    n3.position.set(0.014, 0.012, 0.001);
+    logoGroup.add(n3);
+
+    // Connecting bars
+    function makeBar(p1, p2) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.002, dist), logoMat);
+        bar.position.set((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, 0.0008);
+        bar.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+        return bar;
+    }
+    logoGroup.add(makeBar({x: -0.014, y: 0.012}, {x: 0, y: -0.010}));
+    logoGroup.add(makeBar({x: 0, y: -0.010}, {x: 0.014, y: 0.012}));
+
+    // 4. Build Left Arm and Right Arm - Tightly and gracefully flanking the column
+    buildSingleArm(torso, "left",  -0.075, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
+    buildSingleArm(torso, "right",  0.075, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
 }
 
 // Single 7-DOF Arm + 2-Finger Gripper Kinematic Assembly
-function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, silverMat, glowMat) {
+function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motorMat, silverMat, cableMat, labelMat) {
     const isLeft = side === "left";
+    const sign = isLeft ? -1 : 1;
     const armJoints = isLeft ? leftArmJoints : rightArmJoints;
     const gripperFingers = isLeft ? leftGripperFingers : rightGripperFingers;
 
-    // Shoulder Base Mount on Torso
+    // Shoulder Base Collar on Torso
     const shoulderMount = new THREE.Group();
     shoulderMount.position.set(offsetX, offsetY, offsetZ);
     parent.add(shoulderMount);
 
-    // Lateral Shoulder Motor Pod
-    const shoulderPod = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.06, 28), blackMat);
-    shoulderPod.rotation.z = Math.PI / 2;
-    shoulderPod.castShadow = true;
-    shoulderMount.add(shoulderPod);
+    // Torso side collar socket
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.020, 28), blackMat);
+    collar.rotation.z = Math.PI / 2;
+    shoulderMount.add(collar);
 
-    const shoulderRing = new THREE.Mesh(new THREE.TorusGeometry(0.053, 0.004, 16, 32), silverMat);
-    shoulderRing.rotation.y = Math.PI / 2;
-    shoulderMount.add(shoulderRing);
+    // Inner Silver Accent Ring between Torso & Shoulder Pod
+    const innerSilverRing = new THREE.Mesh(new THREE.TorusGeometry(0.0525, 0.003, 16, 32), silverMat);
+    innerSilverRing.rotation.y = Math.PI / 2;
+    innerSilverRing.position.x = -sign * 0.003;
+    shoulderMount.add(innerSilverRing);
 
-    // ----------------------------------------------------
-    // Joint 1: Shoulder Yaw (rotates around Y)
-    // ----------------------------------------------------
+    // ====================================================
+    // Joint 1: Shoulder Pitch (rotates around X axis)
+    // Swings the entire arm forward / backward
+    // ====================================================
     const j1 = new THREE.Group();
     shoulderMount.add(j1);
-    armJoints[0] = { group: j1, axis: 'y' };
+    armJoints[0] = { group: j1, axis: 'x' };
 
-    // ----------------------------------------------------
-    // Joint 2: Shoulder Pitch (rotates around Z or X)
-    // In natural rest/home pose, arm hangs straight down along -Y
-    // ----------------------------------------------------
+    // Lateral Shoulder Motor Pod (horizontal cylinder pointing outwards)
+    const shoulderPod = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.050, 0.042, 28), motorMat);
+    shoulderPod.rotation.z = Math.PI / 2;
+    shoulderPod.position.x = sign * 0.020;
+    shoulderPod.castShadow = true;
+    j1.add(shoulderPod);
+
+    // Second Silver Accent / Bearing Ring on outer shoulder pod
+    const outerSilverRing = new THREE.Mesh(new THREE.TorusGeometry(0.0505, 0.003, 16, 32), silverMat);
+    outerSilverRing.rotation.y = Math.PI / 2;
+    outerSilverRing.position.x = sign * 0.038;
+    j1.add(outerSilverRing);
+
+    // Outer Shoulder Cap: Spherical dome with recessed circular hub
+    const shoulderDome = new THREE.Mesh(new THREE.SphereGeometry(0.050, 24, 16, 0, Math.PI), blackMat);
+    shoulderDome.rotation.y = sign > 0 ? 0 : Math.PI;
+    shoulderDome.position.x = sign * 0.040;
+    shoulderDome.scale.set(0.35, 1.0, 1.0);
+    j1.add(shoulderDome);
+
+    const shoulderCenterCap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.004, 20), silverMat);
+    shoulderCenterCap.rotation.z = Math.PI / 2;
+    shoulderCenterCap.position.x = sign * 0.048;
+    j1.add(shoulderCenterCap);
+
+    // ====================================================
+    // Joint 2: Shoulder Roll / Abduction (rotates around Z axis)
+    // Hinge located at outer shoulder pod, swings arm outward away from torso
+    // ====================================================
     const j2 = new THREE.Group();
+    j2.position.set(sign * 0.036, 0, 0);
     j1.add(j2);
-    armJoints[1] = { group: j2, axis: 'x' };
+    armJoints[1] = { group: j2, axis: 'z' };
 
-    // J2 Motor Housing with Silver Metallic Bezel Ring
-    const j2Housing = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 28), blackMat);
-    j2Housing.rotation.z = Math.PI / 2;
-    j2Housing.castShadow = true;
-    j2.add(j2Housing);
+    // J2 Pitch Hinge Hub
+    const j2Hub = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.050, 0.065, 24), motorMat);
+    j2Hub.rotation.z = Math.PI / 2;
+    j2Hub.castShadow = true;
+    j2.add(j2Hub);
 
-    const j2Ring = new THREE.Mesh(new THREE.TorusGeometry(0.051, 0.005, 16, 32), silverMat);
-    j2Ring.rotation.y = Math.PI / 2;
-    j2.add(j2Ring);
+    // Upper Arm Link: Ergonomic curved sculpted black casing (~0.23m long)
+    const upperArmLength = 0.23;
+    const upperArmBody = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.036, upperArmLength, 24), blackMat);
+    upperArmBody.position.y = -upperArmLength / 2;
+    upperArmBody.castShadow = true;
+    j2.add(upperArmBody);
 
-    // Link 1: Upper Arm (slender sculpted black casing, ~220mm long downwards)
-    const upperArmLength = 0.22;
-    const upperArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.038, upperArmLength, 24), blackMat);
-    upperArmMesh.position.y = -upperArmLength / 2;
-    upperArmMesh.castShadow = true;
-    j2.add(upperArmMesh);
+    // Distinctive Machined Silver Aluminum Side Plate (as in photo)
+    // Runs down the lateral outer side of the upper arm with visible socket screws
+    const silverPlate = new THREE.Mesh(new THREE.BoxGeometry(0.005, upperArmLength * 0.88, 0.042), silverMat);
+    silverPlate.position.set(sign * 0.038, -upperArmLength * 0.48, 0);
+    silverPlate.castShadow = true;
+    j2.add(silverPlate);
 
-    // Upper arm decorative silver accent groove
-    const upperArmGroove = new THREE.Mesh(new THREE.TorusGeometry(0.041, 0.003, 16, 28), silverMat);
-    upperArmGroove.rotation.x = Math.PI / 2;
-    upperArmGroove.position.y = -upperArmLength * 0.45;
-    j2.add(upperArmGroove);
+    // 4 Rivet / Socket Screws along the silver plate
+    [-0.07, -0.02, 0.03, 0.08].forEach(py => {
+        const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.007, 12), silverMat);
+        screw.rotation.z = Math.PI / 2;
+        screw.position.set(sign * 0.042, -upperArmLength * 0.48 + py, 0);
+        j2.add(screw);
+    });
 
-    // ----------------------------------------------------
-    // Joint 3: Elbow Roll (rotates around Y)
-    // ----------------------------------------------------
+    // Cable harness loop running behind the shoulder/arm
+    const shoulderCable = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 12, 20, Math.PI), cableMat);
+    shoulderCable.rotation.x = Math.PI / 2;
+    shoulderCable.position.set(0, -0.03, -0.035);
+    j2.add(shoulderCable);
+
+    // ====================================================
+    // Joint 3: Elbow Roll (rotates around Y axis)
+    // ====================================================
     const j3 = new THREE.Group();
     j3.position.y = -upperArmLength;
     j2.add(j3);
     armJoints[2] = { group: j3, axis: 'y' };
 
-    const j3Motor = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.05, 24), silverMat);
-    j3Motor.position.y = -0.025;
-    j3Motor.castShadow = true;
-    j3.add(j3Motor);
+    // In-line roll actuator cylinder with silver accent ring
+    const j3Actuator = new THREE.Mesh(new THREE.CylinderGeometry(0.037, 0.037, 0.032, 24), motorMat);
+    j3Actuator.position.y = -0.016;
+    j3Actuator.castShadow = true;
+    j3.add(j3Actuator);
 
-    // ----------------------------------------------------
-    // Joint 4: Elbow Pitch (rotates around X)
-    // ----------------------------------------------------
+    const j3SilverRing = new THREE.Mesh(new THREE.TorusGeometry(0.0375, 0.003, 16, 28), silverMat);
+    j3SilverRing.rotation.x = Math.PI / 2;
+    j3SilverRing.position.y = -0.026;
+    j3.add(j3SilverRing);
+
+    // ====================================================
+    // Joint 4: Elbow Pitch (rotates around X axis)
+    // Features authentic DM4340 motor with circular bolt pattern & spec label
+    // ====================================================
     const j4 = new THREE.Group();
     j4.position.y = -0.045;
     j3.add(j4);
     armJoints[3] = { group: j4, axis: 'x' };
 
-    const j4Housing = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.075, 24), blackMat);
-    j4Housing.rotation.z = Math.PI / 2;
-    j4Housing.castShadow = true;
-    j4.add(j4Housing);
+    // DM4340 Motor Body (horizontal cylinder)
+    const dm4340Body = new THREE.Mesh(new THREE.CylinderGeometry(0.040, 0.040, 0.068, 24), motorMat);
+    dm4340Body.rotation.z = Math.PI / 2;
+    dm4340Body.castShadow = true;
+    j4.add(dm4340Body);
 
-    const j4Ring = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.004, 16, 28), silverMat);
-    j4Ring.rotation.y = Math.PI / 2;
-    j4.add(j4Ring);
+    // DM4340 Outer Silver Faceplate with bolt circle pattern (as in photo)
+    const dm4340Face = new THREE.Mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.006, 24), silverMat);
+    dm4340Face.rotation.z = Math.PI / 2;
+    dm4340Face.position.x = sign * 0.036;
+    j4.add(dm4340Face);
 
-    // Link 2: Forearm (sleek black body, ~200mm long downwards)
-    const forearmLength = 0.20;
-    const forearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.032, forearmLength, 24), blackMat);
-    forearmMesh.position.y = -forearmLength / 2;
-    forearmMesh.castShadow = true;
-    j4.add(forearmMesh);
+    // 6 Hex Screws on bolt circle
+    for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3;
+        const sRad = 0.026;
+        const bY = Math.cos(angle) * sRad;
+        const bZ = Math.sin(angle) * sRad;
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.008, 8), motorMat);
+        bolt.rotation.z = Math.PI / 2;
+        bolt.position.set(sign * 0.039, bY, bZ);
+        j4.add(bolt);
+    }
 
-    // ----------------------------------------------------
-    // Joint 5: Wrist Roll (rotates around Y)
-    // ----------------------------------------------------
+    // Center Bearing Hub
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.009, 16), motorMat);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.x = sign * 0.038;
+    j4.add(hub);
+
+    // DM4340 Specification Label (crisp white label on black body)
+    const labelBand = new THREE.Mesh(new THREE.CylinderGeometry(0.0402, 0.0402, 0.024, 24, 1, false, 0, Math.PI * 0.8), labelMat);
+    labelBand.rotation.z = Math.PI / 2;
+    labelBand.rotation.y = -Math.PI / 2;
+    j4.add(labelBand);
+
+    // Forearm Link: Sleek black link (~0.19m long)
+    const forearmLength = 0.19;
+    const forearmBody = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.030, forearmLength, 24), blackMat);
+    forearmBody.position.y = -forearmLength / 2;
+    forearmBody.castShadow = true;
+    j4.add(forearmBody);
+
+    // Forearm Silver Bracket Accent & Cable Clip (as in photo)
+    const forearmBracket = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.08, 0.034), silverMat);
+    forearmBracket.position.set(sign * 0.031, -forearmLength * 0.45, 0);
+    j4.add(forearmBracket);
+
+    // Elbow under-joint cable loop
+    const elbowCable = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.005, 12, 20, Math.PI * 0.8), cableMat);
+    elbowCable.rotation.z = Math.PI / 2;
+    elbowCable.position.set(0, -0.03, 0.032);
+    j4.add(elbowCable);
+
+    // ====================================================
+    // Joint 5: Wrist Roll (rotates around Y axis)
+    // ====================================================
     const j5 = new THREE.Group();
     j5.position.y = -forearmLength;
     j4.add(j5);
     armJoints[4] = { group: j5, axis: 'y' };
 
-    const j5Motor = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.04, 24), silverMat);
-    j5Motor.position.y = -0.02;
-    j5Motor.castShadow = true;
-    j5.add(j5Motor);
+    const j5Collar = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.030, 0.026, 24), motorMat);
+    j5Collar.position.y = -0.013;
+    j5.add(j5Collar);
 
-    // ----------------------------------------------------
-    // Joint 6: Wrist Pitch (rotates around X)
-    // ----------------------------------------------------
+    const j5SilverRing = new THREE.Mesh(new THREE.TorusGeometry(0.0305, 0.003, 16, 24), silverMat);
+    j5SilverRing.rotation.x = Math.PI / 2;
+    j5SilverRing.position.y = -0.022;
+    j5.add(j5SilverRing);
+
+    // ====================================================
+    // Joint 6: Wrist Pitch (rotates around X axis)
+    // Features signature Machined Silver Clevis / Dual-Prong Fork Bracket
+    // ====================================================
     const j6 = new THREE.Group();
-    j6.position.y = -0.038;
+    j6.position.y = -0.036;
     j5.add(j6);
     armJoints[5] = { group: j6, axis: 'x' };
 
-    const j6Housing = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.06, 24), blackMat);
-    j6Housing.rotation.z = Math.PI / 2;
-    j6Housing.castShadow = true;
-    j6.add(j6Housing);
+    // Machined Silver Clevis Fork Bracket (U-shaped dual-prong, as in photo)
+    const clevisGroup = new THREE.Group();
+    j6.add(clevisGroup);
 
-    // ----------------------------------------------------
-    // Joint 7: Wrist Flange / End-Effector Roll (rotates around Y)
-    // ----------------------------------------------------
+    // Horizontal bridge
+    const clevisBridge = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.010, 0.036), silverMat);
+    clevisBridge.position.y = -0.005;
+    clevisGroup.add(clevisBridge);
+
+    // Left & Right vertical prongs
+    [-0.022, 0.022].forEach(px => {
+        const prong = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.036, 0.034), silverMat);
+        prong.position.set(px, -0.022, 0);
+        clevisGroup.add(prong);
+
+        // Circular pivot bolt cap
+        const boltCap = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.008, 16), silverMat);
+        boltCap.rotation.z = Math.PI / 2;
+        boltCap.position.set(px + (px > 0 ? 0.003 : -0.003), -0.022, 0);
+        clevisGroup.add(boltCap);
+    });
+
+    // Flexible cable conduit through clevis
+    const clevisCable = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.004, 12, 16, Math.PI * 0.7), cableMat);
+    clevisCable.position.set(0, -0.025, 0.022);
+    clevisGroup.add(clevisCable);
+
+    // ====================================================
+    // Joint 7: Wrist Yaw / End-Effector Roll (rotates around Y axis)
+    // Features vertical black DM4310 motor cylinder with silver flanges
+    // ====================================================
     const j7 = new THREE.Group();
-    j7.position.y = -0.035;
+    j7.position.y = -0.040;
     j6.add(j7);
     armJoints[6] = { group: j7, axis: 'y' };
 
-    const j7Flange = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.025, 24), silverMat);
-    j7Flange.position.y = -0.012;
-    j7Flange.castShadow = true;
-    j7.add(j7Flange);
+    // Top silver mounting flange
+    const j7TopFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.005, 24), silverMat);
+    j7TopFlange.position.y = -0.003;
+    j7.add(j7TopFlange);
 
-    // ----------------------------------------------------
-    // End-Effector: 2-Finger Parallel/Angular Gripper
-    // Matching official OpenArm with machined silver links & black pads
-    // ----------------------------------------------------
-    const gripperGroup = new THREE.Group();
-    gripperGroup.position.y = -0.025;
-    j7.add(gripperGroup);
+    // DM4310 Vertical Black Motor Can
+    const dm4310Can = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.044, 24), motorMat);
+    dm4310Can.position.y = -0.025;
+    dm4310Can.castShadow = true;
+    j7.add(dm4310Can);
 
-    // Gripper Base / Actuator Housing
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.025, 0.045), blackMat);
-    palm.position.y = -0.012;
-    palm.castShadow = true;
-    gripperGroup.add(palm);
+    // White/silver spec label on DM4310
+    const dm4310Label = new THREE.Mesh(new THREE.CylinderGeometry(0.0262, 0.0262, 0.020, 24, 1, false, 0, Math.PI * 0.85), labelMat);
+    dm4310Label.position.y = -0.025;
+    dm4310Label.rotation.y = -Math.PI / 2;
+    j7.add(dm4310Label);
+
+    // Bottom silver output collar
+    const j7BottomFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.006, 24), silverMat);
+    j7BottomFlange.position.y = -0.050;
+    j7.add(j7BottomFlange);
+
+    // ====================================================
+    // Joint 8: End-Effector Gripper (OpenArm Parallel Slider with Angled Beak Claws)
+    // Matching official OpenArm photo: horizontal silver guide rail & angled black beak claws
+    // ====================================================
+    const gripperAssembly = new THREE.Group();
+    gripperAssembly.position.y = -0.054;
+    j7.add(gripperAssembly);
+
+    // Horizontal Silver Guide Rail / Slider Crossbar (~96mm wide)
+    const guideRail = new THREE.Mesh(new THREE.BoxGeometry(0.096, 0.008, 0.016), silverMat);
+    guideRail.position.y = -0.004;
+    guideRail.castShadow = true;
+    gripperAssembly.add(guideRail);
+
+    // Rail End Stops (Silver tabs on ends of crossbar)
+    [-0.048, 0.048].forEach(rx => {
+        const stop = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.014, 0.018), silverMat);
+        stop.position.set(rx, -0.004, 0);
+        gripperAssembly.add(stop);
+    });
+
+    // Helper to create the angled matte black wedge beak claw finger
+    function createBeakClawFinger(isLeftFinger) {
+        const clawGroup = new THREE.Group();
+
+        // 1. Machined Silver Slider Carriage Block
+        const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.012, 0.022), silverMat);
+        carriage.position.y = -0.006;
+        carriage.castShadow = true;
+        clawGroup.add(carriage);
+
+        // 2. Angled Matte Black Beak Claw (Wedge-shaped, tapering down to a sharp tip)
+        const clawLength = 0.055;
+        const signClaw = isLeftFinger ? -1 : 1;
+
+        // Custom sculpted wedge claw geometry
+        const clawGeo = new THREE.BufferGeometry();
+        const wTop = 0.014;
+        const depth = 0.018;
+
+        const verts = new Float32Array([
+            // Front face
+            -wTop/2, 0, depth/2,
+             wTop/2, 0, depth/2,
+            -signClaw * 0.008, -clawLength, depth * 0.3,
+
+             wTop/2, 0, depth/2,
+            -signClaw * 0.008, -clawLength, depth * 0.3,
+             signClaw * 0.002, -clawLength, depth * 0.3,
+
+            // Back face
+            -wTop/2, 0, -depth/2,
+             wTop/2, 0, -depth/2,
+            -signClaw * 0.008, -clawLength, -depth * 0.3,
+
+             wTop/2, 0, -depth/2,
+            -signClaw * 0.008, -clawLength, -depth * 0.3,
+             signClaw * 0.002, -clawLength, -depth * 0.3,
+
+            // Outer bevel face
+            -signClaw * wTop/2, 0, -depth/2,
+            -signClaw * wTop/2, 0,  depth/2,
+            -signClaw * 0.008, -clawLength,  depth * 0.3,
+
+            -signClaw * wTop/2, 0, -depth/2,
+            -signClaw * 0.008, -clawLength,  depth * 0.3,
+            -signClaw * 0.008, -clawLength, -depth * 0.3,
+
+            // Inner gripping contact face
+             signClaw * wTop/2, 0, -depth/2,
+             signClaw * wTop/2, 0,  depth/2,
+             signClaw * 0.002, -clawLength,  depth * 0.3,
+
+             signClaw * wTop/2, 0, -depth/2,
+             signClaw * 0.002, -clawLength,  depth * 0.3,
+             signClaw * 0.002, -clawLength, -depth * 0.3,
+        ]);
+
+        clawGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        clawGeo.computeVertexNormals();
+
+        const clawMesh = new THREE.Mesh(clawGeo, blackMat);
+        clawMesh.position.y = -0.012;
+        clawMesh.castShadow = true;
+        clawGroup.add(clawMesh);
+
+        // Inner high-friction gripping pad (dark textured strip)
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.002, clawLength * 0.75, depth * 0.6), motorMat);
+        pad.position.set(signClaw * 0.003, -0.034, 0);
+        clawGroup.add(pad);
+
+        return clawGroup;
+    }
 
     // Left Finger Assembly
-    const fingerLeftGroup = new THREE.Group();
-    fingerLeftGroup.position.set(-0.028, -0.025, 0);
-    gripperGroup.add(fingerLeftGroup);
-
-    const fingerLeftLink = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.045, 0.02), silverMat);
-    fingerLeftLink.position.y = -0.022;
-    fingerLeftLink.castShadow = true;
-    fingerLeftGroup.add(fingerLeftLink);
-
-    const fingerLeftPad = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.035, 0.018), blackMat);
-    fingerLeftPad.position.set(0.006, -0.025, 0);
-    fingerLeftGroup.add(fingerLeftPad);
+    const fingerLeft = createBeakClawFinger(true);
+    fingerLeft.position.set(-0.018, 0, 0);
+    gripperAssembly.add(fingerLeft);
 
     // Right Finger Assembly
-    const fingerRightGroup = new THREE.Group();
-    fingerRightGroup.position.set(0.028, -0.025, 0);
-    gripperGroup.add(fingerRightGroup);
+    const fingerRight = createBeakClawFinger(false);
+    fingerRight.position.set(0.018, 0, 0);
+    gripperAssembly.add(fingerRight);
 
-    const fingerRightLink = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.045, 0.02), silverMat);
-    fingerRightLink.position.y = -0.022;
-    fingerRightLink.castShadow = true;
-    fingerRightGroup.add(fingerRightLink);
-
-    const fingerRightPad = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.035, 0.018), blackMat);
-    fingerRightPad.position.set(-0.006, -0.025, 0);
-    fingerRightGroup.add(fingerRightPad);
-
-    gripperFingers.left = fingerLeftGroup;
-    gripperFingers.right = fingerRightGroup;
+    gripperFingers.left = fingerLeft;
+    gripperFingers.right = fingerRight;
 }
 
 // ----------------------------------------------------
@@ -873,61 +1501,46 @@ function triggerPreset(preset) {
         }
     } else if (preset === "ready") {
         // Ready stance: Both arms raised forward at chest height
-        // L: J1=0.2, J2=0.7, J3=0.0, J4=-1.1, J5=0.0, J6=0.4, J7=0.0
-        // R: J1=-0.2, J2=0.7, J3=0.0, J4=-1.1, J5=0.0, J6=0.4, J7=0.0
-        sendAction("set_mit", { id: 1, q: 0.25 });
-        sendAction("set_mit", { id: 2, q: 0.75 });
-        sendAction("set_mit", { id: 3, q: 0.0 });
-        sendAction("set_mit", { id: 4, q: -1.05 });
-        sendAction("set_mit", { id: 5, q: 0.0 });
-        sendAction("set_mit", { id: 6, q: 0.35 });
-        sendAction("set_mit", { id: 7, q: 0.0 });
-        sendAction("set_gripper", { id: 8, pos: 0.2 });
-
-        sendAction("set_mit", { id: 9,  q: -0.25 });
-        sendAction("set_mit", { id: 10, q: 0.75 });
-        sendAction("set_mit", { id: 11, q: 0.0 });
-        sendAction("set_mit", { id: 12, q: -1.05 });
-        sendAction("set_mit", { id: 13, q: 0.0 });
-        sendAction("set_mit", { id: 14, q: 0.35 });
-        sendAction("set_mit", { id: 15, q: 0.0 });
-        sendAction("set_gripper", { id: 16, pos: 0.2 });
+        // J1(Pitch)=0.35, J2(Roll)=0.20, J3=0, J4(Elbow)=1.20, J5=0, J6(Wrist)=-0.35, J7=0
+        [1, 9].forEach(baseId => {
+            sendAction("set_mit", { id: baseId + 0, q: 0.35 });
+            sendAction("set_mit", { id: baseId + 1, q: 0.20 });
+            sendAction("set_mit", { id: baseId + 2, q: 0.00 });
+            sendAction("set_mit", { id: baseId + 3, q: 1.20 });
+            sendAction("set_mit", { id: baseId + 4, q: 0.00 });
+            sendAction("set_mit", { id: baseId + 5, q: -0.35 });
+            sendAction("set_mit", { id: baseId + 6, q: 0.00 });
+            sendAction("set_gripper", { id: baseId + 7, pos: 0.25 });
+        });
     } else if (preset === "wave") {
-        // Bimanual alternating waving motion
+        // Left arm raises up and waves, Right arm rests
         let t = 0;
+        sendAction("set_mit", { id: 9, q: 0.0 });
+        sendAction("set_mit", { id: 10, q: 0.0 });
+        sendAction("set_mit", { id: 12, q: 0.0 });
         presetTimer = setInterval(() => {
             t += 0.05;
-            // Left arm wave
-            const leftWave = Math.sin(t * 3.5) * 0.45;
-            sendAction("set_mit", { id: 1, q: 0.4 });
-            sendAction("set_mit", { id: 2, q: 1.1 });
-            sendAction("set_mit", { id: 4, q: -1.2 });
-            sendAction("set_mit", { id: 6, q: leftWave });
-
-            // Right arm wave with phase offset
-            const rightWave = Math.sin(t * 3.5 + Math.PI) * 0.45;
-            sendAction("set_mit", { id: 9,  q: -0.4 });
-            sendAction("set_mit", { id: 10, q: 1.1 });
-            sendAction("set_mit", { id: 12, q: -1.2 });
-            sendAction("set_mit", { id: 14, q: rightWave });
+            const waveAngle = Math.sin(t * 3.5) * 0.40;
+            sendAction("set_mit", { id: 1, q: 1.10 });
+            sendAction("set_mit", { id: 2, q: 0.50 });
+            sendAction("set_mit", { id: 3, q: 0.00 });
+            sendAction("set_mit", { id: 4, q: 1.50 });
+            sendAction("set_mit", { id: 5, q: 0.00 });
+            sendAction("set_mit", { id: 6, q: waveAngle });
+            sendAction("set_mit", { id: 7, q: 0.00 });
         }, 50);
     } else if (preset === "clap") {
-        // Handshake / Grippers meet at center
-        sendAction("set_mit", { id: 1, q: 0.65 });
-        sendAction("set_mit", { id: 2, q: 0.70 });
-        sendAction("set_mit", { id: 3, q: 0.0 });
-        sendAction("set_mit", { id: 4, q: -1.15 });
-        sendAction("set_mit", { id: 5, q: 0.8 });
-        sendAction("set_mit", { id: 6, q: 0.2 });
-        sendAction("set_gripper", { id: 8, pos: 0.6 });
-
-        sendAction("set_mit", { id: 9,  q: -0.65 });
-        sendAction("set_mit", { id: 10, q: 0.70 });
-        sendAction("set_mit", { id: 11, q: 0.0 });
-        sendAction("set_mit", { id: 12, q: -1.15 });
-        sendAction("set_mit", { id: 13, q: -0.8 });
-        sendAction("set_mit", { id: 14, q: 0.2 });
-        sendAction("set_gripper", { id: 16, pos: 0.6 });
+        // Handshake / Grippers reach toward center
+        [1, 9].forEach(baseId => {
+            sendAction("set_mit", { id: baseId + 0, q: 0.50 });
+            sendAction("set_mit", { id: baseId + 1, q: 0.15 });
+            sendAction("set_mit", { id: baseId + 2, q: 0.00 });
+            sendAction("set_mit", { id: baseId + 3, q: 1.30 });
+            sendAction("set_mit", { id: baseId + 4, q: 0.00 });
+            sendAction("set_mit", { id: baseId + 5, q: -0.20 });
+            sendAction("set_mit", { id: baseId + 6, q: 0.00 });
+            sendAction("set_gripper", { id: baseId + 7, pos: 0.50 });
+        });
     } else if (preset === "carry") {
         // Dual-arm reach forward, grasp box, lift upwards
         let step = 0;
@@ -936,39 +1549,42 @@ function triggerPreset(preset) {
             const phase = (step % 120);
             if (phase < 40) {
                 // Reach forward & open grippers
-                sendAction("set_mit", { id: 2, q: 0.6 });
-                sendAction("set_mit", { id: 4, q: -0.7 });
-                sendAction("set_mit", { id: 10, q: 0.6 });
-                sendAction("set_mit", { id: 12, q: -0.7 });
-                sendAction("set_gripper", { arm: "both", pos: 0.0 });
+                [1, 9].forEach(baseId => {
+                    sendAction("set_mit", { id: baseId + 0, q: 0.45 });
+                    sendAction("set_mit", { id: baseId + 1, q: 0.25 });
+                    sendAction("set_mit", { id: baseId + 3, q: 1.10 });
+                    sendAction("set_mit", { id: baseId + 5, q: -0.30 });
+                    sendAction("set_gripper", { id: baseId + 7, pos: 0.80 });
+                });
             } else if (phase < 80) {
-                // Grasp
-                sendAction("set_gripper", { arm: "both", pos: 0.85 });
+                // Grasp box
+                [1, 9].forEach(baseId => {
+                    sendAction("set_gripper", { id: baseId + 7, pos: 0.20 });
+                });
             } else {
-                // Lift
-                sendAction("set_mit", { id: 2, q: 0.95 });
-                sendAction("set_mit", { id: 4, q: -1.2 });
-                sendAction("set_mit", { id: 10, q: 0.95 });
-                sendAction("set_mit", { id: 12, q: -1.2 });
+                // Lift box upward
+                [1, 9].forEach(baseId => {
+                    sendAction("set_mit", { id: baseId + 0, q: 0.80 });
+                    sendAction("set_mit", { id: baseId + 3, q: 1.45 });
+                    sendAction("set_mit", { id: baseId + 5, q: -0.45 });
+                });
             }
         }, 60);
     } else if (preset === "sine") {
         let t = 0;
         presetTimer = setInterval(() => {
             t += 0.04;
-            const q2 = Math.sin(t) * 0.4 + 0.3;
-            const q4 = -Math.cos(t * 1.2) * 0.5 - 0.6;
-            const q6 = Math.sin(t * 1.5) * 0.35;
+            const q1 = Math.sin(t * 0.8) * 0.25 + 0.30;
+            const q2 = Math.sin(t * 0.6) * 0.15 + 0.20;
+            const q4 = Math.cos(t * 1.0) * 0.35 + 1.10;
+            const q6 = -Math.sin(t * 0.8) * 0.20 - 0.25;
 
-            // Coordinated mirrored sine wave for both arms
-            sendAction("set_mit", { id: 2,  q: q2 });
-            sendAction("set_mit", { id: 4,  q: q4 });
-            sendAction("set_mit", { id: 6,  q: q6 });
-
-            sendAction("set_mit", { id: 10, q: q2 });
-            sendAction("set_mit", { id: 12, q: q4 });
-            sendAction("set_mit", { id: 14, q: q6 });
-        }, 40);
+            [1, 9].forEach(baseId => {
+                sendAction("set_mit", { id: baseId + 0, q: q1 });
+                sendAction("set_mit", { id: baseId + 1, q: q2 });
+                sendAction("set_mit", { id: baseId + 3, q: q4 });
+            });
+        }, 50);
     }
 }
 
