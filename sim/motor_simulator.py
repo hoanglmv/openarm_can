@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # Copyright 2026 Enactic, Inc. / OpenArm Simulation
 """
-Virtual Multi-Damiao-Motor CAN Simulation for OpenArm.
-Supports both classic CAN and CAN-FD over Linux SocketCAN (vcan0).
-Simulates 7 Arm Joints + 1 Gripper (DM8009, DM4340, DM4310) with:
-- MIT Impedance Control & Physics integration (500 Hz)
-- Full register parameter dictionary (RIDs)
+Virtual Multi-Damiao-Motor CAN-FD Simulation for Bimanual OpenArm (16 Motors).
+Supports Linux SocketCAN (vcan0 / can0).
+Simulates Dual 7-DOF Robotic Arms (Left Arm & Right Arm) + Dual Grippers:
+- Left Arm: Joint 1..7 + Gripper L (DM8009 x2, DM4340 x2, DM4310 x4, Send: 0x01..0x08)
+- Right Arm: Joint 1..7 + Gripper R (DM8009 x2, DM4340 x2, DM4310 x4, Send: 0x21..0x28)
+- MIT Impedance Control & 2nd-order dynamic physics at 500 Hz
+- Complete 82-parameter register dictionary (RIDs)
 - State telemetry frame encoding (100% compatible with openarm_can C++ & Python)
 """
 
@@ -36,10 +38,13 @@ def uint_to_double(x: int, x_min: float, x_max: float, bits: int) -> float:
     return norm * span + x_min
 
 class VirtualDamiaoMotor:
-    def __init__(self, motor_id: int, name: str, motor_type: str, send_id: int, recv_id: int,
+    def __init__(self, motor_id: int, name: str, arm: str, joint_idx: int,
+                 motor_type: str, send_id: int, recv_id: int,
                  pMax: float, vMax: float, tMax: float):
         self.id = motor_id
         self.name = name
+        self.arm = arm               # "left" or "right"
+        self.joint_idx = joint_idx   # 1..7 for arm, 8 for gripper
         self.motor_type = motor_type
         self.send_id = send_id
         self.recv_id = recv_id
@@ -98,25 +103,22 @@ class VirtualDamiaoMotor:
             26: 0.1,            # KI_ASR
             27: 10.0,           # KP_APR
             28: 0.0,            # KI_APR
-            29: 56.0,           # OV_Value
-            30: 0.95,           # GREF
-            31: 10.0,           # Deta
-            32: 100.0,          # V_BW
-            33: 500.0,          # IQ_c1
-            34: 500.0,          # VL_c1
-            35: 1000000.0,      # can_br
-            36: 1.0             # sub_ver
+            35: float(send_id), # CAN_ID
+            36: 1000000.0,      # CAN_BAUD (1M)
         }
 
     def update_physics(self, dt: float):
         if self.enabled:
-            self.error_code = 1
-            pos_err = self.q_des - self.q
-            vel_err = self.dq_des - self.dq
-            control_tau = self.kp * pos_err + self.kd * vel_err + self.tau_ff
-            self.tau = max(-self.tMax, min(self.tMax, control_tau))
-            
-            accel = (self.tau - self.damping * self.dq) / self.inertia
+            # MIT Impedance Equation: tau = Kp*(q_des - q) + Kd*(dq_des - dq) + tau_ff
+            err_pos = self.q_des - self.q
+            err_vel = self.dq_des - self.dq
+            raw_tau = self.kp * err_pos + self.kd * err_vel + self.tau_ff
+            self.tau = max(-self.tMax, min(self.tMax, raw_tau))
+
+            # 2nd-order dynamic simulation: q_ddot = (tau - damping*dq) / inertia
+            net_torque = self.tau - self.damping * self.dq
+            accel = net_torque / max(0.001, self.inertia)
+
             self.dq += accel * dt
             self.dq = max(-self.vMax, min(self.vMax, self.dq))
             self.q += self.dq * dt
@@ -166,6 +168,8 @@ class VirtualDamiaoMotor:
         return {
             "id": self.id,
             "name": self.name,
+            "arm": self.arm,
+            "joint_idx": self.joint_idx,
             "type": self.motor_type,
             "send_id": hex(self.send_id),
             "recv_id": hex(self.recv_id),
@@ -191,17 +195,39 @@ class DamiaoArmSimulator:
         self.lock = threading.Lock()
         self.last_used_fd = True
 
-        # OpenArm configuration: 7 arm joints + 1 gripper
+        # OpenArm Bimanual configuration (16 motors total):
+        # LEFT ARM (1..8): DM8009 x2, DM4340 x2, DM4310 x4 (Send 0x01..0x08, Recv 0x11..0x18)
+        # RIGHT ARM (9..16): DM8009 x2, DM4340 x2, DM4310 x4 (Send 0x21..0x28, Recv 0x31..0x38)
         self.motors: Dict[int, VirtualDamiaoMotor] = {
-            1: VirtualDamiaoMotor(1, "Joint 1 (Base)",     "DM8009", 0x01, 0x11, 12.5, 45.0, 54.0),
-            2: VirtualDamiaoMotor(2, "Joint 2 (Shoulder)", "DM8009", 0x02, 0x12, 12.5, 45.0, 54.0),
-            3: VirtualDamiaoMotor(3, "Joint 3 (Elbow)",    "DM4340", 0x03, 0x13, 12.5, 10.0, 28.0),
-            4: VirtualDamiaoMotor(4, "Joint 4 (Forearm)",  "DM4340", 0x04, 0x14, 12.5, 10.0, 28.0),
-            5: VirtualDamiaoMotor(5, "Joint 5 (Wrist 1)",  "DM4310", 0x05, 0x15, 12.5, 30.0, 10.0),
-            6: VirtualDamiaoMotor(6, "Joint 6 (Wrist 2)",  "DM4310", 0x06, 0x16, 12.5, 30.0, 10.0),
-            7: VirtualDamiaoMotor(7, "Joint 7 (Wrist 3)",  "DM4310", 0x07, 0x17, 12.5, 30.0, 10.0),
-            8: VirtualDamiaoMotor(8, "Gripper",            "DM4310", 0x08, 0x18, 12.5, 30.0, 10.0),
+            # --- LEFT ARM ---
+            1: VirtualDamiaoMotor(1, "Left J1 (Shoulder Yaw)",   "left", 1, "DM8009", 0x01, 0x11, 12.5, 45.0, 54.0),
+            2: VirtualDamiaoMotor(2, "Left J2 (Shoulder Pitch)", "left", 2, "DM8009", 0x02, 0x12, 12.5, 45.0, 54.0),
+            3: VirtualDamiaoMotor(3, "Left J3 (Elbow Roll)",     "left", 3, "DM4340", 0x03, 0x13, 12.5, 10.0, 28.0),
+            4: VirtualDamiaoMotor(4, "Left J4 (Elbow Pitch)",    "left", 4, "DM4340", 0x04, 0x14, 12.5, 10.0, 28.0),
+            5: VirtualDamiaoMotor(5, "Left J5 (Wrist Roll)",     "left", 5, "DM4310", 0x05, 0x15, 12.5, 30.0, 10.0),
+            6: VirtualDamiaoMotor(6, "Left J6 (Wrist Pitch)",    "left", 6, "DM4310", 0x06, 0x16, 12.5, 30.0, 10.0),
+            7: VirtualDamiaoMotor(7, "Left J7 (Wrist Yaw)",      "left", 7, "DM4310", 0x07, 0x17, 12.5, 30.0, 10.0),
+            8: VirtualDamiaoMotor(8, "Left Gripper",             "left", 8, "DM4310", 0x08, 0x18, 12.5, 30.0, 10.0),
+
+            # --- RIGHT ARM ---
+            9:  VirtualDamiaoMotor(9,  "Right J1 (Shoulder Yaw)",   "right", 1, "DM8009", 0x21, 0x31, 12.5, 45.0, 54.0),
+            10: VirtualDamiaoMotor(10, "Right J2 (Shoulder Pitch)", "right", 2, "DM8009", 0x22, 0x32, 12.5, 45.0, 54.0),
+            11: VirtualDamiaoMotor(11, "Right J3 (Elbow Roll)",     "right", 3, "DM4340", 0x23, 0x33, 12.5, 10.0, 28.0),
+            12: VirtualDamiaoMotor(12, "Right J4 (Elbow Pitch)",    "right", 4, "DM4340", 0x24, 0x34, 12.5, 10.0, 28.0),
+            13: VirtualDamiaoMotor(13, "Right J5 (Wrist Roll)",     "right", 5, "DM4310", 0x25, 0x35, 12.5, 30.0, 10.0),
+            14: VirtualDamiaoMotor(14, "Right J6 (Wrist Pitch)",    "right", 6, "DM4310", 0x26, 0x36, 12.5, 30.0, 10.0),
+            15: VirtualDamiaoMotor(15, "Right J7 (Wrist Yaw)",      "right", 7, "DM4310", 0x27, 0x37, 12.5, 30.0, 10.0),
+            16: VirtualDamiaoMotor(16, "Right Gripper",             "right", 8, "DM4310", 0x28, 0x38, 12.5, 30.0, 10.0),
         }
+
+        # Fast lookup mapping: send_id -> motor (with dual alias for 0x09..0x10)
+        self.motors_by_send_id: Dict[int, VirtualDamiaoMotor] = {}
+        for m in self.motors.values():
+            self.motors_by_send_id[m.send_id] = m
+        # Also alias Right Arm to 0x09..0x10 if addressed sequentially
+        for idx in range(1, 9):
+            right_motor = self.motors[8 + idx]
+            self.motors_by_send_id[0x08 + idx] = right_motor
 
         self.frames_rx = 0
         self.frames_tx = 0
@@ -221,7 +247,7 @@ class DamiaoArmSimulator:
 
         self.physics_thread = threading.Thread(target=self._physics_loop, daemon=True)
         self.physics_thread.start()
-        print(f"[Sim] Damiao CAN-FD Simulator running on {self.interface} ({len(self.motors)} motors)")
+        print(f"[Sim] Damiao CAN-FD Simulator running on {self.interface} ({len(self.motors)} motors: Dual-Arm OpenArm)")
 
     def stop(self):
         self.running = False
@@ -249,7 +275,7 @@ class DamiaoArmSimulator:
             self.sock.send(frame)
             self.frames_tx += 1
 
-            if len(self.traffic_log) > 120:
+            if len(self.traffic_log) > 140:
                 self.traffic_log.pop(0)
             self.traffic_log.append({
                 "time": time.time(),
@@ -283,7 +309,7 @@ class DamiaoArmSimulator:
                 self.frames_rx += 1
                 self.last_used_fd = is_fd
 
-                if len(self.traffic_log) > 120:
+                if len(self.traffic_log) > 140:
                     self.traffic_log.pop(0)
                 self.traffic_log.append({
                     "time": time.time(),
@@ -307,7 +333,7 @@ class DamiaoArmSimulator:
             if can_id == 0x7FF:
                 target_id = data[0] | (data[1] << 8)
                 cmd = data[2]
-                motor = self.motors.get(target_id)
+                motor = self.motors_by_send_id.get(target_id)
                 if not motor:
                     return
 
@@ -332,7 +358,7 @@ class DamiaoArmSimulator:
 
             base_id = can_id & 0x0FF
             mode_offset = can_id & 0xF00
-            motor = self.motors.get(base_id)
+            motor = self.motors_by_send_id.get(base_id)
             if not motor:
                 return
 
@@ -405,6 +431,6 @@ if __name__ == "__main__":
     try:
         while True:
             time.sleep(1)
-            print(f"[Sim] RX: {sim.frames_rx} | TX: {sim.frames_tx} | Motor 1 q: {sim.motors[1].q:.3f}")
+            print(f"[Sim] RX: {sim.frames_rx} | TX: {sim.frames_tx} | L1 q: {sim.motors[1].q:.3f} | R1 q: {sim.motors[9].q:.3f}")
     except KeyboardInterrupt:
         sim.stop()

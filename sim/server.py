@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # Copyright 2026 Enactic, Inc. / OpenArm Simulation
 """
-Unified Server for OpenArm CAN Simulation & Web Dashboard:
-- Runs Virtual Damiao Arm CAN-FD Simulator on vcan0
+Unified Server for OpenArm Bimanual CAN-FD Simulation & Web Dashboard:
+- Runs Virtual Damiao Bimanual Dual-Arm CAN-FD Simulator on vcan0 (16 motors)
 - Serves HTTP static files (HTML/CSS/JS) on port 8888
-- Serves WebSocket real-time telemetry and control on port 8889
+- Serves WebSocket real-time telemetry and dual-arm control on port 8889
 - Executes openarm-can-cli subcommands on demand
 """
 
@@ -141,9 +141,29 @@ class OpenArmDashboardServer:
 
         elif action == "set_gripper":
             pos = float(payload.get("pos", 0.0))
-            gripper = self.sim.motors.get(8)
-            if gripper:
-                # Send pos command via MIT mode
+            target_arm = payload.get("arm", "both")
+            target_id = payload.get("id")
+
+            target_motors = []
+            if target_id is not None:
+                m = self.sim.motors.get(int(target_id))
+                if m:
+                    target_motors.append(m)
+            elif target_arm == "left":
+                m = self.sim.motors.get(8)
+                if m:
+                    target_motors.append(m)
+            elif target_arm == "right":
+                m = self.sim.motors.get(16)
+                if m:
+                    target_motors.append(m)
+            else: # both
+                for mid in [8, 16]:
+                    m = self.sim.motors.get(mid)
+                    if m:
+                        target_motors.append(m)
+
+            for gripper in target_motors:
                 q_uint = double_to_uint(pos, -gripper.pMax, gripper.pMax, 16)
                 dq_uint = double_to_uint(0.0, -gripper.vMax, gripper.vMax, 12)
                 kp_uint = double_to_uint(40.0, 0.0, 500.0, 12)
@@ -167,7 +187,7 @@ class OpenArmDashboardServer:
 
             args = [cli_bin, "-i", self.interface]
             if cmd == "discover":
-                args += ["discover", "-m", "8"]
+                args += ["discover", "-m", "16"]
             elif cmd == "show_param":
                 args += ["show_param", "--id", "1"]
             elif cmd == "monitor":
@@ -188,7 +208,6 @@ class OpenArmDashboardServer:
                 except Exception as ex:
                     output = f"Error executing CLI: {str(ex)}"
                 finally:
-                    # Virtual CAN interfaces cannot have hardware bitrate changed, ensure it stays UP
                     subprocess.run(["sudo", "ip", "link", "set", "up", self.interface], capture_output=True)
 
                 if ws in self.clients:
@@ -249,5 +268,11 @@ class OpenArmDashboardServer:
 
 
 if __name__ == "__main__":
-    server = OpenArmDashboardServer("vcan0")
+    iface = "vcan0"
+    if len(sys.argv) > 1 and sys.argv[1].startswith("--interface="):
+        iface = sys.argv[1].split("=")[1]
+    elif len(sys.argv) > 2 and sys.argv[1] in ["-i", "--interface"]:
+        iface = sys.argv[2]
+
+    server = OpenArmDashboardServer(iface)
     server.start()
