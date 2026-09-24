@@ -19,6 +19,7 @@ import struct
 import asyncio
 import threading
 import subprocess
+from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, List, Optional
 
@@ -43,6 +44,51 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
 
+    def do_GET(self):
+        if self.path == "/api/export/status":
+            if hasattr(self.server, 'app') and self.server.app:
+                stats = self.server.app.exporter.get_stats()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(stats).encode('utf-8'))
+                return
+        elif self.path == "/api/export/download":
+            if hasattr(self.server, 'app') and self.server.app:
+                exporter = self.server.app.exporter
+                file_path = exporter.file_path or exporter.get_latest_file()
+                if file_path and os.path.exists(file_path):
+                    if exporter.file:
+                        try:
+                            exporter.file.flush()
+                        except Exception:
+                            pass
+                    with open(file_path, "rb") as f:
+                        data = f.read()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/csv')
+                    self.send_header('Content-Disposition', f'attachment; filename="{os.path.basename(file_path)}"')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                else:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(b'{"error": "No export file found"}')
+                    return
+        elif self.path == "/api/export/new_session":
+            if hasattr(self.server, 'app') and self.server.app:
+                self.server.app.exporter.start_session("manual")
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
+                return
+
+        super().do_GET()
+
     def do_POST(self):
         if self.path == "/api/joint_state":
             length = int(self.headers.get('Content-Length', 0))
@@ -50,7 +96,7 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
             try:
                 data = json.loads(body.decode('utf-8'))
                 if hasattr(self.server, 'app') and self.server.app:
-                    self.server.app.apply_joint_states(data)
+                    self.server.app.apply_joint_states(data, source="REST HTTP")
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -61,6 +107,26 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
             return
+        elif self.path == "/api/export/toggle":
+            if hasattr(self.server, 'app') and self.server.app:
+                exporter = self.server.app.exporter
+                if exporter.active:
+                    exporter.close_session()
+                else:
+                    exporter.start_session("manual")
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(exporter.get_stats()).encode('utf-8'))
+                return
+        elif self.path == "/api/export/new_session":
+            if hasattr(self.server, 'app') and self.server.app:
+                self.server.app.exporter.start_session("manual")
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
+                return
         super().do_POST()
 
     def end_headers(self):
@@ -426,6 +492,193 @@ class RealRobotHardwareBridge:
                 print(f"[Physical Sync] Motor {motor.id} ({motor.name}) synced real angle: {motor.q:.4f} rad ({math.degrees(motor.q):.1f}°)")
 
 
+class JointStateExporter100Hz:
+    """
+    100Hz Joint State Continuous Exporter & Streamer:
+    - Automatically activates upon connecting to the physical robot
+    - Precision loop running at 100 Hz (10 ms interval via perf_counter)
+    - Saves high-precision CSV file to `exports/joint_states_<tag>_<timestamp>.csv`
+    - Broadcasts real-time UDP stream on port 9871 for ROS 2 / external consumers
+    """
+    def __init__(self, server, export_dir: str = "exports", udp_port: int = 9871):
+        self.server = server
+        self.export_dir = os.path.abspath(export_dir)
+        os.makedirs(self.export_dir, exist_ok=True)
+        self.udp_port = udp_port
+        self.running = False
+        self.active = False
+        self.file = None
+        self.file_path = None
+        self.file_name = None
+        self.samples = 0
+        self.start_time = 0.0
+        self.last_flush = 0.0
+        self.hz = 0.0
+        self.lock = threading.Lock()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        except Exception:
+            pass
+
+    def start_session(self, tag: str = "robot"):
+        with self.lock:
+            if self.active and self.file:
+                self._close_session_locked()
+
+            now = datetime.now()
+            now_str = now.strftime("%Y%m%d_%H%M%S")
+            self.file_name = f"joint_states_{tag}_{now_str}.csv"
+            self.file_path = os.path.join(self.export_dir, self.file_name)
+            self.file = open(self.file_path, "w", buffering=1024*64, newline="")
+            self.samples = 0
+            self.start_time = time.time()
+            self.last_flush = time.time()
+            self.active = True
+
+            # CSV Header: timestamp, rel_time_s, q_1..16, dq_1..16, tau_1..16, t_mos_1..16
+            header = ["timestamp", "rel_time_s"]
+            for i in range(1, 17):
+                header.append(f"q_{i}")
+            for i in range(1, 17):
+                header.append(f"dq_{i}")
+            for i in range(1, 17):
+                header.append(f"tau_{i}")
+            for i in range(1, 17):
+                header.append(f"t_mos_{i}")
+            self.file.write(",".join(header) + "\n")
+            self.file.flush()
+            print(f"[Export 100Hz] 🟢 Bắt đầu xuất & ghi dữ liệu Joint State 100Hz: {self.file_path} (UDP port: {self.udp_port})")
+
+    def _close_session_locked(self):
+        if self.file:
+            try:
+                self.file.flush()
+                self.file.close()
+                print(f"[Export 100Hz] ⏹ Đã lưu file Joint State ({self.samples} mẫu): {self.file_path}")
+            except Exception as e:
+                print(f"[Export Error]: {e}")
+            self.file = None
+        self.active = False
+
+    def close_session(self):
+        with self.lock:
+            self._close_session_locked()
+
+    def get_latest_file(self):
+        try:
+            files = [os.path.join(self.export_dir, f) for f in os.listdir(self.export_dir) if f.endswith('.csv')]
+            if files:
+                files.sort(key=os.path.getmtime, reverse=True)
+                return files[0]
+        except Exception:
+            pass
+        return None
+
+    def get_stats(self):
+        now = time.time()
+        dur = round(now - self.start_time, 1) if (self.active and self.start_time > 0) else 0.0
+        file_size_kb = 0
+        if self.file_path and os.path.exists(self.file_path):
+            try:
+                file_size_kb = round(os.path.getsize(self.file_path) / 1024, 1)
+            except Exception:
+                pass
+        return {
+            "active": self.active,
+            "hz": round(self.hz, 1) if self.active else 0.0,
+            "samples": self.samples,
+            "duration_s": dur,
+            "file_name": self.file_name or (os.path.basename(self.get_latest_file()) if self.get_latest_file() else ""),
+            "file_path": self.file_path or (self.get_latest_file() or ""),
+            "file_size_kb": file_size_kb,
+            "udp_port": self.udp_port
+        }
+
+    def loop(self):
+        self.running = True
+        interval = 0.010  # 10ms = 100 Hz
+        next_tick = time.perf_counter()
+        last_t = time.perf_counter()
+
+        while self.running:
+            now = time.perf_counter()
+            if now < next_tick:
+                sleep_s = next_tick - now
+                if sleep_s > 0.001:
+                    time.sleep(sleep_s)
+                continue
+            next_tick += interval
+
+            dt = now - last_t
+            last_t = now
+            if dt > 0:
+                inst_hz = 1.0 / dt
+                self.hz = self.hz * 0.95 + inst_hz * 0.05
+
+            if not self.active or not self.file:
+                continue
+
+            cur_time = time.time()
+            rel_t = cur_time - self.start_time
+
+            positions = []
+            velocities = []
+            efforts = []
+            temps = []
+
+            with self.server.hw.lock:
+                for mid in range(1, 17):
+                    m = self.server.motors.get(mid)
+                    if m:
+                        if mid in [8, 16]:
+                            raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.15))
+                            ratio = (1.0 - raw_ratio) if getattr(m, 'invert', True) else raw_ratio
+                            pos = ratio * 0.0415
+                        else:
+                            pos = m.q
+                        positions.append(pos)
+                        velocities.append(m.dq)
+                        efforts.append(m.tau)
+                        temps.append(m.t_mos)
+                    else:
+                        positions.append(0.0)
+                        velocities.append(0.0)
+                        efforts.append(0.0)
+                        temps.append(0.0)
+
+            # 1. Write CSV line
+            row = [f"{cur_time:.6f}", f"{rel_t:.3f}"]
+            row.extend(f"{v:.5f}" for v in positions)
+            row.extend(f"{v:.4f}" for v in velocities)
+            row.extend(f"{v:.3f}" for v in efforts)
+            row.extend(f"{v:.1f}" for v in temps)
+            with self.lock:
+                if self.file:
+                    self.file.write(",".join(row) + "\n")
+                    self.samples += 1
+
+                    # Periodic disk flush every 1 second (100 samples)
+                    if cur_time - self.last_flush >= 1.0:
+                        self.file.flush()
+                        self.last_flush = cur_time
+
+            # 2. Real-time UDP stream (port 9871)
+            udp_payload = json.dumps({
+                "seq": self.samples,
+                "timestamp": round(cur_time, 4),
+                "rel_time": round(rel_t, 3),
+                "hz": round(self.hz, 1),
+                "positions": [round(p, 5) for p in positions],
+                "velocities": [round(v, 4) for v in velocities],
+                "efforts": [round(e, 3) for e in efforts]
+            }).encode('utf-8')
+            try:
+                self.sock.sendto(udp_payload, ("127.0.0.1", self.udp_port))
+            except Exception:
+                pass
+
+
 class OpenArmDashboardServer:
     def __init__(self, mode: str = "real", can0_if: str = "can0", can1_if: Optional[str] = "can1"):
         self.mode = mode
@@ -452,6 +705,18 @@ class OpenArmDashboardServer:
             m.kp = 18.0
             m.kd = 2.0
 
+        # External joint state streaming diagnostics & metrics
+        self.stream_stats = {
+            "packets": 0,
+            "last_time": 0.0,
+            "hz": 0.0,
+            "source": "None"
+        }
+
+        # Continuous 100Hz Joint State Exporter (Activated upon robot connection)
+        export_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
+        self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=9871)
+
     def start(self):
         # 1. Start hardware bridge or simulator
         self.hw.start()
@@ -470,13 +735,19 @@ class OpenArmDashboardServer:
         self.httpd.app = self
         self.http_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.http_thread.start()
-        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state)")
+        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state, /api/export/*)")
 
         # 5. Start high-speed UDP Joint Stream receiver (port 9870 for zero-latency ROS 2 / teleop streams)
         self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
         self.udp_thread.start()
 
-        # 6. Start WebSocket & Telemetry Broadcaster
+        # 6. Start continuous 100Hz Joint State Exporter thread
+        self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
+        self.export_thread.start()
+        if self.mode == "real":
+            self.exporter.start_session("robot_boot")
+
+        # 7. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
 
     def _find_can_usb(self):
@@ -581,6 +852,8 @@ class OpenArmDashboardServer:
                     print(f"[USB] Kết nối thành công! Đang ở chế độ REAL ROBOT HARDWARE MODE ({self.can0_if}/{self.can1_if})")
                     # Query all physical motor positions immediately
                     self.hw.query_all_physical()
+                    # Start continuous 100Hz Joint State Export session immediately upon connecting to robot
+                    self.exporter.start_session("usb_connected")
                 except Exception as e:
                     print(f"[USB Switch Error]: {e}")
 
@@ -603,6 +876,9 @@ class OpenArmDashboardServer:
     def _exec_disconnect_usb(self):
         try:
             print("[USB] Ngắt kết nối USB Robot...")
+            # Close 100Hz export session upon disconnecting
+            self.exporter.close_session()
+
             if hasattr(self, 'loop') and self.loop:
                 asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang ngắt kết nối USB và ngắt torque an toàn..."), self.loop)
 
@@ -709,6 +985,15 @@ class OpenArmDashboardServer:
                 motors_data = [m.to_dict() for m in self.motors.values()]
                 rx_count = self.hw.frames_rx
                 tx_count = self.hw.frames_tx
+                now_ts = time.time()
+                last_t = self.stream_stats["last_time"]
+                stream_info = {
+                    "active": (now_ts - last_t < 1.2) if last_t > 0 else False,
+                    "packets": self.stream_stats["packets"],
+                    "hz": round(self.stream_stats["hz"], 1) if (now_ts - last_t < 1.5) else 0.0,
+                    "source": self.stream_stats["source"],
+                    "last_ago": round(now_ts - last_t, 2) if last_t > 0 else -1
+                }
             init_msg = json.dumps({
                 "type": "telemetry",
                 "data": {
@@ -716,7 +1001,8 @@ class OpenArmDashboardServer:
                     "frames_rx": rx_count,
                     "frames_tx": tx_count,
                     "mode": self.mode,
-                    "initial": True
+                    "initial": True,
+                    "stream_stats": stream_info
                 }
             })
             await websocket.send(init_msg)
@@ -744,6 +1030,15 @@ class OpenArmDashboardServer:
         elif action == "disconnect_usb":
             print("[Command] Disconnect USB Robot requested from Web UI")
             threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
+
+        elif action == "export_toggle":
+            if self.exporter.active:
+                self.exporter.close_session()
+            else:
+                self.exporter.start_session("manual")
+
+        elif action == "export_new_session":
+            self.exporter.start_session("manual")
 
         elif action == "sync_robot_state":
             print("[Command] Sync state from physical robot requested")
@@ -995,7 +1290,7 @@ class OpenArmDashboardServer:
             threading.Thread(target=self._exec_cli, args=(cmd, target_iface), daemon=True).start()
 
         elif action == "set_joint_state":
-            self.apply_joint_states(payload)
+            self.apply_joint_states(payload, source="WebSocket")
 
     def _udp_receiver_loop(self, port: int = 9870):
         """High-performance, zero-latency UDP receiver for real-time external streams (60-200 Hz)"""
@@ -1008,7 +1303,7 @@ class OpenArmDashboardServer:
                 data, addr = sock.recvfrom(8192)
                 try:
                     payload = json.loads(data.decode('utf-8'))
-                    self.apply_joint_states(payload)
+                    self.apply_joint_states(payload, source=f"UDP ({addr[0]}:{addr[1]})")
                 except Exception:
                     pass
         except Exception as e:
@@ -1016,7 +1311,7 @@ class OpenArmDashboardServer:
         finally:
             sock.close()
 
-    def apply_joint_states(self, payload: dict):
+    def apply_joint_states(self, payload: dict, source: str = "External"):
         """
         Apply target joint states from external sources (ROS 2 / AI / Teleop).
         Supports flexible input formats:
@@ -1025,6 +1320,18 @@ class OpenArmDashboardServer:
         - {"left": [q1..q7], "right": [q9..q15], "left_gripper": pos, "right_gripper": pos}
         - {"positions": [16 values in order 1..16]}
         """
+        now = time.time()
+        prev = self.stream_stats["last_time"]
+        dt = now - prev if prev > 0 else 0
+        if 0 < dt < 2.0:
+            instant_hz = 1.0 / dt
+            self.stream_stats["hz"] = self.stream_stats["hz"] * 0.85 + instant_hz * 0.15
+        elif dt >= 2.0:
+            self.stream_stats["hz"] = 1.0
+        self.stream_stats["last_time"] = now
+        self.stream_stats["packets"] += 1
+        self.stream_stats["source"] = source
+
         joint_map = {}
 
         # Format 1: names + positions lists (standard sensor_msgs/JointState)
@@ -1062,6 +1369,19 @@ class OpenArmDashboardServer:
         elif "positions" in payload and isinstance(payload["positions"], list):
             for idx, val in enumerate(payload["positions"][:16]):
                 joint_map[idx + 1] = float(val)
+
+        # Format 5: direct top-level joint mapping (e.g. {"openarm_left_joint1": 0.5})
+        elif isinstance(payload, dict):
+            for k, v in payload.items():
+                if str(k).isdigit():
+                    mid = int(k)
+                else:
+                    mid = JOINT_NAME_TO_ID.get(str(k).lower())
+                if mid and (1 <= mid <= 16):
+                    try:
+                        joint_map[mid] = float(v)
+                    except (ValueError, TypeError):
+                        pass
 
         # Apply to motors
         for motor_id, val in joint_map.items():
@@ -1265,13 +1585,25 @@ class OpenArmDashboardServer:
                     rx_count = self.hw.frames_rx
                     tx_count = self.hw.frames_tx
 
+                    now_ts = time.time()
+                    last_t = self.stream_stats["last_time"]
+                    stream_info = {
+                        "active": (now_ts - last_t < 1.2) if last_t > 0 else False,
+                        "packets": self.stream_stats["packets"],
+                        "hz": round(self.stream_stats["hz"], 1) if (now_ts - last_t < 1.5) else 0.0,
+                        "source": self.stream_stats["source"],
+                        "last_ago": round(now_ts - last_t, 2) if last_t > 0 else -1
+                    }
+
                 telem_msg = json.dumps({
                     "type": "telemetry",
                     "data": {
                         "motors": motors_data,
                         "frames_rx": rx_count,
                         "frames_tx": tx_count,
-                        "mode": self.mode
+                        "mode": self.mode,
+                        "stream_stats": stream_info,
+                        "export_stats": self.exporter.get_stats()
                     }
                 })
 

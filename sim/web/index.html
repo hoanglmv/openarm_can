@@ -24,9 +24,15 @@
                 <span class="badge badge-primary"><span class="pulse-dot"></span> SocketCAN: <strong id="iface-name">vcan0</strong></span>
                 <span class="badge badge-success" id="bus-health-badge">Bus: <strong>HEALTHY</strong></span>
                 <span class="badge badge-info" id="ws-status-badge">WebSocket: <strong>CONNECTING</strong></span>
+                <span class="badge badge-export" id="export-status-badge" title="Tần số xuất dữ liệu góc khớp 100Hz từ khi kết nối robot">
+                    <span class="pulse-dot pulse-export"></span> 100Hz: <strong id="export-badge-text">REC (0)</strong>
+                </span>
             </div>
         </div>
         <div class="header-right">
+            <a id="btn-export-download-header" href="/api/export/download" class="btn-tool-header" title="Tải file CSV 100Hz mới nhất về máy" download>
+                📥 CSV 100Hz
+            </a>
             <button id="btn-usb-toggle" class="btn-usb-toggle btn-usb-disconnected" title="Kết nối hoặc Ngắt kết nối USB Robot qua SocketCAN">
                 <span class="usb-dot"></span>
                 <span id="usb-btn-text">Connect USB Robot</span>
@@ -79,8 +85,11 @@
                     <button class="mode-tab-btn" id="btn-mode-grippers" data-mode="grippers">
                         🤏 Tay Kẹp
                     </button>
-                    <button class="mode-tab-btn" id="btn-mode-presets" data-mode="presets">
-                        🎭 Tư Thế & Tốc Độ
+                    <button class="mode-tab-btn" id="btn-mode-presets" data-mode="presets" title="Chế độ robot múa và các bài tập nhảy có sẵn cùng tư thế mẫu">
+                        💃 Robot Múa & Presets
+                    </button>
+                    <button class="mode-tab-btn" id="btn-mode-target" data-mode="target" title="Nhập góc khớp mong muốn và gửi tín hiệu SDK điều khiển chuyển động">
+                        🎯 Nhập Joint State
                     </button>
                 </div>
             </div>
@@ -142,38 +151,429 @@
                 </div>
             </div>
 
-            <!-- PANE 3: TRAJECTORY PRESETS & SPEED CONTROLS -->
+            <!-- PANE 3: ROBOT DANCE STUDIO & TRAJECTORY PRESETS -->
             <div class="mode-pane" id="pane-presets" style="display: none;">
-                <!-- Trajectory Presets -->
-                <div class="preset-section">
-                    <h3>Tư Thế & Chuyển Động Mẫu</h3>
-                    <div class="preset-btn-group">
-                        <button class="btn-preset active" data-preset="home">Về Nghỉ / Hang (0 rad)</button>
-                        <button class="btn-preset" data-preset="ready">Tư Thế Chuẩn Bị (Ready)</button>
-                        <button class="btn-preset" data-preset="wave">Vẫy Tay (Wave)</button>
-                        <button class="btn-preset" data-preset="clap">Bắt Tay (Handshake)</button>
-                        <button class="btn-preset" data-preset="carry">Nâng Đôi (Dual Lift)</button>
-                        <button class="btn-preset" data-preset="sine">Dao Động Sine (Sine)</button>
-                        <button class="btn-preset btn-preset-stop" data-preset="stop">Dừng Lại (Stop)</button>
+                <!-- Preset / Dance Sub-Navigation Bar -->
+                <div class="preset-tab-bar">
+                    <button class="preset-tab-btn active" id="tab-dance-mode" data-sub="dance">💃 Sân Khấu Vũ Điệu (Dance Studio)</button>
+                    <button class="preset-tab-btn" id="tab-poses-mode" data-sub="poses">🎭 Tư Thế Cơ Bản (Basic Poses)</button>
+                </div>
+
+                <!-- SUBSECTION A: DANCE STUDIO -->
+                <div id="sub-dance-section" class="preset-sub-pane">
+                    <!-- Dance Console & Beat Tracker -->
+                    <div class="dance-console-card">
+                        <div class="dance-console-header">
+                            <div class="dance-live-info">
+                                <span class="dance-live-badge badge-idle" id="dance-badge-status">SẴN SÀNG</span>
+                                <span class="dance-now-playing" id="dance-title-playing">Chọn một điệu múa và bấm Bắt đầu!</span>
+                            </div>
+                            <div class="dance-timer-box" id="dance-timer-display">00:00</div>
+                        </div>
+
+                        <!-- 4-Beat Glowing Visualizer -->
+                        <div class="beat-visualizer">
+                            <div class="beat-col">
+                                <div class="beat-indicator" id="beat-dot-1"><span class="beat-num">1</span></div>
+                                <span class="beat-lbl">Phách 1</span>
+                            </div>
+                            <div class="beat-col">
+                                <div class="beat-indicator" id="beat-dot-2"><span class="beat-num">2</span></div>
+                                <span class="beat-lbl">Phách 2</span>
+                            </div>
+                            <div class="beat-col">
+                                <div class="beat-indicator" id="beat-dot-3"><span class="beat-num">3</span></div>
+                                <span class="beat-lbl">Phách 3</span>
+                            </div>
+                            <div class="beat-col">
+                                <div class="beat-indicator" id="beat-dot-4"><span class="beat-num">4</span></div>
+                                <span class="beat-lbl">Phách 4</span>
+                            </div>
+                        </div>
+                        <div class="beat-subline" id="dance-step-display">Nhịp 4/4 • Tự động giữ khoảng an toàn cơ học OpenArm</div>
+
+                        <!-- Dance Action Controls -->
+                        <div class="dance-control-actions">
+                            <button class="btn btn-primary btn-dance-action" id="btn-dance-play">
+                                ▶ Bắt Đầu Múa
+                            </button>
+                            <button class="btn btn-secondary btn-dance-action" id="btn-dance-pause" disabled>
+                                ⏸ Tạm Dừng
+                            </button>
+                            <button class="btn btn-danger btn-dance-action" id="btn-dance-stop">
+                                ⏹ Dừng & Về Nghỉ
+                            </button>
+                            <label class="dance-loop-toggle" title="Lặp lại điệu nhảy liên tục cho đến khi bấm dừng">
+                                <input type="checkbox" id="dance-loop-checkbox" checked>
+                                <span>🔁 Lặp lại</span>
+                            </label>
+                        </div>
+
+                        <!-- Tempo / Rhythm Selector -->
+                        <div class="dance-tempo-row">
+                            <span class="tempo-label">Tốc độ nhịp (Tempo):</span>
+                            <div class="tempo-buttons">
+                                <button class="btn-tempo-opt" data-tempo="slow" data-bpm="70">🟢 Chậm (70 BPM)</button>
+                                <button class="btn-tempo-opt active" data-tempo="med" data-bpm="100">🔵 Vừa (100 BPM)</button>
+                                <button class="btn-tempo-opt" data-tempo="fast" data-bpm="130">🟣 Nhanh (130 BPM)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dance Cards Selection Grid -->
+                    <div class="dance-cards-grid">
+                        <!-- Dance 1: Disco Wave -->
+                        <div class="dance-card active" data-dance="disco">
+                            <div class="dance-card-head">
+                                <span class="dance-card-icon">🕺</span>
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Disco Wave (Sóng Disco)</span>
+                                    <span class="dance-tag upbeat">Sôi Động • Đánh tay so le</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Hai tay giơ ngang ngực đánh sóng nhấp nhô so le, cổ tay dập dìu theo nhạc disco và búng kẹp nhịp nhàng.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Dễ nhảy theo • Điệu múa kinh điển</span>
+                                <span class="dance-select-marker">✓ Đang chọn</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 2: Penguin Pop -->
+                        <div class="dance-card" data-dance="penguin">
+                            <div class="dance-card-head">
+                                <span class="dance-card-icon">🐧</span>
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Penguin Pop (Cánh Cụt)</span>
+                                    <span class="dance-tag cute">Hóm Hỉnh • Popping Robot</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Khuỷu tay gập vuông 90°, hai vai đập cánh vỗ nhịp nhún nhảy dứt khoát kiểu popping robot cực kỳ vui mắt.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Dễ nhảy theo • Hóm hỉnh đáng yêu</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 3: Ocean Flow -->
+                        <div class="dance-card" data-dance="ocean">
+                            <div class="dance-card-head">
+                                <span class="dance-card-icon">🌊</span>
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Ocean Flow (Biển Sóng)</span>
+                                    <span class="dance-tag smooth">Uyển Chuyển • Body Wave</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Chuyển động lượn sóng mềm mại truyền từ bàn tay trái qua vai sang bàn tay phải dẻo dai như làn sóng biển.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Trung bình • Sóng tay nghệ thuật</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 4: Cheer Up -->
+                        <div class="dance-card" data-dance="cheer">
+                            <div class="dance-card-head">
+                                <span class="dance-card-icon">🎉</span>
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Cheer Up (Vũ Điệu Cổ Vũ)</span>
+                                    <span class="dance-tag energetic">Năng Lượng • Giơ tay chữ V</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Hai tay giơ cao chữ V vung lắc cổ vũ reo hò, mở rộng kẹp hết cỡ ăn mừng rồi hạ tay xoay chào khán giả.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Dễ nhảy theo • Nhảy cổ động sôi nổi</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 5: Tai Chi Flow -->
+                        <div class="dance-card" data-dance="taichi">
+                            <div class="dance-card-head">
+                                <span class="dance-card-icon">🥋</span>
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Tai Chi Flow (Thái Cực Quyền)</span>
+                                    <span class="dance-tag zen">Dưỡng Sinh • Nhu hòa thư thái</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Động tác đẩy chưởng và xoay ôm quả cầu thái cực nhu hòa, chậm rãi, thư giãn tinh thần mỗi ngày cùng bạn.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Dễ tập theo • Dưỡng sinh thư thái</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Motion Speed & Velocity Control -->
-                <div class="velocity-control-section">
-                    <div class="section-subhead">
-                        <h3>Giới Hạn Tốc Độ (Velocity Limit)</h3>
-                        <span class="badge badge-accent" id="disp-speed-mode">0.25 rad/s (14°/s)</span>
+                <!-- SUBSECTION B: BASIC POSES & SPEED CONTROLS -->
+                <div id="sub-poses-section" class="preset-sub-pane" style="display: none;">
+                    <!-- Trajectory Presets -->
+                    <div class="preset-section">
+                        <h3>Tư Thế & Chuyển Động Mẫu Cơ Bản</h3>
+                        <div class="preset-btn-group">
+                            <button class="btn-preset active" data-preset="home">🏠 Về Nghỉ / Hang (0 rad)</button>
+                            <button class="btn-preset" data-preset="ready">🎯 Tư Thế Chuẩn Bị (Ready)</button>
+                            <button class="btn-preset" data-preset="wave">👋 Vẫy Tay (Wave)</button>
+                            <button class="btn-preset" data-preset="clap">🤝 Bắt Tay (Handshake)</button>
+                            <button class="btn-preset" data-preset="carry">📦 Nâng Đôi (Dual Lift)</button>
+                            <button class="btn-preset" data-preset="sine">〰️ Dao Động Sine (Sine)</button>
+                            <button class="btn-preset btn-preset-stop" data-preset="stop">🛑 Dừng Lại (Stop)</button>
+                        </div>
                     </div>
-                    <div class="speed-presets-row">
-                        <button class="btn-speed-preset" data-speed="0.10">Rất Chậm (0.10)</button>
-                        <button class="btn-speed-preset active" data-speed="0.25">Chậm An Toàn (0.25)</button>
-                        <button class="btn-speed-preset" data-speed="0.50">Vừa Phải (0.50)</button>
-                        <button class="btn-speed-preset" data-speed="1.00">Tiêu Chuẩn (1.00)</button>
+
+                    <!-- Motion Speed & Velocity Control -->
+                    <div class="velocity-control-section">
+                        <div class="section-subhead">
+                            <h3>Giới Hạn Tốc Độ (Velocity Limit)</h3>
+                            <span class="badge badge-accent" id="disp-speed-mode">0.25 rad/s (14°/s)</span>
+                        </div>
+                        <div class="speed-presets-row">
+                            <button class="btn-speed-preset" data-speed="0.10">Rất Chậm (0.10)</button>
+                            <button class="btn-speed-preset active" data-speed="0.25">Chậm An Toàn (0.25)</button>
+                            <button class="btn-speed-preset" data-speed="0.50">Vừa Phải (0.50)</button>
+                            <button class="btn-speed-preset" data-speed="1.00">Tiêu Chuẩn (1.00)</button>
+                        </div>
+                        <div class="speed-slider-row">
+                            <span class="range-bound">0.05</span>
+                            <input type="range" id="slider-max-velocity" min="0.05" max="1.50" step="0.05" value="0.25">
+                            <span class="range-bound">1.50 rad/s</span>
+                        </div>
                     </div>
-                    <div class="speed-slider-row">
-                        <span class="range-bound">0.05</span>
-                        <input type="range" id="slider-max-velocity" min="0.05" max="1.50" step="0.05" value="0.25">
-                        <span class="range-bound">1.50 rad/s</span>
+                </div>
+            </div>
+
+            <!-- PANE 4: TARGET JOINT STATE & SDK MOTION EXECUTION -->
+            <div class="mode-pane" id="pane-target" style="display: none;">
+                <!-- Unit Switcher & Quick Tool Buttons -->
+                <div class="target-toolbar">
+                    <div class="target-unit-toggle">
+                        <button class="btn-unit-opt active" id="btn-unit-deg" data-unit="deg">Độ (°)</button>
+                        <button class="btn-unit-opt" id="btn-unit-rad" data-unit="rad">Radian (rad)</button>
+                    </div>
+                    <div class="target-quick-tools">
+                        <button class="btn-subtle-sm" id="btn-target-copy-current" title="Tự động đọc các góc khớp hiện tại của robot vào bảng">📥 Lấy góc hiện tại</button>
+                        <button class="btn-subtle-sm" id="btn-target-zero" title="Đặt lại toàn bộ các ô về 0">🎯 Về 0</button>
+                    </div>
+                </div>
+
+                <!-- Mode Selection: Form Table vs JSON Payload -->
+                <div class="target-type-selector">
+                    <button class="btn-type-tab active" id="tab-type-table" data-type="table">Bảng Nhập Khớp</button>
+                    <button class="btn-type-tab" id="tab-type-json" data-type="json">Mã JSON / ROS2</button>
+                </div>
+
+                <!-- View A: Form Table Inputs for Left & Right Arms -->
+                <div id="target-view-table" class="target-view-section">
+                    <div class="target-limit-notice">
+                        <span class="notice-icon">🛡️</span>
+                        <span class="notice-text"><strong>Giới hạn khớp (Joint Limits)</strong>: Ngưỡng an toàn cơ học hiển thị bên cạnh mỗi khớp. Nếu nhập vượt ngưỡng, ô sẽ báo đỏ và tự động kẹp về góc an toàn để chống quay quá khớp.</span>
+                    </div>
+                    <div class="target-dual-grid">
+                        <!-- Left Arm Column -->
+                        <div class="target-arm-col left-target-col">
+                            <div class="target-col-title">
+                                <span class="arm-tag arm-tag-left">L</span>
+                                <span>Tay Trái (Left)</span>
+                            </div>
+                            <div class="target-input-row" id="row-target-1">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J1 Vai Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-1">[-80° ~ +200°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-1" min="-80" max="200" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-2">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J2 Vai Roll</span>
+                                    <span class="target-limit-badge" id="limit-lbl-2">[-190° ~ +10°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-2" min="-190" max="10" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-3">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J3 Bắp Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-3">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-3" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-4">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J4 Khuỷu Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-4">[0° ~ +140°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-4" min="0" max="140" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-5">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J5 Cẳng Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-5">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-5" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-6">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J6 Cổ Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-6">[-45° ~ +45°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-6" min="-45" max="45" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-7">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J7 Cổ Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-7">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-7" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row highlight-gripper" id="row-target-8">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J8 Kẹp Ngang</span>
+                                    <span class="target-limit-badge" id="limit-lbl-8">[0 ~ 43 mm]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-8" step="0.5" min="0" max="43" value="0.0">
+                                    <span class="unit-label" style="font-size: 10px;">mm</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Arm Column -->
+                        <div class="target-arm-col right-target-col">
+                            <div class="target-col-title">
+                                <span class="arm-tag arm-tag-right">R</span>
+                                <span>Tay Phải (Right)</span>
+                            </div>
+                            <div class="target-input-row" id="row-target-9">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J1 Vai Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-9">[-80° ~ +200°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-9" min="-80" max="200" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-10">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J2 Vai Roll</span>
+                                    <span class="target-limit-badge" id="limit-lbl-10">[-10° ~ +190°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-10" min="-10" max="190" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-11">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J3 Bắp Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-11">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-11" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-12">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J4 Khuỷu Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-12">[0° ~ +140°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-12" min="0" max="140" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-13">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J5 Cẳng Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-13">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-13" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-14">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J6 Cổ Pitch</span>
+                                    <span class="target-limit-badge" id="limit-lbl-14">[-45° ~ +45°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-14" min="-45" max="45" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row" id="row-target-15">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J7 Cổ Xoay</span>
+                                    <span class="target-limit-badge" id="limit-lbl-15">[-90° ~ +90°]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-15" min="-90" max="90" step="0.5" value="0.0">
+                                    <span class="unit-label">°</span>
+                                </div>
+                            </div>
+                            <div class="target-input-row highlight-gripper" id="row-target-16">
+                                <div class="joint-label-wrap">
+                                    <span class="j-title">J8 Kẹp Ngang</span>
+                                    <span class="target-limit-badge" id="limit-lbl-16">[0 ~ 43 mm]</span>
+                                </div>
+                                <div class="joint-input-wrap">
+                                    <input type="number" id="inp-target-16" step="0.5" min="0" max="43" value="0.0">
+                                    <span class="unit-label" style="font-size: 10px;">mm</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View B: JSON Textarea -->
+                <div id="target-view-json" class="target-view-section" style="display: none;">
+                    <div class="json-sample-chips">
+                        <button class="btn-sample-chip" data-sample="ready">Mẫu: Chuẩn Bị (Ready)</button>
+                        <button class="btn-sample-chip" data-sample="wave">Mẫu: Vẫy Tay (Wave)</button>
+                        <button class="btn-sample-chip" data-sample="reach">Mẫu: Vươn Tay (Reach)</button>
+                    </div>
+                    <textarea id="target-json-textarea" class="target-json-textarea" rows="6" placeholder='{"openarm_left_joint1": 0.5, "openarm_left_joint4": 1.2, "openarm_left_finger_joint": 0.02}'></textarea>
+                </div>
+
+                <!-- Execution Button (Big Primary) & Stop -->
+                <div class="target-action-box">
+                    <button class="btn btn-primary btn-execute-target" id="btn-execute-target-pose">
+                        🚀 GỬI TÍN HIỆU SDK & CHUYỂN ĐỘNG
+                    </button>
+                    <button class="btn btn-danger btn-compact" id="btn-target-stop">
+                        🛑 Dừng Lại
+                    </button>
+                </div>
+
+                <!-- Live Motion Tracking Status Box -->
+                <div class="target-status-box" id="target-status-box">
+                    <div class="target-status-line">
+                        <span class="status-indicator-dot dot-idle" id="target-status-dot"></span>
+                        <span class="status-main-text" id="target-status-text">Sẵn sàng nhận vị trí mong muốn</span>
+                    </div>
+                    <div class="target-status-sub" id="target-status-sub">
+                        Tốc độ an toàn: 0.25 rad/s • Nội suy mượt MIT 400Hz
                     </div>
                 </div>
             </div>
@@ -248,6 +648,22 @@
                         <button class="btn-tool" id="btn-toggle-telem-expand">Mở rộng ▲</button>
                     </div>
                 </div>
+                <!-- 100Hz Joint State Continuous Exporter Widget Bar -->
+                <div class="export-widget-bar" id="export-widget-bar">
+                    <div class="export-widget-left">
+                        <span class="export-status-dot active" id="export-dot"></span>
+                        <div class="export-text-group">
+                            <span class="export-main-title">Xuất Dữ Liệu Khớp 100Hz (Auto-Export)</span>
+                            <span class="export-sub-info" id="export-sub-info">Tần số: 100.0 Hz • Đang ghi: exports/joint_states_...csv • Cổng UDP: 9871</span>
+                        </div>
+                    </div>
+                    <div class="export-widget-right">
+                        <span class="badge badge-accent" id="export-samples-badge">0 mẫu (0.0s)</span>
+                        <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file CSV 100Hz hiện tại về máy" download>📥 Tải CSV</a>
+                        <button class="btn-subtle-sm" id="btn-export-new" title="Kết thúc file hiện tại và mở file ghi 100Hz mới">🔁 File mới</button>
+                        <button class="btn-subtle-sm" id="btn-export-toggle" title="Tạm dừng hoặc Tiếp tục ghi">⏸ Tạm dừng</button>
+                    </div>
+                </div>
                 <div class="telemetry-grid" id="telemetry-grid" style="display: none;">
                     <!-- 16 Telemetry Cards injected by JS -->
                 </div>
@@ -314,6 +730,17 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
     <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="app.js?v=10"></script>
+    
+    <!-- Modular OpenArm Dashboard Architecture -->
+    <script src="js/config.js?v=11"></script>
+    <script src="js/network.js?v=11"></script>
+    <script src="js/three_scene.js?v=11"></script>
+    <script src="js/three_model.js?v=11"></script>
+    <script src="js/ui_sliders.js?v=11"></script>
+    <script src="js/ui_target.js?v=11"></script>
+    <script src="js/telemetry.js?v=11"></script>
+    <script src="js/dance_routines.js?v=11"></script>
+    <script src="js/dance_engine.js?v=11"></script>
+    <script src="app.js?v=11"></script>
 </body>
 </html>
