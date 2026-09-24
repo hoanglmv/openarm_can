@@ -29,8 +29,8 @@
             </div>
         </div>
         <div class="header-right">
-            <button id="btn-toggle-inspector" class="btn-theme" title="Toggle Terminal & CAN-FD Inspector">📊 Terminal</button>
-            <button id="btn-theme-toggle" class="btn-theme" title="Switch Theme">☀️ Studio Bright</button>
+            <button id="btn-toggle-inspector" class="btn-theme" title="Toggle Terminal & CAN-FD Inspector">Terminal</button>
+            <button id="btn-theme-toggle" class="btn-theme" title="Switch Theme">Studio Bright</button>
             <div class="header-stats">
                 <div class="stat-item"><span class="stat-label">RX:</span> <span class="stat-val" id="stat-rx">0</span></div>
                 <div class="stat-item"><span class="stat-label">TX:</span> <span class="stat-val" id="stat-tx">0</span></div>
@@ -52,16 +52,16 @@
             <!-- Master Action Grid (Solid Clean Colors) -->
             <div class="master-action-grid">
                 <button class="btn btn-success" id="btn-enable-all">
-                    <span>⚡</span> Enable Both Arms
+                    Enable Both Arms
                 </button>
                 <button class="btn btn-danger" id="btn-disable-all">
-                    <span>🛑</span> Disarm All (Torque OFF)
+                    Disarm All (Torque OFF)
                 </button>
                 <button class="btn btn-secondary" id="btn-zero-all">
-                    <span>🎯</span> Set Zero All
+                    Set Zero All
                 </button>
                 <button class="btn btn-secondary" id="btn-clear-err">
-                    <span>🔄</span> Clear Errors
+                    Clear Errors
                 </button>
             </div>
 
@@ -69,27 +69,27 @@
             <div class="preset-section">
                 <h3>Bimanual Trajectory Presets</h3>
                 <div class="preset-btn-group">
-                    <button class="btn-preset active" data-preset="home">🏠 Rest / Hang (0 rad)</button>
-                    <button class="btn-preset" data-preset="ready">🦾 Ready Stance</button>
-                    <button class="btn-preset" data-preset="wave">👋 Wave Motion</button>
-                    <button class="btn-preset" data-preset="clap">🤝 Handshake</button>
-                    <button class="btn-preset" data-preset="carry">📦 Dual-Arm Lift</button>
-                    <button class="btn-preset" data-preset="sine">🌊 Coordinated Sine</button>
-                    <button class="btn-preset btn-preset-stop" data-preset="stop">⏹️ Stop</button>
+                    <button class="btn-preset active" data-preset="home">Rest / Hang (0 rad)</button>
+                    <button class="btn-preset" data-preset="ready">Ready Stance</button>
+                    <button class="btn-preset" data-preset="wave">Wave Motion</button>
+                    <button class="btn-preset" data-preset="clap">Handshake</button>
+                    <button class="btn-preset" data-preset="carry">Dual-Arm Lift</button>
+                    <button class="btn-preset" data-preset="sine">Coordinated Sine</button>
+                    <button class="btn-preset btn-preset-stop" data-preset="stop">Stop</button>
                 </div>
             </div>
 
             <!-- Motion Speed & Velocity Control -->
             <div class="velocity-control-section">
                 <div class="section-subhead">
-                    <h3>⚡ Tốc Độ Di Chuyển (Velocity Limit)</h3>
-                    <span class="badge badge-accent" id="disp-speed-mode">🐢 0.25 rad/s (14°/s)</span>
+                    <h3>Giới Hạn Tốc Độ (Velocity Limit)</h3>
+                    <span class="badge badge-accent" id="disp-speed-mode">0.25 rad/s (14°/s)</span>
                 </div>
                 <div class="speed-presets-row">
-                    <button class="btn-speed-preset" data-speed="0.10">🐢 Rất Chậm (0.10)</button>
-                    <button class="btn-speed-preset active" data-speed="0.25">🐢 Chậm An Toàn (0.25)</button>
-                    <button class="btn-speed-preset" data-speed="0.50">🚶 Vừa Phải (0.50)</button>
-                    <button class="btn-speed-preset" data-speed="1.00">🏃 Tiêu Chuẩn (1.00)</button>
+                    <button class="btn-speed-preset" data-speed="0.10">Rất Chậm (0.10)</button>
+                    <button class="btn-speed-preset active" data-speed="0.25">Chậm An Toàn (0.25)</button>
+                    <button class="btn-speed-preset" data-speed="0.50">Vừa Phải (0.50)</button>
+                    <button class="btn-speed-preset" data-speed="1.00">Tiêu Chuẩn (1.00)</button>
                 </div>
                 <div class="speed-slider-row">
                     <span class="range-bound">0.05</span>
@@ -146,7 +146,7 @@
                     <button class="arm-tab-btn active tab-left" id="tab-arm-left">Left Arm (J1-J8)</button>
                     <button class="arm-tab-btn" id="tab-arm-right">Right Arm (J1-J8)</button>
                     <button class="arm-tab-btn" id="tab-arm-both">Dual View (J1-J8)</button>
-                    <button class="arm-tab-btn" id="tab-arm-sync">⚡ Sync Mode</button>
+                    <button class="arm-tab-btn" id="tab-arm-sync">Sync Mode</button>
                 </div>
 
                 <!-- Dynamic 8 Joint Sliders injected by JS -->
@@ -209,11 +209,11 @@
                     <span class="panel-tag">DIAGNOSTICS</span>
                 </div>
                 <div class="cli-actions">
-                    <button class="btn-cli" data-cmd="discover">🔍 discover (16 Nodes)</button>
-                    <button class="btn-cli" data-cmd="show_param">📋 show_param (M1)</button>
-                    <button class="btn-cli" data-cmd="monitor">📊 monitor (2s)</button>
-                    <button class="btn-cli" data-cmd="diagnose">🩺 diagnose (2s)</button>
-                    <button class="btn-cli" data-cmd="clear_term">🧹 Clear</button>
+                    <button class="btn-cli" data-cmd="discover">discover (16 Nodes)</button>
+                    <button class="btn-cli" data-cmd="show_param">show_param (M1)</button>
+                    <button class="btn-cli" data-cmd="monitor">monitor (2s)</button>
+                    <button class="btn-cli" data-cmd="diagnose">diagnose (2s)</button>
+                    <button class="btn-cli" data-cmd="clear_term">Clear</button>
                 </div>
                 <div class="terminal-window">
                     <div class="terminal-bar">

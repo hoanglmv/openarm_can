@@ -116,9 +116,9 @@ function buildJointSliders() {
             <div class="slider-header-compact">
                 <div class="joint-title-row">
                     <button class="btn-joint-power ${isLocked ? 'power-off' : 'power-on'}" 
-                            title="${isLocked ? 'Khóa bảo vệ: Đang KHÓA (Bấm để MỞ KHÓA)' : 'Khớp đang BẬT sẵn sàng (Bấm để KHÓA an toàn)'}" 
+                            title="${isLocked ? 'Khóa an toàn: Đang KHÓA (Bấm để MỞ)' : 'Khớp đang BẬT sẵn sàng (Bấm để KHÓA)'}" 
                             onclick="toggleJointLock(${j.id}, '${uniqueKey}', '${j.group}', ${j.idx})">
-                        ${isLocked ? '🔒 KHÓA (OFF)' : '⚡ BẬT (ON)'}
+                        ${isLocked ? 'OFF' : 'ON'}
                     </button>
                     <span class="arm-tag ${armTagClass}">${armTagText}</span>
                     <span class="joint-id-badge">${jNum}</span>
@@ -248,12 +248,12 @@ function setupEventHandlers() {
         isLightTheme = !isLightTheme;
         if (isLightTheme) {
             document.body.classList.add("theme-light");
-            btnTheme.textContent = "☀️ Studio Bright";
+            btnTheme.textContent = "Studio Bright";
             if (floorMesh) floorMesh.material.color.setHex(0xeef2f6);
             if (scene) scene.background = new THREE.Color(0xf1f5f9);
         } else {
             document.body.classList.remove("theme-light");
-            btnTheme.textContent = "🌙 Cyber Dark";
+            btnTheme.textContent = "Cyber Dark";
             if (floorMesh) floorMesh.material.color.setHex(0x111827);
             if (scene) scene.background = new THREE.Color(0x0f172a);
         }
@@ -343,10 +343,7 @@ function setupEventHandlers() {
         if (activeBtn) activeBtn.classList.add("active");
         if (speedSlider) speedSlider.value = val;
         const degS = (val * 180 / Math.PI).toFixed(0);
-        let icon = "🐢";
-        if (val > 0.8) icon = "🏃";
-        else if (val > 0.4) icon = "🚶";
-        if (speedDisp) speedDisp.textContent = `${icon} ${val.toFixed(2)} rad/s (${degS}°/s)`;
+        if (speedDisp) speedDisp.textContent = `${val.toFixed(2)} rad/s (${degS}°/s)`;
         sendAction("set_velocity_limit", { v_limit: val });
     }
 

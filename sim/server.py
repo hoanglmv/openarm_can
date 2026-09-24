@@ -371,18 +371,52 @@ class OpenArmDashboardServer:
         # 1. Start hardware bridge or simulator
         self.hw.start()
 
-        # 2. Start smooth trajectory generator thread (50 Hz)
+        # 2. Start smooth trajectory generator thread (400 Hz)
         self.traj_thread = threading.Thread(target=self._trajectory_loop, daemon=True)
         self.traj_thread.start()
 
-        # 3. Start HTTP server thread
+        # 3. Start auto-hotplug interface monitor
+        self.hotplug_thread = threading.Thread(target=self._hotplug_monitor_loop, daemon=True)
+        self.hotplug_thread.start()
+
+        # 4. Start HTTP server thread
         self.httpd = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), CustomHTTPHandler)
         self.http_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.http_thread.start()
         print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT}")
 
-        # 4. Start WebSocket & Telemetry Broadcaster
+        # 5. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
+
+    def _hotplug_monitor_loop(self):
+        """Continuously check for physical CAN hotplug (can0/can1) without needing restart"""
+        while self.running:
+            time.sleep(2.0)
+            can0_present = os.path.exists("/sys/class/net/can0")
+            if self.mode == "sim" and can0_present:
+                print("[Hotplug] Detected physical can0 interface! Switching to REAL ROBOT HARDWARE MODE...")
+                try:
+                    new_hw = RealRobotHardwareBridge(self.can0_if, self.can1_if)
+                    new_hw.start()
+                    self.hw.stop()
+                    self.hw = new_hw
+                    self.motors = self.hw.motors
+                    self.mode = "real"
+                    print(f"[Hotplug] Switched to REAL HARDWARE MODE ({len(self.motors)} motors on {self.can0_if}/{self.can1_if})")
+                except Exception as e:
+                    print(f"[Hotplug] Error switching to real mode: {e}")
+            elif self.mode == "real" and not can0_present:
+                print("[Hotplug] Physical can0 detached. Falling back to SIMULATION MODE...")
+                try:
+                    self.hw.stop()
+                    new_sim = DamiaoArmSimulator("vcan0")
+                    new_sim.start()
+                    self.hw = new_sim
+                    self.motors = self.hw.motors
+                    self.mode = "sim"
+                    print("[Hotplug] Fallback to SIMULATION MODE active")
+                except Exception as e:
+                    print(f"[Hotplug] Error falling back to sim mode: {e}")
 
     async def ws_handler(self, websocket):
         self.clients.add(websocket)
