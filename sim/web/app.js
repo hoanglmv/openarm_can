@@ -764,6 +764,34 @@ function handleTelemetry(data) {
                 gripperFingers.right.position.x = fingerOffset;
             }
         }
+
+        // Bi-directional Synchronization: Update UI Sliders to match live robot state in real time
+        const armGroup = isLeft ? 'left' : 'right';
+        const sliderKey = `${armGroup}-${jointIndex}`;
+        const sliderEl = document.getElementById(`slider-${sliderKey}`);
+        const dispEl = document.getElementById(`val-disp-${sliderKey}`);
+
+        if (sliderEl && document.activeElement !== sliderEl) {
+            sliderEl.value = m.q;
+            if (dispEl) {
+                if (jointIndex === 7) {
+                    dispEl.textContent = formatGripperText(m.q);
+                } else {
+                    const deg = (m.q * 180 / Math.PI).toFixed(0);
+                    dispEl.textContent = `${m.q.toFixed(2)} rad (${deg}°)`;
+                }
+            }
+        }
+
+        // Also sync top Dual Gripper sliders if not focused
+        if (jointIndex === 7) {
+            const topSlider = document.getElementById(isLeft ? "slider-gripper-left" : "slider-gripper-right");
+            const topDisp = document.getElementById(isLeft ? "left-gripper-val-display" : "right-gripper-val-display");
+            if (topSlider && document.activeElement !== topSlider) {
+                topSlider.value = m.q;
+                if (topDisp) topDisp.textContent = formatGripperText(m.q);
+            }
+        }
     });
 }
 
