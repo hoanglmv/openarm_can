@@ -1,0 +1,14 @@
+services:
+  openarm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openarm_can
+    restart: unless-stopped
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - .:/workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python3 sim/server.py
