@@ -14,7 +14,7 @@ const LEFT_JOINTS = [
 
 const RIGHT_JOINTS = [
     { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
-    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
+    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.175, max: 3.316, default: 0.0 },
     { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
     { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
     { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
@@ -188,8 +188,8 @@ function buildJointSliders() {
                 } else { // sync
                     const leftMotorId = LEFT_JOINTS[j.idx].id;
                     const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                    // Mirrored yaw/roll for symmetrical bimanual gestures
-                    const mirrorSign = (j.idx === 0 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                    // Mirrored roll/yaw/abduction for symmetrical bimanual gestures (J3, J5, J7)
+                    const mirrorSign = (j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
 
                     sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
                     sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
