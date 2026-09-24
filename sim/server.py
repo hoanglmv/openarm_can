@@ -388,6 +388,154 @@ class OpenArmDashboardServer:
         # 5. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
 
+    def _find_can_usb(self):
+        try:
+            # 1. Try direct usbipd state (fast JSON)
+            res = subprocess.run(["usbipd", "state"], capture_output=True, text=True, timeout=3)
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                devices = data.get("Devices", [])
+                for d in devices:
+                    desc = d.get("Description", "") or ""
+                    inst = d.get("InstanceId", "") or ""
+                    busid = d.get("BusId")
+                    if ('PCAN' in desc.upper() or '0C72' in inst.upper() or 'CAN' in desc.upper()) and busid:
+                        return str(busid), desc
+        except Exception as e:
+            print("[USB Search Error]:", e)
+
+        # 2. Fallback to parsing usbipd list
+        try:
+            res = subprocess.run(["usbipd", "list"], capture_output=True, text=True, timeout=3)
+            for line in res.stdout.splitlines():
+                if "PCAN" in line.upper() or "0C72:0011" in line.lower():
+                    parts = line.split()
+                    if parts and '-' in parts[0]:
+                        return parts[0], "PCAN-USB Pro FD"
+        except Exception as e:
+            pass
+
+        return None, None
+
+    def _exec_connect_usb(self):
+        busid, desc = self._find_can_usb()
+        if not busid:
+            msg = "Chưa phát hiện thiết bị USB CAN cắm trên Windows. Vui lòng cắm cáp USB nối đến robot."
+            print(f"[USB] {msg}")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("error", msg), self.loop)
+            return
+
+        print(f"[USB] Đang kết nối thiết bị USB (BusID: {busid}, {desc}) vào WSL2...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", f"Đang kết nối USB {busid} ({desc})..."), self.loop)
+
+        # 1. usbipd attach
+        subprocess.run(["usbipd", "attach", "--wsl", "--busid", busid], capture_output=True, text=True)
+
+        # 2. Kernel modules
+        for mod in ["vhci-hcd", "can", "can-raw", "can-dev", "peak_usb"]:
+            subprocess.run(["sudo", "modprobe", mod], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # 3. Wait for can0 to appear
+        for _ in range(8):
+            if os.path.exists("/sys/class/net/can0"):
+                break
+            time.sleep(0.4)
+
+        # 4. Bring up CAN-FD on can0 and can1
+        configured_any = False
+        for iface in ["can0", "can1"]:
+            if os.path.exists(f"/sys/class/net/{iface}"):
+                subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False)
+                cmd = [
+                    "sudo", "ip", "link", "set", iface, "type", "can",
+                    "bitrate", "1000000", "sample-point", "0.75",
+                    "dbitrate", "5000000", "dsample-point", "0.75",
+                    "dsjw", "2", "fd", "on"
+                ]
+                r = subprocess.run(cmd, check=False)
+                if r.returncode != 0:
+                    subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can", "bitrate", "1000000"], check=False)
+                subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
+                configured_any = True
+
+        if configured_any:
+            time.sleep(0.5)
+            # Switch to real mode if not already
+            if self.mode != "real":
+                try:
+                    new_hw = RealRobotHardwareBridge(self.can0_if, self.can1_if)
+                    new_hw.start()
+                    self.hw.stop()
+                    self.hw = new_hw
+                    self.motors = self.hw.motors
+                    self.mode = "real"
+                    print(f"[USB] Kết nối thành công! Đang ở chế độ REAL ROBOT HARDWARE MODE ({self.can0_if}/{self.can1_if})")
+                except Exception as e:
+                    print(f"[USB Switch Error]: {e}")
+            msg = f"Đã kết nối thành công Robot thật qua USB ({desc}, Bus: {busid})!"
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", msg), self.loop)
+        else:
+            msg = f"Đã gắn USB {busid} nhưng chưa thấy interface can0/can1. Vui lòng kiểm tra nguồn robot."
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", msg), self.loop)
+
+    def _exec_disconnect_usb(self):
+        print("[USB] Ngắt kết nối USB Robot...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang ngắt kết nối USB và ngắt torque an toàn..."), self.loop)
+
+        # 1. Disarm all motors safely first
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.enabled = False
+                m.error_code = 0
+        if self.mode == "real":
+            for m in self.motors.values():
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFD]))
+
+        time.sleep(0.3)
+
+        # 2. Down CAN interfaces
+        for iface in ["can0", "can1"]:
+            subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # 3. Detach via usbipd
+        busid, desc = self._find_can_usb()
+        if busid:
+            subprocess.run(["usbipd", "detach", "--busid", busid], check=False)
+
+        # 4. Fallback to SIM
+        if self.mode == "real":
+            try:
+                self.hw.stop()
+                new_sim = DamiaoArmSimulator("vcan0")
+                new_sim.start()
+                self.hw = new_sim
+                self.motors = self.hw.motors
+                self.mode = "sim"
+                print("[USB] Đã ngắt kết nối robot thật. Chuyển sang SIMULATION MODE (vcan0)")
+            except Exception as e:
+                print(f"[USB Fallback Error]: {e}")
+
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", "Đã ngắt kết nối USB Robot. Hệ thống đang ở chế độ Mô phỏng (SIM)."), self.loop)
+
+    async def broadcast_notice(self, level: str, message: str):
+        msg = json.dumps({
+            "type": "notice",
+            "level": level,
+            "message": message,
+            "mode": self.mode
+        })
+        for ws in list(self.clients):
+            try:
+                await ws.send(msg)
+            except Exception:
+                pass
+
     def _hotplug_monitor_loop(self):
         """Continuously check for physical CAN hotplug (can0/can1) without needing restart"""
         while self.running:
@@ -403,6 +551,8 @@ class OpenArmDashboardServer:
                     self.motors = self.hw.motors
                     self.mode = "real"
                     print(f"[Hotplug] Switched to REAL HARDWARE MODE ({len(self.motors)} motors on {self.can0_if}/{self.can1_if})")
+                    if hasattr(self, 'loop') and self.loop:
+                        asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", "Đã tự động kết nối robot thật trên can0/can1!"), self.loop)
                 except Exception as e:
                     print(f"[Hotplug] Error switching to real mode: {e}")
             elif self.mode == "real" and not can0_present:
@@ -415,6 +565,8 @@ class OpenArmDashboardServer:
                     self.motors = self.hw.motors
                     self.mode = "sim"
                     print("[Hotplug] Fallback to SIMULATION MODE active")
+                    if hasattr(self, 'loop') and self.loop:
+                        asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", "Cáp USB đã tháo. Đang hoạt động ở chế độ Mô phỏng (vcan0)"), self.loop)
                 except Exception as e:
                     print(f"[Hotplug] Error falling back to sim mode: {e}")
 
@@ -434,7 +586,15 @@ class OpenArmDashboardServer:
             self.clients.discard(websocket)
 
     async def handle_action(self, action: str, payload: dict, ws):
-        if action == "set_velocity_limit":
+        if action == "connect_usb":
+            print("[Command] Connect USB Robot requested from Web UI")
+            threading.Thread(target=self._exec_connect_usb, daemon=True).start()
+
+        elif action == "disconnect_usb":
+            print("[Command] Disconnect USB Robot requested from Web UI")
+            threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
+
+        elif action == "set_velocity_limit":
             val = float(payload.get("v_limit", 0.25))
             self.velocity_limit = max(0.02, min(3.0, val))
             print(f"[Speed Profile] Velocity limit set to: {self.velocity_limit:.3f} rad/s ({math.degrees(self.velocity_limit):.1f}°/s)")

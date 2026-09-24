@@ -1249,3 +1249,111 @@ body.theme-light .model-spec-overlay {
         display: none;
     }
 }
+
+/* ==============================================================================
+   USB CONNECT / DISCONNECT BUTTON & TOAST NOTIFICATIONS
+   ============================================================================== */
+.btn-usb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color);
+}
+
+.btn-usb-disconnected {
+    background-color: #0f172a;
+    border-color: #0284c7 !important;
+    color: #38bdf8 !important;
+}
+.btn-usb-disconnected:hover {
+    background-color: #1e293b;
+    border-color: #38bdf8 !important;
+}
+
+.btn-usb-connected {
+    background-color: #064e3b !important;
+    border-color: #10b981 !important;
+    color: #ecfdf5 !important;
+}
+.btn-usb-connected:hover {
+    background-color: #065f46 !important;
+    border-color: #34d399 !important;
+}
+
+.btn-usb-busy {
+    opacity: 0.65;
+    cursor: wait !important;
+}
+
+.usb-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background-color 0.2s ease;
+}
+.btn-usb-disconnected .usb-dot {
+    background-color: #94a3b8;
+}
+.btn-usb-connected .usb-dot {
+    background-color: #10b981;
+    box-shadow: 0 0 6px #10b981;
+}
+
+.btn-usb {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.toast-container {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    min-width: 260px;
+    max-width: 400px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+    animation: toast-in 0.25s ease-out;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-success { background-color: #059669; border: 1px solid #10b981; }
+.toast-info    { background-color: #0284c7; border: 1px solid #38bdf8; }
+.toast-warning { background-color: #d97706; border: 1px solid #fbbf24; }
+.toast-error   { background-color: #dc2626; border: 1px solid #f87171; }
+

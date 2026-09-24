@@ -29,6 +29,10 @@
             </div>
         </div>
         <div class="header-right">
+            <button id="btn-usb-toggle" class="btn-usb-toggle btn-usb-disconnected" title="Kết nối hoặc Ngắt kết nối USB Robot qua SocketCAN">
+                <span class="usb-dot"></span>
+                <span id="usb-btn-text">Connect USB Robot</span>
+            </button>
             <button id="btn-toggle-inspector" class="btn-theme" title="Toggle Terminal & CAN-FD Inspector">Terminal</button>
             <button id="btn-theme-toggle" class="btn-theme" title="Switch Theme">Studio Bright</button>
             <div class="header-stats">
@@ -39,6 +43,8 @@
             </div>
         </div>
     </header>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- 3-COLUMN INDUSTRIAL WORKSPACE -->
     <main class="dashboard-grid">
@@ -51,6 +57,9 @@
 
             <!-- Master Action Grid (Solid Clean Colors) -->
             <div class="master-action-grid">
+                <button class="btn btn-usb btn-usb-disconnected" id="btn-master-usb" style="grid-column: span 2;" title="Connect/Disconnect Physical USB Robot">
+                    ⚡ Connect USB Robot (Physical)
+                </button>
                 <button class="btn btn-success" id="btn-enable-all">
                     Enable Both Arms
                 </button>

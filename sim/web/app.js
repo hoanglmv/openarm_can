@@ -279,6 +279,16 @@ function setupEventHandlers() {
         setArmTab("sync", e.target);
     });
 
+    // USB Toggle button handlers
+    const btnUsbToggle = document.getElementById("btn-usb-toggle");
+    if (btnUsbToggle) {
+        btnUsbToggle.addEventListener("click", toggleUsbConnection);
+    }
+    const btnMasterUsb = document.getElementById("btn-master-usb");
+    if (btnMasterUsb) {
+        btnMasterUsb.addEventListener("click", toggleUsbConnection);
+    }
+
     // Master actions
     document.getElementById("btn-enable-all").addEventListener("click", () => {
         for (let i = 1; i <= 16; i++) jointLockStates[i] = true;
@@ -645,6 +655,11 @@ function initWebSocket() {
                 handleTraffic(msg.data);
             } else if (msg.type === "cli_output") {
                 handleCliOutput(msg.data);
+            } else if (msg.type === "notice") {
+                showToast(msg.level || "info", msg.message || "");
+                if (msg.mode) {
+                    updateUsbUiState(msg.mode === "real");
+                }
             }
         } catch (e) {
             console.error("WS Parse Error:", e);
@@ -680,6 +695,87 @@ function handleCliOutput(data) {
     term.textContent = data;
 }
 
+// USB Connection State & Controller
+let currentUsbState = false;
+
+function updateUsbUiState(isReal) {
+    currentUsbState = isReal;
+
+    const btnHeader = document.getElementById("btn-usb-toggle");
+    const textHeader = document.getElementById("usb-btn-text");
+    const btnMaster = document.getElementById("btn-master-usb");
+    const ifaceBadge = document.getElementById("iface-name");
+
+    if (btnHeader) btnHeader.classList.remove("btn-usb-busy");
+    if (btnMaster) btnMaster.classList.remove("btn-usb-busy");
+
+    if (isReal) {
+        if (btnHeader) {
+            btnHeader.className = "btn-usb-toggle btn-usb-connected";
+            if (textHeader) textHeader.textContent = "Disconnect USB Robot";
+            btnHeader.title = "Đang kết nối robot thật (can0/can1). Bấm để ngắt kết nối an toàn.";
+        }
+        if (btnMaster) {
+            btnMaster.className = "btn btn-usb btn-usb-connected";
+            btnMaster.textContent = "🔌 Disconnect USB Robot (can0/can1)";
+            btnMaster.style.gridColumn = "span 2";
+        }
+        if (ifaceBadge) ifaceBadge.textContent = "can0 / can1 (REAL)";
+    } else {
+        if (btnHeader) {
+            btnHeader.className = "btn-usb-toggle btn-usb-disconnected";
+            if (textHeader) textHeader.textContent = "Connect USB Robot";
+            btnHeader.title = "Đang ở chế độ mô phỏng (vcan0). Bấm để kết nối USB Robot thật.";
+        }
+        if (btnMaster) {
+            btnMaster.className = "btn btn-usb btn-usb-disconnected";
+            btnMaster.textContent = "⚡ Connect USB Robot (Physical)";
+            btnMaster.style.gridColumn = "span 2";
+        }
+        if (ifaceBadge) ifaceBadge.textContent = "vcan0 (SIM)";
+    }
+}
+
+function toggleUsbConnection() {
+    const btnHeader = document.getElementById("btn-usb-toggle");
+    const textHeader = document.getElementById("usb-btn-text");
+    const btnMaster = document.getElementById("btn-master-usb");
+
+    if (currentUsbState) {
+        // Currently connected -> Disconnect
+        if (textHeader) textHeader.textContent = "Disconnecting USB...";
+        if (btnMaster) btnMaster.textContent = "Disconnecting USB...";
+        if (btnHeader) btnHeader.classList.add("btn-usb-busy");
+        if (btnMaster) btnMaster.classList.add("btn-usb-busy");
+        showToast("info", "Đang gửi lệnh ngắt kết nối USB và tắt torque an toàn...");
+        sendAction("disconnect_usb");
+    } else {
+        // Currently disconnected -> Connect
+        if (textHeader) textHeader.textContent = "Connecting USB...";
+        if (btnMaster) btnMaster.textContent = "Connecting USB...";
+        if (btnHeader) btnHeader.classList.add("btn-usb-busy");
+        if (btnMaster) btnMaster.classList.add("btn-usb-busy");
+        showToast("info", "Đang quét cổng USB và gắn thiết bị vào WSL2...");
+        sendAction("connect_usb");
+    }
+}
+
+function showToast(level, message) {
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${level}`;
+    const icon = level === "success" ? "✓" : level === "error" ? "✕" : level === "warning" ? "⚠" : "ℹ";
+    toast.innerHTML = `<span style="font-weight: 800; font-size: 13px;">${icon}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-10px)";
+        toast.style.transition = "all 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+    }, 4500);
+}
+
 // Telemetry & 3D Kinematics Synchronizer
 function handleTelemetry(data) {
     const motors = data.motors || [];
@@ -687,6 +783,9 @@ function handleTelemetry(data) {
 
     document.getElementById("stat-rx").textContent = data.frames_rx || 0;
     document.getElementById("stat-tx").textContent = data.frames_tx || 0;
+
+    const isRealMode = (data.mode === "real");
+    updateUsbUiState(isRealMode);
 
     motors.forEach(m => {
         // Update DOM Telemetry Card
