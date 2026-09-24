@@ -265,6 +265,40 @@ function setupEventHandlers() {
         }
     });
 
+    // Mode tabs switching (Khớp Tay, Tay Kẹp, Tư Thế & Tốc Độ)
+    const modeBtns = document.querySelectorAll(".mode-tab-btn");
+    const modePanes = {
+        joints: document.getElementById("pane-joints"),
+        grippers: document.getElementById("pane-grippers"),
+        presets: document.getElementById("pane-presets")
+    };
+
+    function switchControlMode(mode) {
+        modeBtns.forEach(b => {
+            if (b.dataset.mode === mode) {
+                b.classList.add("active");
+            } else {
+                b.classList.remove("active");
+            }
+        });
+
+        Object.keys(modePanes).forEach(k => {
+            if (modePanes[k]) {
+                if (k === mode) {
+                    modePanes[k].style.display = "flex";
+                } else {
+                    modePanes[k].style.display = "none";
+                }
+            }
+        });
+    }
+
+    modeBtns.forEach(b => {
+        b.addEventListener("click", () => {
+            switchControlMode(b.dataset.mode);
+        });
+    });
+
     // Arm tab switching
     document.getElementById("tab-arm-left").addEventListener("click", (e) => {
         setArmTab("left", e.target);
@@ -464,7 +498,7 @@ function setupEventHandlers() {
         e.target.textContent = `Axes: ${axesHelper.visible ? 'ON' : 'OFF'}`;
     });
 
-    // Inspector toggle
+    // Inspector toggle (Terminal & CAN-FD Inspector)
     const btnInspector = document.getElementById("btn-toggle-inspector");
     if (btnInspector) {
         btnInspector.addEventListener("click", () => {
@@ -475,14 +509,63 @@ function setupEventHandlers() {
                 if (isHidden) {
                     rightCol.style.display = "flex";
                     grid.classList.remove("right-col-hidden");
-                    btnInspector.classList.remove("active");
+                    btnInspector.classList.add("active");
                 } else {
                     rightCol.style.display = "none";
                     grid.classList.add("right-col-hidden");
-                    btnInspector.classList.add("active");
+                    btnInspector.classList.remove("active");
                 }
                 setTimeout(onWindowResize, 50);
             }
+        });
+    }
+
+    // Telemetry Panel Collapsible Toggle (Header button, panel bar, or expand button)
+    const telemPanel = document.getElementById("telemetry-panel");
+    const telemGrid = document.getElementById("telemetry-grid");
+    const telemTabs = document.getElementById("telem-tabs-group");
+    const btnTelemExpand = document.getElementById("btn-toggle-telem-expand");
+    const btnTelemHeader = document.getElementById("btn-toggle-telemetry-header");
+    const telemToggleHeader = document.getElementById("telemetry-toggle-header");
+
+    function toggleTelemetryPanel(forceOpen = null) {
+        if (!telemPanel) return;
+        const isCollapsed = telemPanel.classList.contains("collapsed");
+        const willCollapse = (forceOpen !== null) ? !forceOpen : !isCollapsed;
+
+        if (willCollapse) {
+            telemPanel.classList.add("collapsed");
+            if (telemGrid) telemGrid.style.display = "none";
+            if (telemTabs) telemTabs.style.display = "none";
+            if (btnTelemExpand) btnTelemExpand.textContent = "Mở rộng ▲";
+            if (btnTelemHeader) btnTelemHeader.classList.remove("active");
+        } else {
+            telemPanel.classList.remove("collapsed");
+            if (telemGrid) telemGrid.style.display = "grid";
+            if (telemTabs) telemTabs.style.display = "flex";
+            if (btnTelemExpand) btnTelemExpand.textContent = "Thu gọn ▼";
+            if (btnTelemHeader) btnTelemHeader.classList.add("active");
+        }
+        setTimeout(onWindowResize, 50);
+    }
+
+    if (btnTelemExpand) {
+        btnTelemExpand.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleTelemetryPanel();
+        });
+    }
+
+    if (telemToggleHeader) {
+        telemToggleHeader.addEventListener("click", (e) => {
+            if (e.target.closest(".telem-tabs")) return;
+            toggleTelemetryPanel();
+        });
+    }
+
+    if (btnTelemHeader) {
+        btnTelemHeader.addEventListener("click", () => {
+            toggleTelemetryPanel();
         });
     }
 

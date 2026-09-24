@@ -43,6 +43,26 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
 
+    def do_POST(self):
+        if self.path == "/api/joint_state":
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body.decode('utf-8'))
+                if hasattr(self.server, 'app') and self.server.app:
+                    self.server.app.apply_joint_states(data)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status": "ok"}')
+            except Exception as e:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+            return
+        super().do_POST()
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
@@ -143,6 +163,31 @@ JOINT_LIMITS = {
     14: (-0.7854, 0.7854),
     15: (-1.5708, 1.5708),
     16: (0.000, 0.043), # Right Gripper: Thanh kẹp ngang (Stroke: 0.0 - 0.043 m / 0 - 43 mm)
+}
+
+# Standard ROS 2 (MoveIt / sensor_msgs.JointState) naming mapping to OpenArm Motor IDs
+JOINT_NAME_TO_ID = {
+    # Left Arm Joints (1..7)
+    "openarm_left_joint1": 1, "left_joint1": 1, "left_j1": 1, "l_j1": 1, "joint1": 1, "j1": 1,
+    "openarm_left_joint2": 2, "left_joint2": 2, "left_j2": 2, "l_j2": 2, "joint2": 2, "j2": 2,
+    "openarm_left_joint3": 3, "left_joint3": 3, "left_j3": 3, "l_j3": 3, "joint3": 3, "j3": 3,
+    "openarm_left_joint4": 4, "left_joint4": 4, "left_j4": 4, "l_j4": 4, "joint4": 4, "j4": 4,
+    "openarm_left_joint5": 5, "left_joint5": 5, "left_j5": 5, "l_j5": 5, "joint5": 5, "j5": 5,
+    "openarm_left_joint6": 6, "left_joint6": 6, "left_j6": 6, "l_j6": 6, "joint6": 6, "j6": 6,
+    "openarm_left_joint7": 7, "left_joint7": 7, "left_j7": 7, "l_j7": 7, "joint7": 7, "j7": 7,
+    # Left Gripper (8)
+    "openarm_left_finger_joint": 8, "openarm_left_gripper": 8, "left_gripper": 8, "left_grip": 8, "l_grip": 8, "joint8": 8, "j8": 8,
+
+    # Right Arm Joints (9..15)
+    "openarm_right_joint1": 9, "right_joint1": 9, "right_j1": 9, "r_j1": 9, "joint9": 9, "j9": 9,
+    "openarm_right_joint2": 10, "right_joint2": 10, "right_j2": 10, "r_j2": 10, "joint10": 10, "j10": 10,
+    "openarm_right_joint3": 11, "right_joint3": 11, "right_j3": 11, "r_j3": 11, "joint11": 11, "j11": 11,
+    "openarm_right_joint4": 12, "right_joint4": 12, "right_j4": 12, "r_j4": 12, "joint12": 12, "j12": 12,
+    "openarm_right_joint5": 13, "right_joint5": 13, "right_j5": 13, "r_j5": 13, "joint13": 13, "j13": 13,
+    "openarm_right_joint6": 14, "right_joint6": 14, "right_j6": 14, "r_j6": 14, "joint14": 14, "j14": 14,
+    "openarm_right_joint7": 15, "right_joint7": 15, "right_j7": 15, "r_j7": 15, "joint15": 15, "j15": 15,
+    # Right Gripper (16)
+    "openarm_right_finger_joint": 16, "openarm_right_gripper": 16, "right_gripper": 16, "right_grip": 16, "r_grip": 16, "joint16": 16, "j16": 16,
 }
 
 
@@ -422,11 +467,16 @@ class OpenArmDashboardServer:
         # 4. Start HTTP server thread
         ThreadingHTTPServer.allow_reuse_address = True
         self.httpd = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), CustomHTTPHandler)
+        self.httpd.app = self
         self.http_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.http_thread.start()
-        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT}")
+        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state)")
 
-        # 5. Start WebSocket & Telemetry Broadcaster
+        # 5. Start high-speed UDP Joint Stream receiver (port 9870 for zero-latency ROS 2 / teleop streams)
+        self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
+        self.udp_thread.start()
+
+        # 6. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
 
     def _find_can_usb(self):
@@ -943,6 +993,115 @@ class OpenArmDashboardServer:
             cmd = payload.get("cmd", "")
             target_iface = self.can0_if if self.mode == "real" else "vcan0"
             threading.Thread(target=self._exec_cli, args=(cmd, target_iface), daemon=True).start()
+
+        elif action == "set_joint_state":
+            self.apply_joint_states(payload)
+
+    def _udp_receiver_loop(self, port: int = 9870):
+        """High-performance, zero-latency UDP receiver for real-time external streams (60-200 Hz)"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", port))
+            print(f"[Stream Receiver] High-speed UDP Joint State stream listening on 0.0.0.0:{port}")
+            while self.running:
+                data, addr = sock.recvfrom(8192)
+                try:
+                    payload = json.loads(data.decode('utf-8'))
+                    self.apply_joint_states(payload)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[Stream Receiver] Warning: UDP stream error on port {port}: {e}")
+        finally:
+            sock.close()
+
+    def apply_joint_states(self, payload: dict):
+        """
+        Apply target joint states from external sources (ROS 2 / AI / Teleop).
+        Supports flexible input formats:
+        - {"joints": {"openarm_left_joint1": 0.5, ...}}
+        - {"names": ["openarm_left_joint1", ...], "positions": [0.5, ...]}
+        - {"left": [q1..q7], "right": [q9..q15], "left_gripper": pos, "right_gripper": pos}
+        - {"positions": [16 values in order 1..16]}
+        """
+        joint_map = {}
+
+        # Format 1: names + positions lists (standard sensor_msgs/JointState)
+        if "names" in payload and "positions" in payload:
+            for name, pos in zip(payload["names"], payload["positions"]):
+                mid = JOINT_NAME_TO_ID.get(str(name).lower())
+                if mid:
+                    joint_map[mid] = float(pos)
+
+        # Format 2: direct "joints" dictionary
+        elif "joints" in payload and isinstance(payload["joints"], dict):
+            for k, v in payload["joints"].items():
+                if str(k).isdigit():
+                    mid = int(k)
+                else:
+                    mid = JOINT_NAME_TO_ID.get(str(k).lower())
+                if mid and (1 <= mid <= 16):
+                    joint_map[mid] = float(v)
+
+        # Format 3: "left" and "right" lists
+        elif "left" in payload or "right" in payload:
+            if "left" in payload and isinstance(payload["left"], list):
+                for idx, val in enumerate(payload["left"][:7]):
+                    joint_map[idx + 1] = float(val)
+            if "left_gripper" in payload:
+                joint_map[8] = float(payload["left_gripper"])
+
+            if "right" in payload and isinstance(payload["right"], list):
+                for idx, val in enumerate(payload["right"][:7]):
+                    joint_map[idx + 9] = float(val)
+            if "right_gripper" in payload:
+                joint_map[16] = float(payload["right_gripper"])
+
+        # Format 4: flat list of 16 positions
+        elif "positions" in payload and isinstance(payload["positions"], list):
+            for idx, val in enumerate(payload["positions"][:16]):
+                joint_map[idx + 1] = float(val)
+
+        # Apply to motors
+        for motor_id, val in joint_map.items():
+            m = self.motors.get(motor_id)
+            if not m:
+                continue
+
+            if motor_id in [8, 16]:
+                # Gripper (Joint 8 / Joint 16)
+                pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
+                safe_pos = min(0.0415, max(0.0, pos_m))
+                invert = self.gripper_invert.get(motor_id, True)
+                stroke_ratio = safe_pos / 0.0415
+                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+                rad_target = ratio * 1.15
+
+                m.enabled = True
+                m.error_code = 1
+                m.q_target = rad_target
+                m.q_cmd = rad_target
+
+                if self.mode == "real":
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
+                    posforce_can_id = m.send_id + 0x300
+                    vel_uint = 2500
+                    i_uint = 1200
+                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+            else:
+                # Arm Joints (1..7, 9..15)
+                lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
+                q = max(lim[0], min(lim[1], val))
+                if not m.enabled:
+                    m.enabled = True
+                    m.q_cmd = m.q
+                    if self.mode == "real":
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
+                m.q_target = q
 
     def _trajectory_loop(self):
         """400 Hz trajectory generator & control loop that smoothly moves motors at limited velocity"""

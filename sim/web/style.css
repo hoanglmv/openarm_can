@@ -235,7 +235,13 @@ body.theme-light .badge-success {
     flex-shrink: 0;
 }
 
-.btn-theme {
+.header-status-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-theme, .btn-tool-header {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     color: var(--text-main);
@@ -246,11 +252,20 @@ body.theme-light .badge-success {
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.btn-theme:hover {
+.btn-theme:hover, .btn-tool-header:hover {
     background-color: var(--bg-card-hover);
     border-color: var(--border-accent);
+}
+
+.btn-tool-header.active {
+    background-color: var(--accent-blue);
+    color: #ffffff;
+    border-color: var(--accent-blue);
 }
 
 .header-stats {
@@ -348,6 +363,146 @@ body.theme-light .badge-success {
     flex-direction: column;
     gap: 10px;
     padding: 10px;
+}
+
+/* Quick Action Bar (3 Primary Safety Buttons) */
+.quick-action-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+/* Control Mode Selector Tabs */
+.mode-selector-wrapper {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin-bottom: 2px;
+}
+
+.mode-tabs {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1.3fr;
+    gap: 4px;
+}
+
+.mode-tab-btn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 4px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.mode-tab-btn:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-main);
+}
+
+.mode-tab-btn.active {
+    background-color: var(--accent-blue);
+    color: #ffffff;
+    border-color: var(--accent-blue);
+}
+
+/* Mode Panes */
+.mode-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Collapsible Advanced Actions Accordion */
+.more-actions-details {
+    margin-top: auto;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.more-actions-summary {
+    padding: 7px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    list-style: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.more-actions-summary::-webkit-details-marker {
+    display: none;
+}
+
+.more-actions-summary:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-main);
+}
+
+.more-actions-details[open] .more-actions-summary {
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+.more-actions-details[open] .summary-arrow {
+    transform: rotate(180deg);
+}
+
+.summary-arrow {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+}
+
+.more-actions-content {
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.more-actions-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.robot-info-card {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.robot-info-card strong {
+    color: var(--text-main);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
 }
 
 /* Master Action Buttons (Solid Colors) */
@@ -955,19 +1110,73 @@ body.theme-light .model-spec-overlay {
     background-color: rgba(255, 255, 255, 0.85);
 }
 
-/* Telemetry Panel */
+/* Telemetry Panel (Collapsible to keep 3D Viewport clean & spacious) */
 .telemetry-panel {
     flex: 0.9;
     min-height: 200px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.telemetry-panel.collapsed {
+    flex: 0 0 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    overflow: hidden;
+}
+
+.telemetry-bar-header {
+    padding: 6px 12px;
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+}
+
+.telemetry-bar-header:hover {
+    background-color: var(--bg-card);
+}
+
+.telemetry-panel:not(.collapsed) .telemetry-bar-header {
+    border-bottom: 1px solid var(--border-color);
 }
 
 .telem-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+}
+
+.telem-header-left h2 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-main);
+    letter-spacing: 0.5px;
+}
+
+.telem-arrow-indicator {
+    font-size: 10px;
+    color: var(--text-dim);
+    transition: transform 0.2s ease;
+    display: inline-block;
+}
+
+.telemetry-panel:not(.collapsed) .telem-arrow-indicator {
+    transform: rotate(90deg);
+}
+
+.telem-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .telem-tabs {
