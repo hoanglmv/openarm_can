@@ -1539,10 +1539,11 @@ function triggerPreset(preset) {
         }
     } else if (preset === "ready") {
         // Ready stance: Both arms raised forward at chest height
-        // J1(Pitch)=0.35, J2(Roll)=0.20, J3=0, J4(Elbow)=1.20, J5=0, J6(Wrist)=-0.35, J7=0
+        // J1(Pitch)=0.35, J2(Roll: L=-0.20, R=+0.20), J3=0, J4(Elbow)=1.20, J5=0, J6(Wrist)=-0.35, J7=0
         [1, 9].forEach(baseId => {
+            const isLeftArm = (baseId === 1);
             sendAction("set_mit", { id: baseId + 0, q: 0.35 });
-            sendAction("set_mit", { id: baseId + 1, q: 0.20 });
+            sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.20 : 0.20 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.20 });
             sendAction("set_mit", { id: baseId + 4, q: 0.00 });
@@ -1560,7 +1561,7 @@ function triggerPreset(preset) {
             t += 0.05;
             const waveAngle = Math.sin(t * 3.5) * 0.40;
             sendAction("set_mit", { id: 1, q: 1.10 });
-            sendAction("set_mit", { id: 2, q: 0.50 });
+            sendAction("set_mit", { id: 2, q: -0.50 });
             sendAction("set_mit", { id: 3, q: 0.00 });
             sendAction("set_mit", { id: 4, q: 1.50 });
             sendAction("set_mit", { id: 5, q: 0.00 });
@@ -1570,8 +1571,9 @@ function triggerPreset(preset) {
     } else if (preset === "clap") {
         // Handshake / Grippers reach toward center
         [1, 9].forEach(baseId => {
+            const isLeftArm = (baseId === 1);
             sendAction("set_mit", { id: baseId + 0, q: 0.50 });
-            sendAction("set_mit", { id: baseId + 1, q: 0.15 });
+            sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.15 : 0.15 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.30 });
             sendAction("set_mit", { id: baseId + 4, q: 0.00 });
@@ -1588,8 +1590,9 @@ function triggerPreset(preset) {
             if (phase < 40) {
                 // Reach forward & open grippers
                 [1, 9].forEach(baseId => {
+                    const isLeftArm = (baseId === 1);
                     sendAction("set_mit", { id: baseId + 0, q: 0.45 });
-                    sendAction("set_mit", { id: baseId + 1, q: 0.25 });
+                    sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.25 : 0.25 });
                     sendAction("set_mit", { id: baseId + 3, q: 1.10 });
                     sendAction("set_mit", { id: baseId + 5, q: -0.30 });
                     sendAction("set_gripper", { id: baseId + 7, pos: 0.043 });
@@ -1615,11 +1618,11 @@ function triggerPreset(preset) {
             const q1 = Math.sin(t * 0.8) * 0.25 + 0.30;
             const q2 = Math.sin(t * 0.6) * 0.15 + 0.20;
             const q4 = Math.cos(t * 1.0) * 0.35 + 1.10;
-            const q6 = -Math.sin(t * 0.8) * 0.20 - 0.25;
 
             [1, 9].forEach(baseId => {
+                const isLeftArm = (baseId === 1);
                 sendAction("set_mit", { id: baseId + 0, q: q1 });
-                sendAction("set_mit", { id: baseId + 1, q: q2 });
+                sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -q2 : q2 });
                 sendAction("set_mit", { id: baseId + 3, q: q4 });
             });
         }, 50);
