@@ -207,7 +207,7 @@ class DamiaoArmSimulator:
             5: VirtualDamiaoMotor(5, "Left J5 (Wrist Roll)",     "left", 5, "DM4310", 0x05, 0x15, 12.5, 30.0, 10.0),
             6: VirtualDamiaoMotor(6, "Left J6 (Wrist Pitch)",    "left", 6, "DM4310", 0x06, 0x16, 12.5, 30.0, 10.0),
             7: VirtualDamiaoMotor(7, "Left J7 (Wrist Yaw)",      "left", 7, "DM4310", 0x07, 0x17, 12.5, 30.0, 10.0),
-            8: VirtualDamiaoMotor(8, "Left Gripper",             "left", 8, "DM4310", 0x08, 0x18, 12.5, 30.0, 10.0),
+            8: VirtualDamiaoMotor(8, "Left Gripper (J8 Kẹp Ngang)",  "left", 8, "DM4310", 0x08, 0x18, 12.5, 30.0, 10.0),
 
             # --- RIGHT ARM ---
             9:  VirtualDamiaoMotor(9,  "Right J1 (Shoulder Yaw)",   "right", 1, "DM8009", 0x21, 0x31, 12.5, 45.0, 54.0),
@@ -217,7 +217,7 @@ class DamiaoArmSimulator:
             13: VirtualDamiaoMotor(13, "Right J5 (Wrist Roll)",     "right", 5, "DM4310", 0x25, 0x35, 12.5, 30.0, 10.0),
             14: VirtualDamiaoMotor(14, "Right J6 (Wrist Pitch)",    "right", 6, "DM4310", 0x26, 0x36, 12.5, 30.0, 10.0),
             15: VirtualDamiaoMotor(15, "Right J7 (Wrist Yaw)",      "right", 7, "DM4310", 0x27, 0x37, 12.5, 30.0, 10.0),
-            16: VirtualDamiaoMotor(16, "Right Gripper",             "right", 8, "DM4310", 0x28, 0x38, 12.5, 30.0, 10.0),
+            16: VirtualDamiaoMotor(16, "Right Gripper (J8 Kẹp Ngang)", "right", 8, "DM4310", 0x28, 0x38, 12.5, 30.0, 10.0),
         }
 
         # Fast lookup mapping: send_id -> motor (with dual alias for 0x09..0x10)

@@ -2,25 +2,25 @@
 // Supports Dual 7-DOF Robotic Arms (Left & Right) + Dual Grippers (16 CAN Nodes)
 
 const LEFT_JOINTS = [
-    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
-    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
-    { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
-    { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
-    { id: 7, name: "L-Joint 7 (Wrist Roll)",     arm: "left",  idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 8, name: "L-Gripper (Kẹp gắp)",        arm: "left",  idx: 7, type: "DM4310", min:  0.000, max: 1.000, default: 0.0 }
+    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
+    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -3.3161, max: 0.1745, default: 0.0 },
+    { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
+    { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -0.7854, max: 0.7854, default: 0.0 },
+    { id: 7, name: "L-Joint 7 (Wrist Roll)",     arm: "left",  idx: 6, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 8, name: "L-Gripper (J8 Kẹp Ngang)",   arm: "left",  idx: 7, type: "DM4310", min:  0.0000, max: 0.0430, default: 0.0 }
 ];
 
 const RIGHT_JOINTS = [
-    { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
-    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
-    { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
-    { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
-    { id: 15, name: "R-Joint 7 (Wrist Roll)",     arm: "right", idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 16, name: "R-Gripper (Kẹp gắp)",        arm: "right", idx: 7, type: "DM4310", min:  0.000, max: 1.000, default: 0.0 }
+    { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
+    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.1745, max: 3.3161, default: 0.0 },
+    { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
+    { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -0.7854, max: 0.7854, default: 0.0 },
+    { id: 15, name: "R-Joint 7 (Wrist Roll)",     arm: "right", idx: 6, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 16, name: "R-Gripper (J8 Kẹp Ngang)",   arm: "right", idx: 7, type: "DM4310", min:  0.0000, max: 0.0430, default: 0.0 }
 ];
 
 const ALL_JOINTS = [...LEFT_JOINTS, ...RIGHT_JOINTS];
@@ -45,6 +45,12 @@ let currentArmTab = 'left';
 let syncGrippers = true;
 let telemFilter = 'all';
 let trafficFilter = 'all';
+
+function formatGripperText(val) {
+    const mm = (val * 1000).toFixed(1);
+    const status = val < 0.002 ? 'Đóng' : (val >= 0.040 ? 'Mở tối đa' : `${mm} mm`);
+    return `${mm} mm (${status})`;
+}
 
 // Initialize DOM and App
 document.addEventListener("DOMContentLoaded", () => {
@@ -92,7 +98,7 @@ function buildJointSliders() {
         "Forearm Twist",
         "Wrist Pitch",
         "Wrist Roll",
-        "Gripper (Kẹp gắp)"
+        "Gripper J8 (Thanh kẹp ngang)"
     ];
 
     itemsToRender.forEach((j) => {
@@ -110,7 +116,7 @@ function buildJointSliders() {
         const armTagText = isSync ? "L+R" : (isRight ? "R" : "L");
         const jNum = `J${j.idx + 1}`;
         const cleanName = JOINT_NAMES[j.idx] || `Joint ${j.idx + 1}`;
-        const valUnitText = isGripper ? "0.00 rad (Open)" : "0.00 rad (0°)";
+        const valUnitText = isGripper ? "0.0 mm (Đóng)" : "0.00 rad (0°)";
 
         card.innerHTML = `
             <div class="slider-header-compact">
@@ -127,13 +133,13 @@ function buildJointSliders() {
                 </div>
                 <div class="joint-val-row">
                     <span class="joint-val" id="val-disp-${uniqueKey}">${valUnitText}</span>
-                    <button class="btn-zero-single" title="Reset to 0 rad" onclick="resetSingleJoint(${j.id}, '${uniqueKey}', '${j.group}', ${j.idx})" ${isLocked ? 'disabled' : ''}>0</button>
+                    <button class="btn-zero-single" title="Reset to 0" onclick="resetSingleJoint(${j.id}, '${uniqueKey}', '${j.group}', ${j.idx})" ${isLocked ? 'disabled' : ''}>0</button>
                 </div>
             </div>
             <div class="slider-track-row">
-                <span class="range-bound">${j.min.toFixed(2)}</span>
-                <input type="range" class="joint-slider-input" id="slider-${uniqueKey}" min="${j.min}" max="${j.max}" step="0.005" value="0.0" ${isLocked ? 'disabled' : ''}>
-                <span class="range-bound">+${j.max.toFixed(2)}</span>
+                <span class="range-bound">${isGripper ? '0.0 mm' : j.min.toFixed(2)}</span>
+                <input type="range" class="joint-slider-input" id="slider-${uniqueKey}" min="${j.min}" max="${j.max}" step="${isGripper ? '0.0005' : '0.005'}" value="0.0" ${isLocked ? 'disabled' : ''}>
+                <span class="range-bound">+${isGripper ? '43.0 mm' : j.max.toFixed(2)}</span>
             </div>
         `;
         list.appendChild(card);
@@ -144,21 +150,21 @@ function buildJointSliders() {
             const val = parseFloat(e.target.value);
 
             if (isGripper) {
-                const statusText = val > 0.4 ? 'Grasping' : 'Open';
-                document.getElementById(`val-disp-${uniqueKey}`).textContent = `${val.toFixed(2)} rad (${statusText})`;
+                const dispText = formatGripperText(val);
+                document.getElementById(`val-disp-${uniqueKey}`).textContent = dispText;
 
                 if (isLeft) {
                     sendAction("set_gripper", { id: 8, arm: "left", pos: val });
                     const topSlider = document.getElementById("slider-gripper-left");
                     if (topSlider) topSlider.value = val;
                     const topDisp = document.getElementById("left-gripper-val-display");
-                    if (topDisp) topDisp.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                    if (topDisp) topDisp.textContent = dispText;
                 } else if (isRight) {
                     sendAction("set_gripper", { id: 16, arm: "right", pos: val });
                     const topSlider = document.getElementById("slider-gripper-right");
                     if (topSlider) topSlider.value = val;
                     const topDisp = document.getElementById("right-gripper-val-display");
-                    if (topDisp) topDisp.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                    if (topDisp) topDisp.textContent = dispText;
                 } else { // sync
                     sendAction("set_gripper", { id: 8, arm: "left", pos: val });
                     sendAction("set_gripper", { id: 16, arm: "right", pos: val });
@@ -168,8 +174,8 @@ function buildJointSliders() {
                     if (topR) topR.value = val;
                     const dispL = document.getElementById("left-gripper-val-display");
                     const dispR = document.getElementById("right-gripper-val-display");
-                    if (dispL) dispL.textContent = `${val.toFixed(2)} rad (${statusText})`;
-                    if (dispR) dispR.textContent = `${val.toFixed(2)} rad (${statusText})`;
+                    if (dispL) dispL.textContent = dispText;
+                    if (dispR) dispR.textContent = dispText;
                 }
             } else {
                 const deg = (val * 180 / Math.PI).toFixed(0);
@@ -182,8 +188,8 @@ function buildJointSliders() {
                 } else { // sync
                     const leftMotorId = LEFT_JOINTS[j.idx].id;
                     const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                    // Mirrored yaw/roll for symmetrical bimanual gestures
-                    const mirrorSign = (j.idx === 0 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                    // Mirrored roll/yaw/abduction for symmetrical bimanual gestures (J2, J3, J5, J7)
+                    const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
 
                     sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
                     sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
@@ -273,6 +279,16 @@ function setupEventHandlers() {
         setArmTab("sync", e.target);
     });
 
+    // USB Toggle button handlers
+    const btnUsbToggle = document.getElementById("btn-usb-toggle");
+    if (btnUsbToggle) {
+        btnUsbToggle.addEventListener("click", toggleUsbConnection);
+    }
+    const btnMasterUsb = document.getElementById("btn-master-usb");
+    if (btnMasterUsb) {
+        btnMasterUsb.addEventListener("click", toggleUsbConnection);
+    }
+
     // Master actions
     document.getElementById("btn-enable-all").addEventListener("click", () => {
         for (let i = 1; i <= 16; i++) jointLockStates[i] = true;
@@ -293,7 +309,7 @@ function setupEventHandlers() {
         document.querySelectorAll(".joint-val").forEach(disp => {
             if (disp.id.startsWith("val-disp-")) {
                 if (disp.id.includes("-7")) {
-                    disp.textContent = "0.00 rad (Open)";
+                    disp.textContent = "0.0 mm (Đóng)";
                 } else {
                     disp.textContent = "0.00 rad (0°)";
                 }
@@ -307,10 +323,10 @@ function setupEventHandlers() {
         if (rightG) rightG.value = 0.0;
         const leftGDisp = document.getElementById("left-gripper-val-display");
         const rightGDisp = document.getElementById("right-gripper-val-display");
-        if (leftGDisp) leftGDisp.textContent = "0.00 rad (Open)";
-        if (rightGDisp) rightGDisp.textContent = "0.00 rad (Open)";
+        if (leftGDisp) leftGDisp.textContent = "0.0 mm (Đóng)";
+        if (rightGDisp) rightGDisp.textContent = "0.0 mm (Đóng)";
 
-        // 3. Immediately reset 3D Digital Twin model to natural 0 rad resting pose
+        // 3. Immediately reset 3D Digital Twin model to natural resting pose
         leftArmJoints.forEach(j => {
             if (j && j.group) j.group.rotation.set(0, 0, 0);
         });
@@ -318,12 +334,12 @@ function setupEventHandlers() {
             if (j && j.group) j.group.rotation.set(0, 0, 0);
         });
         if (leftGripperFingers.left && leftGripperFingers.right) {
-            leftGripperFingers.left.position.x = -0.018;
-            leftGripperFingers.right.position.x = 0.018;
+            leftGripperFingers.left.position.x = -0.010;
+            leftGripperFingers.right.position.x = 0.010;
         }
         if (rightGripperFingers.left && rightGripperFingers.right) {
-            rightGripperFingers.left.position.x = -0.018;
-            rightGripperFingers.right.position.x = 0.018;
+            rightGripperFingers.left.position.x = -0.010;
+            rightGripperFingers.right.position.x = 0.010;
         }
 
         // 4. Send zero calibration sequence to server & physical motors
@@ -370,7 +386,7 @@ function setupEventHandlers() {
     const leftGripperSlider = document.getElementById("slider-gripper-left");
     leftGripperSlider.addEventListener("input", (e) => {
         const val = parseFloat(e.target.value);
-        const text = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        const text = formatGripperText(val);
         document.getElementById("left-gripper-val-display").textContent = text;
         const j8Slider = document.getElementById("slider-left-7");
         if (j8Slider) j8Slider.value = val;
@@ -393,7 +409,7 @@ function setupEventHandlers() {
     const rightGripperSlider = document.getElementById("slider-gripper-right");
     rightGripperSlider.addEventListener("input", (e) => {
         const val = parseFloat(e.target.value);
-        const text = `${val.toFixed(2)} rad (${val > 0.4 ? 'Grasping' : 'Open'})`;
+        const text = formatGripperText(val);
         document.getElementById("right-gripper-val-display").textContent = text;
         const j8Slider = document.getElementById("slider-right-7");
         if (j8Slider) j8Slider.value = val;
@@ -580,7 +596,7 @@ window.setGripperDirect = function(arm, val) {
     const sliderId = isLeft ? 'slider-gripper-left' : 'slider-gripper-right';
     const dispId = isLeft ? 'left-gripper-val-display' : 'right-gripper-val-display';
     const motorId = isLeft ? 8 : 16;
-    const text = `${val.toFixed(2)} rad (${val >= 0.4 ? 'Grasping' : 'Open'})`;
+    const text = formatGripperText(val);
 
     const slider = document.getElementById(sliderId);
     if (slider) slider.value = val;
@@ -639,6 +655,11 @@ function initWebSocket() {
                 handleTraffic(msg.data);
             } else if (msg.type === "cli_output") {
                 handleCliOutput(msg.data);
+            } else if (msg.type === "notice") {
+                showToast(msg.level || "info", msg.message || "");
+                if (msg.mode) {
+                    updateUsbUiState(msg.mode === "real");
+                }
             }
         } catch (e) {
             console.error("WS Parse Error:", e);
@@ -674,6 +695,87 @@ function handleCliOutput(data) {
     term.textContent = data;
 }
 
+// USB Connection State & Controller
+let currentUsbState = false;
+
+function updateUsbUiState(isReal) {
+    currentUsbState = isReal;
+
+    const btnHeader = document.getElementById("btn-usb-toggle");
+    const textHeader = document.getElementById("usb-btn-text");
+    const btnMaster = document.getElementById("btn-master-usb");
+    const ifaceBadge = document.getElementById("iface-name");
+
+    if (btnHeader) btnHeader.classList.remove("btn-usb-busy");
+    if (btnMaster) btnMaster.classList.remove("btn-usb-busy");
+
+    if (isReal) {
+        if (btnHeader) {
+            btnHeader.className = "btn-usb-toggle btn-usb-connected";
+            if (textHeader) textHeader.textContent = "Disconnect USB Robot";
+            btnHeader.title = "Đang kết nối robot thật (can0/can1). Bấm để ngắt kết nối an toàn.";
+        }
+        if (btnMaster) {
+            btnMaster.className = "btn btn-usb btn-usb-connected";
+            btnMaster.textContent = "🔌 Disconnect USB Robot (can0/can1)";
+            btnMaster.style.gridColumn = "span 2";
+        }
+        if (ifaceBadge) ifaceBadge.textContent = "can0 / can1 (REAL)";
+    } else {
+        if (btnHeader) {
+            btnHeader.className = "btn-usb-toggle btn-usb-disconnected";
+            if (textHeader) textHeader.textContent = "Connect USB Robot";
+            btnHeader.title = "Đang ở chế độ mô phỏng (vcan0). Bấm để kết nối USB Robot thật.";
+        }
+        if (btnMaster) {
+            btnMaster.className = "btn btn-usb btn-usb-disconnected";
+            btnMaster.textContent = "⚡ Connect USB Robot (Physical)";
+            btnMaster.style.gridColumn = "span 2";
+        }
+        if (ifaceBadge) ifaceBadge.textContent = "vcan0 (SIM)";
+    }
+}
+
+function toggleUsbConnection() {
+    const btnHeader = document.getElementById("btn-usb-toggle");
+    const textHeader = document.getElementById("usb-btn-text");
+    const btnMaster = document.getElementById("btn-master-usb");
+
+    if (currentUsbState) {
+        // Currently connected -> Disconnect
+        if (textHeader) textHeader.textContent = "Disconnecting USB...";
+        if (btnMaster) btnMaster.textContent = "Disconnecting USB...";
+        if (btnHeader) btnHeader.classList.add("btn-usb-busy");
+        if (btnMaster) btnMaster.classList.add("btn-usb-busy");
+        showToast("info", "Đang gửi lệnh ngắt kết nối USB và tắt torque an toàn...");
+        sendAction("disconnect_usb");
+    } else {
+        // Currently disconnected -> Connect
+        if (textHeader) textHeader.textContent = "Connecting USB...";
+        if (btnMaster) btnMaster.textContent = "Connecting USB...";
+        if (btnHeader) btnHeader.classList.add("btn-usb-busy");
+        if (btnMaster) btnMaster.classList.add("btn-usb-busy");
+        showToast("info", "Đang quét cổng USB và gắn thiết bị vào WSL2...");
+        sendAction("connect_usb");
+    }
+}
+
+function showToast(level, message) {
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${level}`;
+    const icon = level === "success" ? "✓" : level === "error" ? "✕" : level === "warning" ? "⚠" : "ℹ";
+    toast.innerHTML = `<span style="font-weight: 800; font-size: 13px;">${icon}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-10px)";
+        toast.style.transition = "all 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+    }, 4500);
+}
+
 // Telemetry & 3D Kinematics Synchronizer
 function handleTelemetry(data) {
     const motors = data.motors || [];
@@ -681,6 +783,9 @@ function handleTelemetry(data) {
 
     document.getElementById("stat-rx").textContent = data.frames_rx || 0;
     document.getElementById("stat-tx").textContent = data.frames_tx || 0;
+
+    const isRealMode = (data.mode === "real");
+    updateUsbUiState(isRealMode);
 
     motors.forEach(m => {
         // Update DOM Telemetry Card
@@ -702,7 +807,14 @@ function handleTelemetry(data) {
                 chip.textContent = "OFF";
             }
         }
-        if (qEl) qEl.textContent = `${m.q.toFixed(3)} (${m.q_deg}°)`;
+        const isGripperMotor = (m.id === 8 || m.id === 16);
+        if (qEl) {
+            if (isGripperMotor) {
+                qEl.textContent = `${(m.q * 1000).toFixed(1)} mm`;
+            } else {
+                qEl.textContent = `${m.q.toFixed(3)} (${m.q_deg}°)`;
+            }
+        }
         if (dqEl) dqEl.textContent = `${m.dq.toFixed(2)}`;
         if (tauEl) tauEl.textContent = `${m.tau.toFixed(2)} Nm`;
         if (tmosEl) tmosEl.textContent = `${m.t_mos.toFixed(1)}°C`;
@@ -721,10 +833,10 @@ function handleTelemetry(data) {
                     // J1: Shoulder Pitch (swings arm forward/backward around X)
                     jEntry.group.rotation.x = -angle;
                 } else if (jointIndex === 1) {
-                    // J2: Shoulder Roll / Abduction (swings arm outward away from torso around Z)
-                    // Left arm swings outward to -X (+Z rotation)
-                    // Right arm swings outward to +X (-Z rotation)
-                    jEntry.group.rotation.z = isLeft ? angle : -angle;
+                    // J2: Shoulder Roll / Abduction
+                    // Left arm uses negative angles for outward abduction (-3.3161 .. 0.1745 rad) -> swings to -X
+                    // Right arm uses positive angles for outward abduction (-0.1745 .. 3.3161 rad) -> swings to +X
+                    jEntry.group.rotation.z = angle;
                 } else if (jointIndex === 2) {
                     // J3: Arm Twist (humeral twist around Y axis)
                     jEntry.group.rotation.y = isLeft ? angle : -angle;
@@ -743,12 +855,40 @@ function handleTelemetry(data) {
                 }
             }
         } else if (jointIndex === 7) {
-            // Gripper opening/closing (0.0: closed beak at center, 1.0: open wide)
-            const stroke = Math.max(0.0, Math.min(1.0, Math.abs(m.q)));
-            const fingerOffset = 0.018 + stroke * 0.024;
+            // Horizontal parallel linear gripper (stroke: 0.0m closed to 0.043m open)
+            const strokeRatio = Math.max(0.0, Math.min(1.0, Math.abs(m.q) / 0.043));
+            const fingerOffset = 0.010 + strokeRatio * 0.028;
             if (gripperFingers.left && gripperFingers.right) {
                 gripperFingers.left.position.x = -fingerOffset;
                 gripperFingers.right.position.x = fingerOffset;
+            }
+        }
+
+        // Bi-directional Synchronization: Update UI Sliders to match live robot state in real time
+        const armGroup = isLeft ? 'left' : 'right';
+        const sliderKey = `${armGroup}-${jointIndex}`;
+        const sliderEl = document.getElementById(`slider-${sliderKey}`);
+        const dispEl = document.getElementById(`val-disp-${sliderKey}`);
+
+        if (sliderEl && document.activeElement !== sliderEl) {
+            sliderEl.value = m.q;
+            if (dispEl) {
+                if (jointIndex === 7) {
+                    dispEl.textContent = formatGripperText(m.q);
+                } else {
+                    const deg = (m.q * 180 / Math.PI).toFixed(0);
+                    dispEl.textContent = `${m.q.toFixed(2)} rad (${deg}°)`;
+                }
+            }
+        }
+
+        // Also sync top Dual Gripper sliders if not focused
+        if (jointIndex === 7) {
+            const topSlider = document.getElementById(isLeft ? "slider-gripper-left" : "slider-gripper-right");
+            const topDisp = document.getElementById(isLeft ? "left-gripper-val-display" : "right-gripper-val-display");
+            if (topSlider && document.activeElement !== topSlider) {
+                topSlider.value = m.q;
+                if (topDisp) topDisp.textContent = formatGripperText(m.q);
             }
         }
     });
@@ -1498,16 +1638,17 @@ function triggerPreset(preset) {
         }
     } else if (preset === "ready") {
         // Ready stance: Both arms raised forward at chest height
-        // J1(Pitch)=0.35, J2(Roll)=0.20, J3=0, J4(Elbow)=1.20, J5=0, J6(Wrist)=-0.35, J7=0
+        // J1(Pitch)=0.35, J2(Roll: L=-0.20, R=+0.20), J3=0, J4(Elbow)=1.20, J5=0, J6(Wrist)=-0.35, J7=0
         [1, 9].forEach(baseId => {
+            const isLeftArm = (baseId === 1);
             sendAction("set_mit", { id: baseId + 0, q: 0.35 });
-            sendAction("set_mit", { id: baseId + 1, q: 0.20 });
+            sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.20 : 0.20 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.20 });
             sendAction("set_mit", { id: baseId + 4, q: 0.00 });
             sendAction("set_mit", { id: baseId + 5, q: -0.35 });
             sendAction("set_mit", { id: baseId + 6, q: 0.00 });
-            sendAction("set_gripper", { id: baseId + 7, pos: 0.25 });
+            sendAction("set_gripper", { id: baseId + 7, pos: 0.020 });
         });
     } else if (preset === "wave") {
         // Left arm raises up and waves, Right arm rests
@@ -1519,7 +1660,7 @@ function triggerPreset(preset) {
             t += 0.05;
             const waveAngle = Math.sin(t * 3.5) * 0.40;
             sendAction("set_mit", { id: 1, q: 1.10 });
-            sendAction("set_mit", { id: 2, q: 0.50 });
+            sendAction("set_mit", { id: 2, q: -0.50 });
             sendAction("set_mit", { id: 3, q: 0.00 });
             sendAction("set_mit", { id: 4, q: 1.50 });
             sendAction("set_mit", { id: 5, q: 0.00 });
@@ -1529,14 +1670,15 @@ function triggerPreset(preset) {
     } else if (preset === "clap") {
         // Handshake / Grippers reach toward center
         [1, 9].forEach(baseId => {
+            const isLeftArm = (baseId === 1);
             sendAction("set_mit", { id: baseId + 0, q: 0.50 });
-            sendAction("set_mit", { id: baseId + 1, q: 0.15 });
+            sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.15 : 0.15 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.30 });
             sendAction("set_mit", { id: baseId + 4, q: 0.00 });
             sendAction("set_mit", { id: baseId + 5, q: -0.20 });
             sendAction("set_mit", { id: baseId + 6, q: 0.00 });
-            sendAction("set_gripper", { id: baseId + 7, pos: 0.50 });
+            sendAction("set_gripper", { id: baseId + 7, pos: 0.035 });
         });
     } else if (preset === "carry") {
         // Dual-arm reach forward, grasp box, lift upwards
@@ -1547,16 +1689,17 @@ function triggerPreset(preset) {
             if (phase < 40) {
                 // Reach forward & open grippers
                 [1, 9].forEach(baseId => {
+                    const isLeftArm = (baseId === 1);
                     sendAction("set_mit", { id: baseId + 0, q: 0.45 });
-                    sendAction("set_mit", { id: baseId + 1, q: 0.25 });
+                    sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.25 : 0.25 });
                     sendAction("set_mit", { id: baseId + 3, q: 1.10 });
                     sendAction("set_mit", { id: baseId + 5, q: -0.30 });
-                    sendAction("set_gripper", { id: baseId + 7, pos: 0.80 });
+                    sendAction("set_gripper", { id: baseId + 7, pos: 0.043 });
                 });
             } else if (phase < 80) {
                 // Grasp box
                 [1, 9].forEach(baseId => {
-                    sendAction("set_gripper", { id: baseId + 7, pos: 0.20 });
+                    sendAction("set_gripper", { id: baseId + 7, pos: 0.015 });
                 });
             } else {
                 // Lift box upward
@@ -1574,11 +1717,11 @@ function triggerPreset(preset) {
             const q1 = Math.sin(t * 0.8) * 0.25 + 0.30;
             const q2 = Math.sin(t * 0.6) * 0.15 + 0.20;
             const q4 = Math.cos(t * 1.0) * 0.35 + 1.10;
-            const q6 = -Math.sin(t * 0.8) * 0.20 - 0.25;
 
             [1, 9].forEach(baseId => {
+                const isLeftArm = (baseId === 1);
                 sendAction("set_mit", { id: baseId + 0, q: q1 });
-                sendAction("set_mit", { id: baseId + 1, q: q2 });
+                sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -q2 : q2 });
                 sendAction("set_mit", { id: baseId + 3, q: q4 });
             });
         }, 50);
