@@ -19,6 +19,7 @@ import struct
 import asyncio
 import threading
 import subprocess
+import shutil
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, List, Optional
 
@@ -38,6 +39,21 @@ from motor_simulator import (
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 HTTP_PORT = 8888
 WS_PORT = 8889
+CAMERA_STREAM_PORT = int(os.environ.get("OPENARM_CAMERA_STREAM_PORT", "8890"))
+CAMERA_RAW_RGB_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_RAW_RGB_TOPIC",
+    "/camera/camera/color/image_raw",
+)
+CAMERA_RAW_DEPTH_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_RAW_DEPTH_TOPIC",
+    "/camera/camera/depth/image_rect_raw",
+)
+CAMERA_ALIGNED_DEPTH_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_ALIGNED_DEPTH_TOPIC",
+    "/camera/camera/aligned_depth_to_color/image_raw",
+)
+CAMERA_TOPIC = os.environ.get("OPENARM_CAMERA_TOPIC", "/camera/act/rgb")
+CAMERA_DEPTH_TOPIC = os.environ.get("OPENARM_CAMERA_DEPTH_TOPIC", "/camera/act/depth")
 
 class CustomHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -388,6 +404,9 @@ class OpenArmDashboardServer:
         self.can1_if = can1_if
         self.clients = set()
         self.running = True
+        self.camera_process = None
+        self.camera_driver_process = None
+        self.rgbd_process = None
         self.velocity_limit = 0.25 # rad/s (~14°/s) gentle & safe velocity limit
         self.gripper_invert = {8: True, 16: True} # Direction invert flag (default True: 0mm=closed/1.15rad, 41.5mm=open/0.0rad)
 
@@ -408,6 +427,13 @@ class OpenArmDashboardServer:
             m.kd = 2.0
 
     def start(self):
+        # Start the RealSense ROS driver and its browser stream automatically.
+        # The bridge uses Ubuntu's Python so apt-installed ROS 2 modules remain
+        # available even when this dashboard runs inside a virtualenv.
+        self._start_camera_driver()
+        self._start_rgbd_preprocessor()
+        self._start_camera_bridge()
+
         # 1. Start hardware bridge or simulator
         self.hw.start()
 
@@ -428,6 +454,158 @@ class OpenArmDashboardServer:
 
         # 5. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
+
+    def _start_camera_driver(self):
+        if "--no-camera" in sys.argv:
+            print("[Camera] RealSense driver disabled by --no-camera")
+            return
+
+        ros2 = os.environ.get("OPENARM_ROS2", "/opt/ros/jazzy/bin/ros2")
+        if not os.path.exists(ros2):
+            ros2 = shutil.which("ros2")
+        if not ros2:
+            print("[Camera] ros2 was not found; camera driver was not started")
+            return
+
+        # Reuse an already running camera node instead of trying to open the
+        # same USB device twice.
+        try:
+            topics = subprocess.run(
+                [ros2, "topic", "list"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            ).stdout.splitlines()
+            if CAMERA_RAW_RGB_TOPIC in topics and CAMERA_RAW_DEPTH_TOPIC in topics:
+                print(
+                    f"[Camera] Reusing active RGB and depth topics: "
+                    f"{CAMERA_RAW_RGB_TOPIC}, {CAMERA_RAW_DEPTH_TOPIC}"
+                )
+                return
+            if CAMERA_RAW_RGB_TOPIC in topics:
+                print(
+                    "[Camera] An RGB-only RealSense driver is already running. "
+                    "Stop it and restart the dashboard to enable depth too."
+                )
+                return
+        except Exception:
+            pass
+
+        try:
+            self.camera_driver_process = subprocess.Popen(
+                [
+                    ros2,
+                    "launch",
+                    "realsense2_camera",
+                    "rs_launch.py",
+                    "enable_color:=true",
+                    "enable_depth:=true",
+                    "enable_sync:=true",
+                    "align_depth.enable:=true",
+                    "rgb_camera.color_profile:=424x240x30",
+                    "depth_module.depth_profile:=424x240x30",
+                ],
+            )
+            print(
+                "[Camera] Starting Intel RealSense RGB + aligned depth "
+                "(424x240 @ 30 FPS source)"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start RealSense driver: {error}")
+
+    def _start_rgbd_preprocessor(self):
+        if "--no-camera" in sys.argv:
+            return
+
+        script = os.path.join(os.path.dirname(__file__), "rgbd_preprocessor.py")
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
+        if not os.path.exists(camera_python):
+            camera_python = shutil.which("python3") or sys.executable
+
+        try:
+            self.rgbd_process = subprocess.Popen(
+                [
+                    camera_python,
+                    script,
+                    "--rgb-input",
+                    CAMERA_RAW_RGB_TOPIC,
+                    "--depth-input",
+                    CAMERA_ALIGNED_DEPTH_TOPIC,
+                    "--rgb-output",
+                    CAMERA_TOPIC,
+                    "--depth-output",
+                    CAMERA_DEPTH_TOPIC,
+                    "--width",
+                    "320",
+                    "--height",
+                    "180",
+                    "--rate",
+                    "25",
+                ],
+            )
+            print(
+                "[Camera] Starting synchronized ACT RGB-D output "
+                "(320x180 @ 25 Hz)"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start RGB-D preprocessor: {error}")
+
+    def _start_camera_bridge(self):
+        if "--no-camera" in sys.argv:
+            print("[Camera] Bridge disabled by --no-camera")
+            return
+
+        bridge_script = os.path.join(os.path.dirname(__file__), "camera_stream.py")
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
+        if not os.path.exists(camera_python):
+            camera_python = shutil.which("python3") or sys.executable
+
+        try:
+            self.camera_process = subprocess.Popen(
+                [
+                    camera_python,
+                    bridge_script,
+                    "--topic",
+                    CAMERA_TOPIC,
+                    "--port",
+                    str(CAMERA_STREAM_PORT),
+                ],
+            )
+            print(
+                f"[Camera] Starting ROS image bridge for {CAMERA_TOPIC} "
+                f"on port {CAMERA_STREAM_PORT}"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start ROS image bridge: {error}")
+
+    def stop(self):
+        self.running = False
+        try:
+            self.hw.stop()
+        except Exception:
+            pass
+        if getattr(self, "httpd", None):
+            self.httpd.shutdown()
+            self.httpd.server_close()
+        if self.camera_process and self.camera_process.poll() is None:
+            self.camera_process.terminate()
+            try:
+                self.camera_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.camera_process.kill()
+        if self.rgbd_process and self.rgbd_process.poll() is None:
+            self.rgbd_process.terminate()
+            try:
+                self.rgbd_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.rgbd_process.kill()
+        if self.camera_driver_process and self.camera_driver_process.poll() is None:
+            self.camera_driver_process.terminate()
+            try:
+                self.camera_driver_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.camera_driver_process.kill()
 
     def _find_can_usb(self):
         try:
@@ -1158,4 +1336,9 @@ if __name__ == "__main__":
 
     print(f"[Dashboard] Mode selected: {mode.upper()} (can0 available: {can0_available})")
     server = OpenArmDashboardServer(mode=mode, can0_if="can0", can1_if="can1")
-    server.start()
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        print("\n[Dashboard] Stopping...")
+    finally:
+        server.stop()

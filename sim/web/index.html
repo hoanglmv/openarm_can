@@ -188,6 +188,22 @@
                     </div>
                 </div>
                 <div id="three-container" class="three-container">
+                    <div class="camera-feed-card" id="camera-feed-card">
+                        <div class="camera-feed-header">
+                            <span>ACT RGB · 320×180 · 25 Hz</span>
+                            <span class="camera-feed-status waiting" id="camera-feed-status">
+                                <span class="camera-status-dot"></span>
+                                WAITING
+                            </span>
+                        </div>
+                        <div class="camera-feed-frame">
+                            <img id="camera-feed" alt="RealSense camera preview">
+                            <div class="camera-feed-placeholder" id="camera-feed-placeholder">
+                                Waiting for ROS camera topic
+                                <small>/camera/act/rgb</small>
+                            </div>
+                        </div>
+                    </div>
                     <div class="viewport-overlay-hint">Rotate: Left Click + Drag | Pan: Right Click | Zoom: Scroll</div>
                     <div class="model-spec-overlay">
                         <span>Dual 7-DOF Arms</span> • <span>DM8009 / DM4340 / DM4310</span> • <span>606mm Reach</span> • <span>CAN-FD 1 kHz</span>
@@ -274,6 +290,6 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
     <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
 </body>
 </html>
