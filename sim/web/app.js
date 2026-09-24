@@ -3,7 +3,7 @@
 
 const LEFT_JOINTS = [
     { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
-    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -0.1745, max: 3.3161, default: 0.0 },
+    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -3.3161, max: 0.1745, default: 0.0 },
     { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
     { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
     { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
@@ -188,8 +188,8 @@ function buildJointSliders() {
                 } else { // sync
                     const leftMotorId = LEFT_JOINTS[j.idx].id;
                     const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                    // Mirrored roll/yaw/abduction for symmetrical bimanual gestures (J3, J5, J7)
-                    const mirrorSign = (j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                    // Mirrored roll/yaw/abduction for symmetrical bimanual gestures (J2, J3, J5, J7)
+                    const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
 
                     sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
                     sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
@@ -734,10 +734,10 @@ function handleTelemetry(data) {
                     // J1: Shoulder Pitch (swings arm forward/backward around X)
                     jEntry.group.rotation.x = -angle;
                 } else if (jointIndex === 1) {
-                    // J2: Shoulder Roll / Abduction (swings arm outward away from torso around Z)
-                    // Left arm swings outward to -X (+Z rotation)
-                    // Right arm swings outward to +X (-Z rotation)
-                    jEntry.group.rotation.z = isLeft ? angle : -angle;
+                    // J2: Shoulder Roll / Abduction
+                    // Left arm uses negative angles for outward abduction (-3.3161 .. 0.1745 rad) -> swings to -X
+                    // Right arm uses positive angles for outward abduction (-0.1745 .. 3.3161 rad) -> swings to +X
+                    jEntry.group.rotation.z = angle;
                 } else if (jointIndex === 2) {
                     // J3: Arm Twist (humeral twist around Y axis)
                     jEntry.group.rotation.y = isLeft ? angle : -angle;

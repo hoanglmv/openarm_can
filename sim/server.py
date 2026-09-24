@@ -110,7 +110,7 @@ class RealDamiaoMotorState:
 JOINT_LIMITS = {
     # Left Arm (IDs 1..7) & Left Gripper (ID 8)
     1: (-1.3963, 3.4907),
-    2: (-0.17453, 3.3161),
+    2: (-3.3161, 0.17453), # Left J2: Shoulder Roll (-3.3161 .. 0.17453 rad)
     3: (-1.5708, 1.5708),
     4: (0.0, 2.4435),
     5: (-1.5708, 1.5708),
