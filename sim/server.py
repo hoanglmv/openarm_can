@@ -83,11 +83,14 @@ class RealDamiaoMotorState:
         self.kd = 2.0
         self.last_update = 0.0
         self.has_physical_sync = False
+        self.invert = True if joint_idx == 8 else False
 
     def to_dict(self):
-        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
+        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.0415) and mm
         if self.joint_idx == 8:
-            stroke_m = max(0.0, min(0.043, (abs(self.q) / 1.20) * 0.043))
+            raw_ratio = max(0.0, min(1.0, abs(self.q) / 1.15))
+            ratio = (1.0 - raw_ratio) if getattr(self, 'invert', True) else raw_ratio
+            stroke_m = ratio * 0.0415
             q_val = round(stroke_m, 4)
             q_deg_val = round(stroke_m * 1000.0, 1) # displayed as mm
         else:
@@ -106,7 +109,7 @@ class RealDamiaoMotorState:
             "error_code": self.error_code,
             "q": q_val,
             "q_deg": q_deg_val,
-            "stroke_mm": round((abs(self.q) / 1.20) * 43.0, 1) if self.joint_idx == 8 else None,
+            "stroke_mm": round(stroke_m * 1000.0, 1) if self.joint_idx == 8 else None,
             "q_rad": round(self.q, 4),
             "dq": round(self.dq, 4),
             "tau": round(self.tau, 3),
@@ -337,10 +340,20 @@ class RealRobotHardwareBridge:
         with self.lock:
             if motor.joint_idx == 8 and error_code >= 8:
                 # Motor 8 reached mechanical limit or grasped object (stall flag)
-                # Auto-clear fault and keep enabled so user can immediately close/open
-                self.send_frame(iface, motor.send_id, bytes([0xFF]*7 + [0xFB]))
+                # Auto-clear fault (0xFB) AND re-enable (0xFC) so motor never stays disabled!
+                now = time.time()
+                if now - getattr(motor, '_last_clear_err', 0) > 0.05:
+                    motor._last_clear_err = now
+                    self.send_frame(iface, motor.send_id, bytes([0xFF]*7 + [0xFB]))
+                    self.send_frame(iface, motor.send_id, bytes([0xFF]*7 + [0xFC]))
                 motor.error_code = 1
                 motor.enabled = True
+            elif motor.joint_idx == 8 and error_code == 0 and motor.enabled:
+                # Motor unexpectedly disabled: re-enable
+                now = time.time()
+                if now - getattr(motor, '_last_reenable', 0) > 0.1:
+                    motor._last_reenable = now
+                    self.send_frame(iface, motor.send_id, bytes([0xFF]*7 + [0xFC]))
             else:
                 motor.error_code = error_code
                 if error_code >= 8:
@@ -376,7 +389,7 @@ class OpenArmDashboardServer:
         self.clients = set()
         self.running = True
         self.velocity_limit = 0.25 # rad/s (~14°/s) gentle & safe velocity limit
-        self.gripper_invert = {8: False, 16: False} # Direction invert flag if needed
+        self.gripper_invert = {8: True, 16: True} # Direction invert flag (default True: 0mm=closed/1.15rad, 41.5mm=open/0.0rad)
 
         if self.mode == "real":
             print(f"[Dashboard] Initializing in REAL ROBOT HARDWARE MODE on {can0_if} / {can1_if}")
@@ -407,6 +420,7 @@ class OpenArmDashboardServer:
         self.hotplug_thread.start()
 
         # 4. Start HTTP server thread
+        ThreadingHTTPServer.allow_reuse_address = True
         self.httpd = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), CustomHTTPHandler)
         self.http_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.http_thread.start()
@@ -823,32 +837,23 @@ class OpenArmDashboardServer:
                 m = self.motors.get(motor_id)
                 if m:
                     pos_m = q_raw / 1000.0 if (q_raw > 0.043 and q_raw <= 43.0) else q_raw
-                    pos = max(0.0, min(0.043, pos_m))
-                    invert = self.gripper_invert.get(m.id, False)
-                    stroke_ratio = pos / 0.043
+                    # Safe stroke cap: 0.0 to 0.0415 m (41.5 mm) prevents hitting hard mechanical endstop
+                    safe_pos = min(0.0415, max(0.0, pos_m))
+                    invert = self.gripper_invert.get(m.id, True)
+                    stroke_ratio = safe_pos / 0.0415
                     ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                    # On OpenArm physical hardware, closing is 0.0 rad, opening is -1.20 rad
-                    rad_target = -ratio * 1.20
+                    rad_target = ratio * 1.15
 
-                    if not m.enabled or m.error_code >= 8:
-                        m.enabled = True
-                        m.error_code = 1
-                        m.q_cmd = m.q
-                        if self.mode == "real":
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
-                            time.sleep(0.01)
-                            set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
-                            self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
-                            time.sleep(0.02)
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
-                            time.sleep(0.01)
-
+                    m.enabled = True
+                    m.error_code = 1
                     m.q_target = rad_target
                     m.q_cmd = rad_target
                     if self.mode == "real":
+                        # Ensure motor is active and cleared
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
                         posforce_can_id = m.send_id + 0x300
                         vel_uint = 2500  # 25.0 rad/s
-                        i_uint = 1500    # 0.15 pu
+                        i_uint = 1200    # 12% safe current limit (no stall/overload trip)
                         posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
                         self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                         refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
@@ -880,7 +885,7 @@ class OpenArmDashboardServer:
                 pos_m = pos_raw / 1000.0
             else:
                 pos_m = pos_raw
-            pos = max(0.0, min(0.043, pos_m)) # Clamp 0.0 .. 0.043 m (thanh kẹp ngang)
+            pos = max(0.0, min(0.043, pos_m))
             target_arm = payload.get("arm", "both")
             target_id = payload.get("id")
 
@@ -900,35 +905,24 @@ class OpenArmDashboardServer:
                     if m: target_motors.append(m)
 
             for m in target_motors:
-                # Convert linear stroke (0.0 .. 0.043 m) to motor target angle in radians (0.0 .. -1.20 rad)
-                invert = self.gripper_invert.get(m.id, False)
-                stroke_ratio = pos / 0.043
+                # Safe stroke cap: 0.0 to 0.0415 m (41.5 mm) prevents hitting hard mechanical endstop
+                safe_pos = min(0.0415, max(0.0, pos))
+                invert = self.gripper_invert.get(m.id, True)
+                stroke_ratio = safe_pos / 0.0415
                 ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                # On OpenArm physical hardware, closing is 0.0 rad, opening is -1.20 rad
-                rad_target = -ratio * 1.20
+                rad_target = ratio * 1.15
 
-                if not m.enabled or m.error_code >= 8:
-                    m.enabled = True
-                    m.error_code = 1
-                    m.q_cmd = m.q
-                    if self.mode == "real":
-                        # 1. Clear any active motor fault (stall/overload)
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
-                        time.sleep(0.01)
-                        # 2. Ensure motor is in POS_FORCE control mode (RID 10 = 4)
-                        set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
-                        self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
-                        time.sleep(0.02)
-                        # 3. Enable motor
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
-                        time.sleep(0.01)
-
+                m.enabled = True
+                m.error_code = 1
                 m.q_target = rad_target
                 m.q_cmd = rad_target
+
                 if self.mode == "real":
+                    # Always ensure motor output is active (0xFC)
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
                     posforce_can_id = m.send_id + 0x300
                     vel_uint = 2500  # 25.0 rad/s
-                    i_uint = 1500    # 0.15 pu safe current limit
+                    i_uint = 1200    # 12% safe current limit (no stall/overload trip)
                     posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
                     self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                     refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
@@ -939,7 +933,10 @@ class OpenArmDashboardServer:
 
         elif action == "toggle_gripper_invert":
             target_id = int(payload.get("id", 8))
-            self.gripper_invert[target_id] = not self.gripper_invert.get(target_id, False)
+            self.gripper_invert[target_id] = not self.gripper_invert.get(target_id, True)
+            m = self.motors.get(target_id)
+            if m:
+                m.invert = self.gripper_invert[target_id]
             print(f"[Gripper] Motor {target_id} invert set to: {self.gripper_invert[target_id]}")
 
         elif action == "run_cli":
@@ -988,7 +985,7 @@ class OpenArmDashboardServer:
                                 m._last_posforce_tx = now
                                 posforce_can_id = m.send_id + 0x300
                                 vel_uint = 2500  # 25.0 rad/s
-                                i_uint = 1500    # 0.15 pu
+                                i_uint = 1200    # 0.12 pu safe torque limit
                                 posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
                                 self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                                 refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
