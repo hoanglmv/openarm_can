@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="theme-light">
     <!-- TOP NAVIGATION & STATUS BAR -->
@@ -59,6 +59,9 @@
             <div class="master-action-grid">
                 <button class="btn btn-usb btn-usb-disconnected" id="btn-master-usb" style="grid-column: span 2;" title="Connect/Disconnect Physical USB Robot">
                     ⚡ Connect USB Robot (Physical)
+                </button>
+                <button class="btn btn-primary" id="btn-sync-state" style="grid-column: span 2;" title="Đọc trạng thái góc khớp thực tế từ robot vật lý và cập nhật vào thanh trượt">
+                    🔄 Đọc trạng thái Robot (Sync Real Pose)
                 </button>
                 <button class="btn btn-success" id="btn-enable-all">
                     Enable Both Arms
@@ -126,6 +129,7 @@
                             <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0)">Đóng (0mm)</button>
                             <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0215)">50% (21.5mm)</button>
                             <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.043)">Mở (43mm)</button>
+                            <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('left')" title="Đảo ngược chiều quay của động cơ kẹp">⇄ Đảo chiều</button>
                         </div>
                     </div>
                     <div class="gripper-box right-box">
@@ -138,6 +142,7 @@
                             <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0)">Đóng (0mm)</button>
                             <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0215)">50% (21.5mm)</button>
                             <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.043)">Mở (43mm)</button>
+                            <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('right')" title="Đảo ngược chiều quay của động cơ kẹp">⇄ Đảo chiều</button>
                         </div>
                     </div>
                 </div>
@@ -269,6 +274,6 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
     <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>

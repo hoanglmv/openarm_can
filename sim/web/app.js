@@ -288,6 +288,14 @@ function setupEventHandlers() {
     if (btnMasterUsb) {
         btnMasterUsb.addEventListener("click", toggleUsbConnection);
     }
+    const btnSyncState = document.getElementById("btn-sync-state");
+    if (btnSyncState) {
+        btnSyncState.addEventListener("click", () => {
+            sendAction("sync_robot_state");
+            syncUiFromRobot(currentTelemetry, true);
+            showToast("success", "✓ Đã đọc và đồng bộ trạng thái thực tế từ Robot vật lý!");
+        });
+    }
 
     // Master actions
     document.getElementById("btn-enable-all").addEventListener("click", () => {
@@ -633,6 +641,12 @@ window.setGripperDirect = function(arm, val) {
     }
 };
 
+window.toggleGripperInvert = function(arm) {
+    const motorId = (arm === 'left') ? 8 : 16;
+    sendAction("toggle_gripper_invert", { id: motorId });
+    showToast("info", `Đã đảo chiều quay cho kẹp ${arm === 'left' ? 'Tay Trái (Left Gripper)' : 'Tay Phải (Right Gripper)'}`);
+};
+
 // WebSocket Connection
 function initWebSocket() {
     const wsHost = window.location.hostname || "127.0.0.1";
@@ -650,6 +664,12 @@ function initWebSocket() {
         try {
             const msg = JSON.parse(event.data);
             if (msg.type === "telemetry") {
+                const isReal = (msg.data.mode === "real");
+                if (isReal && !hasInitialRobotSync) {
+                    hasInitialRobotSync = true;
+                    syncUiFromRobot(msg.data.motors, true);
+                    showToast("success", "✓ Đã tự động đọc góc khớp thực từ Robot vật lý!");
+                }
                 handleTelemetry(msg.data);
             } else if (msg.type === "traffic") {
                 handleTraffic(msg.data);
@@ -697,9 +717,56 @@ function handleCliOutput(data) {
 
 // USB Connection State & Controller
 let currentUsbState = false;
+let hasInitialRobotSync = false;
+let usbActionPending = false;
+let usbPendingTimer = null;
+
+function syncUiFromRobot(motors, force = false) {
+    if (!motors || motors.length === 0) return;
+    motors.forEach(m => {
+        const isLeft = (m.arm === "left" || m.id <= 8);
+        const jointIndex = (m.joint_idx !== undefined ? m.joint_idx - 1 : ((m.id <= 8 ? m.id : m.id - 8) - 1));
+        const armGroup = isLeft ? 'left' : 'right';
+        const sliderKey = `${armGroup}-${jointIndex}`;
+
+        const sliderEl = document.getElementById(`slider-${sliderKey}`);
+        const dispEl = document.getElementById(`val-disp-${sliderKey}`);
+
+        if (sliderEl && (force || document.activeElement !== sliderEl)) {
+            sliderEl.value = m.q;
+            if (dispEl) {
+                if (jointIndex === 7) {
+                    dispEl.textContent = formatGripperText(m.q);
+                } else {
+                    const deg = (m.q * 180 / Math.PI).toFixed(0);
+                    dispEl.textContent = `${m.q.toFixed(2)} rad (${deg}°)`;
+                }
+            }
+        }
+
+        // Top Dual Grippers
+        if (jointIndex === 7) {
+            const topSlider = document.getElementById(isLeft ? "slider-gripper-left" : "slider-gripper-right");
+            const topDisp = document.getElementById(isLeft ? "left-gripper-val-display" : "right-gripper-val-display");
+            if (topSlider && (force || document.activeElement !== topSlider)) {
+                topSlider.value = m.q;
+                if (topDisp) topDisp.textContent = formatGripperText(m.q);
+            }
+        }
+    });
+}
 
 function updateUsbUiState(isReal) {
     currentUsbState = isReal;
+    usbActionPending = false;
+    if (usbPendingTimer) {
+        clearTimeout(usbPendingTimer);
+        usbPendingTimer = null;
+    }
+
+    if (!isReal) {
+        hasInitialRobotSync = false;
+    }
 
     const btnHeader = document.getElementById("btn-usb-toggle");
     const textHeader = document.getElementById("usb-btn-text");
@@ -737,9 +804,31 @@ function updateUsbUiState(isReal) {
 }
 
 function toggleUsbConnection() {
+    if (usbActionPending) {
+        console.log("USB action already pending, ignoring click");
+        return;
+    }
+
     const btnHeader = document.getElementById("btn-usb-toggle");
     const textHeader = document.getElementById("usb-btn-text");
     const btnMaster = document.getElementById("btn-master-usb");
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast("error", "Chưa kết nối được với máy chủ (WebSocket đang tắt). Vui lòng thử lại sau giây lát.");
+        return;
+    }
+
+    usbActionPending = true;
+
+    // Safety timeout: auto-reset busy state after 8 seconds if no response
+    clearTimeout(usbPendingTimer);
+    usbPendingTimer = setTimeout(() => {
+        if (usbActionPending) {
+            usbActionPending = false;
+            updateUsbUiState(currentUsbState);
+            showToast("warning", "Quá thời gian phản hồi từ USB Robot. Vui lòng kiểm tra lại cáp nối.");
+        }
+    }, 8000);
 
     if (currentUsbState) {
         // Currently connected -> Disconnect
@@ -751,6 +840,7 @@ function toggleUsbConnection() {
         sendAction("disconnect_usb");
     } else {
         // Currently disconnected -> Connect
+        hasInitialRobotSync = false;
         if (textHeader) textHeader.textContent = "Connecting USB...";
         if (btnMaster) btnMaster.textContent = "Connecting USB...";
         if (btnHeader) btnHeader.classList.add("btn-usb-busy");

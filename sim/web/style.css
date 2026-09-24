@@ -100,9 +100,9 @@ body {
 .header-left {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     flex-wrap: nowrap;
-    overflow: hidden;
+    overflow-x: auto;
 }
 
 .brand-logo {
@@ -387,6 +387,14 @@ body.theme-light .badge-success {
     background-color: var(--accent-rose-hover);
 }
 
+.btn-primary {
+    background-color: var(--accent-blue);
+    color: #ffffff;
+}
+.btn-primary:hover {
+    background-color: var(--accent-blue-hover);
+}
+
 .btn-secondary {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -562,6 +570,16 @@ body.theme-light .btn-preset-stop {
     background-color: var(--bg-card-hover);
     color: var(--text-main);
     border-color: var(--border-accent);
+}
+
+.btn-gripper-invert {
+    color: #0284c7;
+    background-color: rgba(2, 132, 199, 0.05);
+}
+
+.btn-gripper-invert:hover {
+    background-color: rgba(2, 132, 199, 0.15);
+    color: #0369a1;
 }
 
 /* 7-DOF Arm Tab Bar */
