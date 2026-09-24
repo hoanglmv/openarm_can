@@ -3,242 +3,223 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sơ Đồ Kiến Trúc Model ACT (1 Camera Ngực) - OpenArm (Ngang - Compact)</title>
+  <title>Mô Hình ACT Gọn (RGB-D + 16-DOF Bimanual)</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <style>
     :root {
-      --bg-primary: #090d16;
-      --bg-card: #111827;
-      --border-color: #1f2937;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --accent-cyan: #38bdf8;
-      --accent-purple: #c084fc;
-      --accent-green: #4ade80;
-      --accent-orange: #fb923c;
+      --bg: #070b14;
+      --card: #0d1527;
+      --border: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --fire: #f97316;
+      --ice: #38bdf8;
+      --purple: #c084fc;
+      --green: #34d399;
     }
+
+    * { box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, var(--bg-primary) 70%);
-      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 10%, #111a36 0%, var(--bg) 75%);
+      color: var(--text);
       margin: 0;
-      padding: 24px 16px;
+      padding: 12px 16px;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      box-sizing: border-box;
+      justify-content: space-between;
+      overflow: hidden;
     }
 
+    /* HEADER */
     .header {
-      text-align: center;
-      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
     }
-
-    h1 {
-      color: var(--accent-cyan);
-      font-size: 26px;
-      margin: 0 0 6px 0;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .subtitle {
-      color: var(--text-muted);
-      font-size: 14px;
+    .header-left h1 {
+      font-size: 17px;
       margin: 0;
+      font-weight: 800;
+      background: linear-gradient(90deg, #38bdf8, #f97316);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.3px;
     }
-
-    .badge-bar {
+    .header-left p {
+      margin: 2px 0 0 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .badge-group {
       display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
+      gap: 6px;
     }
-
     .badge {
-      font-size: 12px;
-      padding: 4px 10px;
+      font-size: 10px;
+      padding: 3px 8px;
       border-radius: 9999px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      font-weight: 500;
+      font-weight: 600;
+      border: 1px solid;
     }
-    .badge.cyan { border-color: var(--accent-cyan); color: var(--accent-cyan); }
-    .badge.purple { border-color: var(--accent-purple); color: var(--accent-purple); }
-    .badge.green { border-color: var(--accent-green); color: var(--accent-green); }
-    .badge.orange { border-color: var(--accent-orange); color: var(--accent-orange); }
+    .badge.ice { border-color: rgba(56, 189, 248, 0.4); color: var(--ice); background: rgba(56, 189, 248, 0.1); }
+    .badge.fire { border-color: rgba(249, 115, 22, 0.4); color: var(--fire); background: rgba(249, 115, 22, 0.1); }
+    .badge.green { border-color: rgba(52, 211, 153, 0.4); color: var(--green); background: rgba(52, 211, 153, 0.1); }
 
-    .mermaid-wrapper {
-      background: rgba(17, 24, 39, 0.75);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
-      width: 98vw;
-      max-width: 1500px;
-      padding: 20px 10px;
-      box-sizing: border-box;
-      overflow-x: auto;
+    /* MERMAID WRAPPER */
+    .mermaid-box {
+      flex: 1;
       display: flex;
+      align-items: center;
       justify-content: center;
+      background: rgba(13, 21, 39, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px 12px;
+      box-shadow: 0 15px 35px -10px rgba(0,0,0,0.8);
+      position: relative;
     }
-
     .mermaid {
       width: 100%;
-      min-width: 1100px;
       display: flex;
       justify-content: center;
     }
 
-    .info-grid {
+    /* FOOTER MICRO-CARDS */
+    .footer-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-      width: 98vw;
-      max-width: 1500px;
-      margin-top: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 8px;
     }
-
-    .info-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 14px 18px;
+    .m-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
     }
-
-    .info-card h3 {
-      font-size: 14px;
-      margin: 0 0 6px 0;
+    .m-card h4 {
+      margin: 0 0 3px 0;
+      font-size: 11px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 5px;
     }
-
-    .info-card p {
-      font-size: 13px;
-      color: var(--text-muted);
+    .m-card p {
       margin: 0;
-      line-height: 1.5;
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.4;
     }
-
-    .info-card.c1 h3 { color: var(--accent-cyan); }
-    .info-card.c2 h3 { color: var(--accent-purple); }
-    .info-card.c3 h3 { color: var(--accent-green); }
-    .info-card.c4 h3 { color: var(--accent-orange); }
+    .m-card.c-in h4 { color: var(--text); }
+    .m-card.c-fire h4 { color: var(--fire); }
+    .m-card.c-ice h4 { color: var(--ice); }
+    .m-card.c-out h4 { color: var(--green); }
   </style>
 </head>
 <body>
 
+  <!-- HEADER -->
   <div class="header">
-    <h1>SƠ ĐỒ KIẾN TRÚC MÔ HÌNH ACT (ACTION CHUNKING WITH TRANSFORMERS)</h1>
-    <p class="subtitle">Thiết kế tối ưu theo chiều ngang (Horizontal Flow) cho Robot OpenArm (01 Camera ngực + 8 Bậc tự do)</p>
-    <div class="badge-bar">
-      <span class="badge cyan">Camera: 1 Chest RGB (480x640)</span>
-      <span class="badge purple">CVAE: Latent z ∈ ℝ¹⁶</span>
-      <span class="badge green">Action Horizon: k = 50 steps (1s)</span>
-      <span class="badge orange">Output: 8 Motors @ 50Hz CAN-FD</span>
+    <div class="header-left">
+      <h1>KIẾN TRÚC MÔ HÌNH ACT — OPENARM 16-DOF</h1>
+      <p>01 Camera Ngực RGB-D + Hai Cánh Tay Robot (16 Motors) • Chunking k=50 @ 50Hz</p>
+    </div>
+    <div class="badge-group">
+      <span class="badge ice">❄️ Fixed / Frozen</span>
+      <span class="badge fire">🔥 Trainable</span>
+      <span class="badge green">🦾 16-DOF CAN-FD</span>
     </div>
   </div>
 
-  <div class="mermaid-wrapper">
+  <!-- COMPACT MERMAID DIAGRAM -->
+  <div class="mermaid-box">
     <div class="mermaid">
-%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '13px', 'fontFamily': 'system-ui, sans-serif' }}}%%
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '11.5px', 'fontFamily': 'system-ui, sans-serif' }}}%%
 flowchart LR
 
-    %% -------------------------------------------------------------
-    %% SUBGRAPH 1: INPUTS
-    %% -------------------------------------------------------------
-    subgraph G1 ["1. ĐẦU VÀO (Observation State tại t)"]
+    %% 1. ĐẦU VÀO
+    subgraph S1 ["1. ĐẦU VÀO (Observation)"]
         direction TB
-        CamChest["📸 <b>Camera Trước Ngực</b><br/>RGB: [3, 480, 640]<br/><i>Góc chúc 40°-45° bao quát bàn</i>"]
-        JointState["🦾 <b>Góc Khớp Hiện Tại (qpos)</b><br/>Vector [8] float32<br/><i>7 khớp tay + 1 motor kẹp</i>"]
+        RGBD["📷 <b>Camera Ngực RGB-D</b><br/>[4, 480, 640] ❄️"]
+        QPOS["🦾 <b>Khớp Hiện Tại (qpos)</b><br/>16 Khớp [16] ❄️"]
     end
 
-    %% -------------------------------------------------------------
-    %% SUBGRAPH 2: VISUAL ENCODER & CVAE
-    %% -------------------------------------------------------------
-    subgraph G2 ["2. ĐẶC TRƯNG HÌNH ẢNH & BIẾN TIỀM ẨN z"]
+    %% 2. THỊ GIÁC & CVAE
+    subgraph S2 ["2. THỊ GIÁC & CVAE"]
         direction TB
-        subgraph G2_Vision ["Trích xuất Thị giác (Visual Backbone)"]
-            ResNet["<b>ResNet-18</b> (Pretrained ImageNet)<br/>+ 2D Sinusoidal Pos Encoding"]
-            VisualTokens["<b>300 Visual Tokens</b><br/>Shape: [300, 256]<br/><i>15x20 patches không gian</i>"]
-        end
-        subgraph G2_CVAE ["CVAE Latent Block"]
-            CVAE_Enc["<b>CVAE Encoder</b> (Transformer)<br/><i>(Chỉ train: Action Chunk + qpos)</i>"]
-            LatentZ["<b>Biến tiềm ẩn z</b> ∈ ℝ¹⁶<br/>• Train: z ~ N(μ, σ²)<br/>• <b>Inference: Gán z = 0</b>"]
-        end
+        CONV["🔥 <b>4-Ch Conv1</b> (RGB+D)"]
+        RES["❄️ <b>ResNet-18</b> (Layers 1..4)<br/><i>(Pretrained Frozen)</i>"]
+        VTOK["<b>300 Visual Tokens</b><br/>[300, 512]"]
+        QPROJ["🔥 <b>Joint Proj</b> (16 ➔ 512)"]
+        CVAE["🔥 <b>CVAE Block</b><br/>• Train: z ~ N(μ, σ²)<br/>• <b>Test: z = 0 ❄️</b>"]
     end
 
-    %% -------------------------------------------------------------
-    %% SUBGRAPH 3: TRANSFORMER DECODER POLICY
-    %% -------------------------------------------------------------
-    subgraph G3 ["3. TRANSFORMER POLICY (Dự đoán hành động)"]
+    %% 3. TRANSFORMER POLICY
+    subgraph S3 ["3. TRANSFORMER POLICY"]
         direction TB
-        TokenMixer["<b>Ghép Tokens Đầu Vào (Memory):</b><br/>[300 Visual Tokens + 1 qpos Token + 1 Latent Token z]"]
-        TransDecoder["<b>Transformer Decoder (4 Layers)</b><br/>Cross-Attention giữa Action Queries & Memory Tokens"]
-        ActionQueries["<b>50 Action Queries</b> (k=50)<br/>+ 1D Temporal Sinusoidal Pos Encoding"]
+        MEM["<b>302 Memory Tokens</b><br/>(300 Vis + 1 Qpos + 1 z)"]
+        QRY["🔥 <b>50 Action Queries</b><br/>[50, 512] + 1D PE ❄️"]
+        DEC["🔥 <b>Decoder (4 Layers)</b><br/>Cross/Self-Attention"]
+        HEAD["🔥 <b>Linear Head</b> (512 ➔ 16)"]
     end
 
-    %% -------------------------------------------------------------
-    %% SUBGRAPH 4: OUTPUT & CAN BUS EXECUTION
-    %% -------------------------------------------------------------
-    subgraph G4 ["4. ĐẦU RA ĐIỀU KHIỂN & CAN-FD"]
+    %% 4. ĐIỀU KHIỂN CAN BUS
+    subgraph S4 ["4. ĐẦU RA & CAN-FD"]
         direction TB
-        ActionChunk["🎯 <b>Action Chunk [50, 8]</b><br/>Quỹ đạo góc mục tiêu q_des<br/>cho 8 motor trong 1 giây tới"]
-        Ensemble["🔄 <b>Temporal Ensembling</b><br/>Trọng số mũ: ω_i = exp(-m · i)<br/><i>Triệt tiêu rung giật motor</i>"]
-        CANExecution["⚡ <b>SocketCAN can0 (5 Mbps)</b><br/>8 gói tin Damiao MIT Mode<br/><i>Tần số điều khiển chuẩn 50 Hz</i>"]
+        CHUNK["🎯 <b>Action Chunk [50, 16]</b><br/>Quỹ đạo 50 bước tương lai"]
+        ENS["❄️ <b>Temporal Ensemble</b><br/>Bộ lọc làm mịn mũ"]
+        CAN["⚡ <b>SocketCAN (can0)</b><br/>16 Motor Damiao @ 50Hz"]
     end
 
-    %% -------------------------------------------------------------
-    %% LIÊN KẾT LUỒNG DỮ LIỆU TỪ TRÁI SANG PHẢI (LEFT TO RIGHT)
-    %% -------------------------------------------------------------
-    CamChest --> ResNet --> VisualTokens --> TokenMixer
-    JointState --> TokenMixer
-    JointState -.-> CVAE_Enc --> LatentZ --> TokenMixer
+    %% KẾT NỐI
+    RGBD --> CONV --> RES --> VTOK --> MEM
+    QPOS --> QPROJ --> MEM
+    QPOS -.-> CVAE --> MEM
+    MEM --> DEC
+    QRY --> DEC --> HEAD --> CHUNK
+    CHUNK --> ENS --> CAN
 
-    TokenMixer --> TransDecoder
-    ActionQueries --> TransDecoder
+    %% STYLING
+    classDef fire fill:#3d1308,stroke:#f97316,stroke-width:2px,color:#fed7aa;
+    classDef ice fill:#082f49,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe;
+    classDef mem fill:#2e1065,stroke:#a855f7,stroke-width:1.5px,color:#f3e8ff;
+    classDef out fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#d1fae5;
+    classDef inp fill:#0f172a,stroke:#64748b,stroke-width:1.5px,color:#f8fafc;
 
-    TransDecoder --> ActionChunk
-    ActionChunk --> Ensemble --> CANExecution
-
-    %% -------------------------------------------------------------
-    %% ĐỊNH KIỂU COLOR CLASS
-    %% -------------------------------------------------------------
-    classDef default font-family:system-ui;
-    classDef inputStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef visionStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef cvaeStyle fill:#2e1065,stroke:#c084fc,stroke-width:2px,stroke-dasharray: 4 4,color:#f8fafc;
-    classDef policyStyle fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#f8fafc;
-    classDef outputStyle fill:#451a03,stroke:#fb923c,stroke-width:2px,color:#f8fafc;
-
-    class CamChest,JointState inputStyle;
-    class ResNet,VisualTokens visionStyle;
-    class CVAE_Enc,LatentZ cvaeStyle;
-    class TokenMixer,TransDecoder,ActionQueries policyStyle;
-    class ActionChunk,Ensemble,CANExecution outputStyle;
+    class RGBD,QPOS inp;
+    class CONV,QPROJ,CVAE,QRY,DEC,HEAD fire;
+    class RES,ENS,CAN ice;
+    class VTOK,MEM mem;
+    class CHUNK out;
     </div>
   </div>
 
-  <div class="info-grid">
-    <div class="info-card c1">
-      <h3>1. Cấu hình 1 Camera Ngực</h3>
-      <p>Giảm 50% FLOPs so với ALOHA 2 camera. Thời gian inference chỉ còn ~8ms. Góc nhìn từ trên cao xuống bao quát trọn vẹn mặt bàn.</p>
+  <!-- FOOTER SUMMARY CARDS -->
+  <div class="footer-grid">
+    <div class="m-card c-in">
+      <h4>📷 1. Đầu Vào Tinh Gọn</h4>
+      <p>• <b>RGB-D (4 kênh)</b>: 3 màu + 1 chiều sâu Z.<br/>• <b>qpos (16)</b>: 8 khớp Trái + 8 khớp Phải.</p>
     </div>
-    <div class="info-card c2">
-      <h3>2. Cơ chế CVAE (Latent z)</h3>
-      <p>Hấp thụ đa dạng phong cách teleop của con người lúc huấn luyện. Khi chạy thực tế, gán cứng <b>z = 0</b> để policy tất định và mượt mà tuyệt đối.</p>
+
+    <div class="m-card c-fire">
+      <h4>🔥 2. Khối Trainable (Lửa)</h4>
+      <p>• <b>Conv1 Adapter</b> + <b>Joint Proj</b>.<br/>• <b>CVAE Encoder</b> + <b>Queries</b> + <b>Decoder 4 lớp</b>.</p>
     </div>
-    <div class="info-card c3">
-      <h3>3. Action Chunking (k=50)</h3>
-      <p>Dự đoán trước quỹ đạo 50 bước (~1 giây). Loại bỏ độ trễ phản xạ từng bước, robot chuyển động liên tục không bị khựng giữa đường.</p>
+
+    <div class="m-card c-ice">
+      <h4>❄️ 3. Khối Fixed (Tuyết)</h4>
+      <p>• <b>ResNet-18 Frozen</b> (chống overfit).<br/>• <b>z = 0</b> lúc test + <b>PE sin/cos</b> + <b>Ensemble</b>.</p>
     </div>
-    <div class="info-card c4">
-      <h3>4. Temporal Ensembling</h3>
-      <p>Trung bình trượt có trọng số suy giảm hàm mũ giữa các chunk gối đầu. Chuyển đổi trực tiếp thành lệnh CAN-FD Damiao MIT Mode.</p>
+
+    <div class="m-card c-out">
+      <h4>🎯 4. Đầu Ra 16 Khớp (50Hz)</h4>
+      <p>• <b>Chunk [50, 16]</b>: 1s chuyển động 2 tay.<br/>• Gửi 16 gói tin MIT Mode qua <b>SocketCAN</b>.</p>
     </div>
   </div>
 
