@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ Đồ Kiến Trúc Model ACT (1 Camera Ngực) - OpenArm (Ngang - Compact)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-card: #111827;
+      --border-color: #1f2937;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-cyan: #38bdf8;
+      --accent-purple: #c084fc;
+      --accent-green: #4ade80;
+      --accent-orange: #fb923c;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, var(--bg-primary) 70%);
+      color: var(--text-main);
+      margin: 0;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: var(--accent-cyan);
+      font-size: 26px;
+      margin: 0 0 6px 0;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .badge-bar {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-weight: 500;
+    }
+    .badge.cyan { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .badge.purple { border-color: var(--accent-purple); color: var(--accent-purple); }
+    .badge.green { border-color: var(--accent-green); color: var(--accent-green); }
+    .badge.orange { border-color: var(--accent-orange); color: var(--accent-orange); }
+
+    .mermaid-wrapper {
+      background: rgba(17, 24, 39, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+      width: 98vw;
+      max-width: 1500px;
+      padding: 20px 10px;
+      box-sizing: border-box;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+
+    .mermaid {
+      width: 100%;
+      min-width: 1100px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      width: 98vw;
+      max-width: 1500px;
+      margin-top: 20px;
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px 18px;
+    }
+
+    .info-card h3 {
+      font-size: 14px;
+      margin: 0 0 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .info-card.c1 h3 { color: var(--accent-cyan); }
+    .info-card.c2 h3 { color: var(--accent-purple); }
+    .info-card.c3 h3 { color: var(--accent-green); }
+    .info-card.c4 h3 { color: var(--accent-orange); }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>SƠ ĐỒ KIẾN TRÚC MÔ HÌNH ACT (ACTION CHUNKING WITH TRANSFORMERS)</h1>
+    <p class="subtitle">Thiết kế tối ưu theo chiều ngang (Horizontal Flow) cho Robot OpenArm (01 Camera ngực + 8 Bậc tự do)</p>
+    <div class="badge-bar">
+      <span class="badge cyan">Camera: 1 Chest RGB (480x640)</span>
+      <span class="badge purple">CVAE: Latent z ∈ ℝ¹⁶</span>
+      <span class="badge green">Action Horizon: k = 50 steps (1s)</span>
+      <span class="badge orange">Output: 8 Motors @ 50Hz CAN-FD</span>
+    </div>
+  </div>
+
+  <div class="mermaid-wrapper">
+    <div class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '13px', 'fontFamily': 'system-ui, sans-serif' }}}%%
+flowchart LR
+
+    %% -------------------------------------------------------------
+    %% SUBGRAPH 1: INPUTS
+    %% -------------------------------------------------------------
+    subgraph G1 ["1. ĐẦU VÀO (Observation State tại t)"]
+        direction TB
+        CamChest["📸 <b>Camera Trước Ngực</b><br/>RGB: [3, 480, 640]<br/><i>Góc chúc 40°-45° bao quát bàn</i>"]
+        JointState["🦾 <b>Góc Khớp Hiện Tại (qpos)</b><br/>Vector [8] float32<br/><i>7 khớp tay + 1 motor kẹp</i>"]
+    end
+
+    %% -------------------------------------------------------------
+    %% SUBGRAPH 2: VISUAL ENCODER & CVAE
+    %% -------------------------------------------------------------
+    subgraph G2 ["2. ĐẶC TRƯNG HÌNH ẢNH & BIẾN TIỀM ẨN z"]
+        direction TB
+        subgraph G2_Vision ["Trích xuất Thị giác (Visual Backbone)"]
+            ResNet["<b>ResNet-18</b> (Pretrained ImageNet)<br/>+ 2D Sinusoidal Pos Encoding"]
+            VisualTokens["<b>300 Visual Tokens</b><br/>Shape: [300, 256]<br/><i>15x20 patches không gian</i>"]
+        end
+        subgraph G2_CVAE ["CVAE Latent Block"]
+            CVAE_Enc["<b>CVAE Encoder</b> (Transformer)<br/><i>(Chỉ train: Action Chunk + qpos)</i>"]
+            LatentZ["<b>Biến tiềm ẩn z</b> ∈ ℝ¹⁶<br/>• Train: z ~ N(μ, σ²)<br/>• <b>Inference: Gán z = 0</b>"]
+        end
+    end
+
+    %% -------------------------------------------------------------
+    %% SUBGRAPH 3: TRANSFORMER DECODER POLICY
+    %% -------------------------------------------------------------
+    subgraph G3 ["3. TRANSFORMER POLICY (Dự đoán hành động)"]
+        direction TB
+        TokenMixer["<b>Ghép Tokens Đầu Vào (Memory):</b><br/>[300 Visual Tokens + 1 qpos Token + 1 Latent Token z]"]
+        TransDecoder["<b>Transformer Decoder (4 Layers)</b><br/>Cross-Attention giữa Action Queries & Memory Tokens"]
+        ActionQueries["<b>50 Action Queries</b> (k=50)<br/>+ 1D Temporal Sinusoidal Pos Encoding"]
+    end
+
+    %% -------------------------------------------------------------
+    %% SUBGRAPH 4: OUTPUT & CAN BUS EXECUTION
+    %% -------------------------------------------------------------
+    subgraph G4 ["4. ĐẦU RA ĐIỀU KHIỂN & CAN-FD"]
+        direction TB
+        ActionChunk["🎯 <b>Action Chunk [50, 8]</b><br/>Quỹ đạo góc mục tiêu q_des<br/>cho 8 motor trong 1 giây tới"]
+        Ensemble["🔄 <b>Temporal Ensembling</b><br/>Trọng số mũ: ω_i = exp(-m · i)<br/><i>Triệt tiêu rung giật motor</i>"]
+        CANExecution["⚡ <b>SocketCAN can0 (5 Mbps)</b><br/>8 gói tin Damiao MIT Mode<br/><i>Tần số điều khiển chuẩn 50 Hz</i>"]
+    end
+
+    %% -------------------------------------------------------------
+    %% LIÊN KẾT LUỒNG DỮ LIỆU TỪ TRÁI SANG PHẢI (LEFT TO RIGHT)
+    %% -------------------------------------------------------------
+    CamChest --> ResNet --> VisualTokens --> TokenMixer
+    JointState --> TokenMixer
+    JointState -.-> CVAE_Enc --> LatentZ --> TokenMixer
+
+    TokenMixer --> TransDecoder
+    ActionQueries --> TransDecoder
+
+    TransDecoder --> ActionChunk
+    ActionChunk --> Ensemble --> CANExecution
+
+    %% -------------------------------------------------------------
+    %% ĐỊNH KIỂU COLOR CLASS
+    %% -------------------------------------------------------------
+    classDef default font-family:system-ui;
+    classDef inputStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef visionStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef cvaeStyle fill:#2e1065,stroke:#c084fc,stroke-width:2px,stroke-dasharray: 4 4,color:#f8fafc;
+    classDef policyStyle fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#f8fafc;
+    classDef outputStyle fill:#451a03,stroke:#fb923c,stroke-width:2px,color:#f8fafc;
+
+    class CamChest,JointState inputStyle;
+    class ResNet,VisualTokens visionStyle;
+    class CVAE_Enc,LatentZ cvaeStyle;
+    class TokenMixer,TransDecoder,ActionQueries policyStyle;
+    class ActionChunk,Ensemble,CANExecution outputStyle;
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card c1">
+      <h3>1. Cấu hình 1 Camera Ngực</h3>
+      <p>Giảm 50% FLOPs so với ALOHA 2 camera. Thời gian inference chỉ còn ~8ms. Góc nhìn từ trên cao xuống bao quát trọn vẹn mặt bàn.</p>
+    </div>
+    <div class="info-card c2">
+      <h3>2. Cơ chế CVAE (Latent z)</h3>
+      <p>Hấp thụ đa dạng phong cách teleop của con người lúc huấn luyện. Khi chạy thực tế, gán cứng <b>z = 0</b> để policy tất định và mượt mà tuyệt đối.</p>
+    </div>
+    <div class="info-card c3">
+      <h3>3. Action Chunking (k=50)</h3>
+      <p>Dự đoán trước quỹ đạo 50 bước (~1 giây). Loại bỏ độ trễ phản xạ từng bước, robot chuyển động liên tục không bị khựng giữa đường.</p>
+    </div>
+    <div class="info-card c4">
+      <h3>4. Temporal Ensembling</h3>
+      <p>Trung bình trượt có trọng số suy giảm hàm mũ giữa các chunk gối đầu. Chuyển đổi trực tiếp thành lệnh CAN-FD Damiao MIT Mode.</p>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true,
+        curve: 'basis'
+      }
+    });
+  </script>
+</body>
+</html>
