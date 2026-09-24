@@ -301,6 +301,7 @@ class RealRobotHardwareBridge:
             except Exception:
                 if not self.running:
                     break
+                time.sleep(0.01)
 
     def _decode_feedback(self, iface: str, can_id: int, data: bytes):
         """Decode Damiao State Feedback Frame (D[0]..D[7])"""
