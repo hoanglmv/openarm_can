@@ -2,25 +2,25 @@
 // Supports Dual 7-DOF Robotic Arms (Left & Right) + Dual Grippers (16 CAN Nodes)
 
 const LEFT_JOINTS = [
-    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
-    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -0.174, max: 3.316, default: 0.0 },
-    { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
-    { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
-    { id: 7, name: "L-Joint 7 (Wrist Roll)",     arm: "left",  idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 8, name: "L-Gripper (J8 Kẹp Ngang)",   arm: "left",  idx: 7, type: "DM4310", min:  0.000, max: 0.043, default: 0.0 }
+    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
+    { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -0.1745, max: 3.3161, default: 0.0 },
+    { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
+    { id: 5, name: "L-Joint 5 (Forearm Twist)",  arm: "left",  idx: 4, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 6, name: "L-Joint 6 (Wrist Pitch)",    arm: "left",  idx: 5, type: "DM4310", min: -0.7854, max: 0.7854, default: 0.0 },
+    { id: 7, name: "L-Joint 7 (Wrist Roll)",     arm: "left",  idx: 6, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 8, name: "L-Gripper (J8 Kẹp Ngang)",   arm: "left",  idx: 7, type: "DM4310", min:  0.0000, max: 0.0430, default: 0.0 }
 ];
 
 const RIGHT_JOINTS = [
-    { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.396, max: 3.490, default: 0.0 },
-    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.175, max: 3.316, default: 0.0 },
-    { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.000, max: 2.443, default: 0.0 },
-    { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -0.785, max: 0.785, default: 0.0 },
-    { id: 15, name: "R-Joint 7 (Wrist Roll)",     arm: "right", idx: 6, type: "DM4310", min: -1.570, max: 1.570, default: 0.0 },
-    { id: 16, name: "R-Gripper (J8 Kẹp Ngang)",   arm: "right", idx: 7, type: "DM4310", min:  0.000, max: 0.043, default: 0.0 }
+    { id: 9,  name: "R-Joint 1 (Shoulder Pitch)", arm: "right", idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
+    { id: 10, name: "R-Joint 2 (Shoulder Roll)",  arm: "right", idx: 1, type: "DM8009", min: -0.1745, max: 3.3161, default: 0.0 },
+    { id: 11, name: "R-Joint 3 (Arm Twist)",      arm: "right", idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 12, name: "R-Joint 4 (Elbow Pitch)",    arm: "right", idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
+    { id: 13, name: "R-Joint 5 (Forearm Twist)",  arm: "right", idx: 4, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 14, name: "R-Joint 6 (Wrist Pitch)",    arm: "right", idx: 5, type: "DM4310", min: -0.7854, max: 0.7854, default: 0.0 },
+    { id: 15, name: "R-Joint 7 (Wrist Roll)",     arm: "right", idx: 6, type: "DM4310", min: -1.5708, max: 1.5708, default: 0.0 },
+    { id: 16, name: "R-Gripper (J8 Kẹp Ngang)",   arm: "right", idx: 7, type: "DM4310", min:  0.0000, max: 0.0430, default: 0.0 }
 ];
 
 const ALL_JOINTS = [...LEFT_JOINTS, ...RIGHT_JOINTS];
