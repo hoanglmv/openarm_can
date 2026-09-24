@@ -33,3 +33,9 @@
 /python/vendor/
 __pycache__/
 *.pyc
+SETUP_WSL_GUIDE.md
+*.local.md
+test_wrist_pitch.py
+stop_robot.py
+.venv*/
+

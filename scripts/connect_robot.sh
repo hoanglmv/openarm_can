@@ -74,7 +74,7 @@ usbipd attach --wsl --busid "$BUSID" || {
 sleep 2
 echo -e "\n${GREEN}✓ Thiết bị đã được kết nối vào WSL!${NC}"
 echo -e "${CYAN}Danh sách USB trong WSL (lsusb):${NC}"
-lsusb
+lsusb 2>/dev/null || true
 
 echo -e "\n${YELLOW}[4/4] Cấu hình giao tiếp SocketCAN...${NC}"
 
