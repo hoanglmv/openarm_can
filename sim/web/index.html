@@ -101,7 +101,7 @@
             <!-- DUAL END-EFFECTOR GRIPPERS -->
             <div class="gripper-section">
                 <div class="section-subhead">
-                    <h3>End-Effector Grippers (Joint 8)</h3>
+                    <h3>End-Effector Grippers (J8 - Thanh kẹp ngang / Parallel Jaw)</h3>
                     <label class="sync-checkbox-label">
                         <input type="checkbox" id="sync-grippers-check" checked> Sync Grippers
                     </label>
@@ -109,26 +109,26 @@
                 <div class="dual-gripper-container">
                     <div class="gripper-box left-box">
                         <div class="slider-header">
-                            <span class="joint-title"><span class="arm-tag arm-tag-left">L</span> Left Gripper</span>
-                            <span class="joint-val" id="left-gripper-val-display">0.00 rad</span>
+                            <span class="joint-title"><span class="arm-tag arm-tag-left">L</span> Left Gripper (Kẹp Ngang)</span>
+                            <span class="joint-val" id="left-gripper-val-display">0.0 mm (Đóng)</span>
                         </div>
-                        <input type="range" id="slider-gripper-left" min="0" max="1.0" step="0.01" value="0.0">
+                        <input type="range" id="slider-gripper-left" min="0.0" max="0.043" step="0.0005" value="0.0">
                         <div class="gripper-quick-actions">
-                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0)">Close</button>
-                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.5)">50%</button>
-                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 1.0)">Open</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0)">Đóng (0mm)</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0215)">50% (21.5mm)</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.043)">Mở (43mm)</button>
                         </div>
                     </div>
                     <div class="gripper-box right-box">
                         <div class="slider-header">
-                            <span class="joint-title"><span class="arm-tag arm-tag-right">R</span> Right Gripper</span>
-                            <span class="joint-val" id="right-gripper-val-display">0.00 rad</span>
+                            <span class="joint-title"><span class="arm-tag arm-tag-right">R</span> Right Gripper (Kẹp Ngang)</span>
+                            <span class="joint-val" id="right-gripper-val-display">0.0 mm (Đóng)</span>
                         </div>
-                        <input type="range" id="slider-gripper-right" min="0" max="1.0" step="0.01" value="0.0">
+                        <input type="range" id="slider-gripper-right" min="0.0" max="0.043" step="0.0005" value="0.0">
                         <div class="gripper-quick-actions">
-                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0)">Close</button>
-                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.5)">50%</button>
-                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 1.0)">Open</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0)">Đóng (0mm)</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0215)">50% (21.5mm)</button>
+                            <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.043)">Mở (43mm)</button>
                         </div>
                     </div>
                 </div>

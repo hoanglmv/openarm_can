@@ -15,9 +15,9 @@ def main():
     parser.add_argument("-i", "--interface", default="can0", help="CAN interface (mặc định: can0)")
     parser.add_argument("--action", choices=["test", "open", "close", "toggle", "interactive"], default="test",
                         help="Hành động: 'test' (chu kỳ đóng/mở tự động), 'open' (mở), 'close' (đóng), 'toggle', 'interactive'")
-    parser.add_argument("--open-pos", type=float, default=1.2, help="Góc mở của kẹp (rad, mặc định: 1.2 rad ~ 70 độ)")
-    parser.add_argument("--close-pos", type=float, default=0.0, help="Góc đóng của kẹp (rad, mặc định: 0.0 rad)")
-    parser.add_argument("--speed", type=float, default=10.0, help="Vận tốc đóng mở tối đa (rad/s, mặc định: 10.0)")
+    parser.add_argument("--open-pos", type=float, default=0.043, help="Hành trình mở tối đa kẹp ngang (m, mặc định: 0.043 m ~ 43 mm)")
+    parser.add_argument("--close-pos", type=float, default=0.0, help="Hành trình đóng kẹp ngang (m, mặc định: 0.0 m)")
+    parser.add_argument("--speed", type=float, default=10.0, help="Vận tốc đóng mở tối đa (mặc định: 10.0)")
     parser.add_argument("--force", type=float, default=0.15, help="Giới hạn lực kẹp torque_pu (0.0 - 1.0, mặc định: 0.15 an toàn)")
     args = parser.parse_args()
 
@@ -56,10 +56,10 @@ def main():
     arm.recv_all(500)
 
     current_pos = motor.get_position()
-    print(f"[i] Vị trí kẹp ban đầu: {current_pos:.3f} rad, Nhiệt độ: {motor.get_state_tmos():.1f} °C")
+    print(f"[i] Vị trí kẹp ban đầu: {current_pos*1000:.1f} mm ({current_pos:.4f} m), Nhiệt độ: {motor.get_state_tmos():.1f} °C")
 
     def move_gripper(target_pos, desc=""):
-        print(f"\n--> {desc}: Đưa kẹp về vị trí {target_pos:.3f} rad (Tốc độ: {args.speed} rad/s, Lực: {args.force})...")
+        print(f"\n--> {desc}: Đưa kẹp về vị trí {target_pos*1000:.1f} mm ({target_pos:.4f} m) (Tốc độ: {args.speed}, Lực: {args.force})...")
         gripper.set_position(target_pos, speed_rad_s=args.speed, torque_pu=args.force)
         
         # Theo dõi quá trình dịch chuyển trong 1.5 giây
@@ -70,7 +70,7 @@ def main():
             p = motor.get_position()
             v = motor.get_velocity()
             t = motor.get_torque()
-            print(f"\r    Vị trí: {p:>7.3f} rad | Vận tốc: {v:>7.2f} rad/s | Lực phản hồi: {t:>6.2f} Nm", end="", flush=True)
+            print(f"\r    Hành trình kẹp: {p*1000:>6.1f} mm | Vận tốc: {v:>7.2f} | Lực phản hồi: {t:>6.2f} Nm", end="", flush=True)
             time.sleep(0.05)
         print(" [Hoàn thành]")
 
@@ -79,32 +79,32 @@ def main():
             print("\n[*] Bắt đầu bài test chu kỳ ĐÓNG - MỞ kẹp (3 chu kỳ):")
             for cycle in range(1, 4):
                 print(f"\n===== Chu kỳ {cycle}/3 =====")
-                move_gripper(args.open_pos, desc=f"[Chu kỳ {cycle}] MỞ KẸP")
+                move_gripper(args.open_pos, desc=f"[Chu kỳ {cycle}] MỞ KẸP (43 mm)")
                 time.sleep(0.8)
-                move_gripper(args.close_pos, desc=f"[Chu kỳ {cycle}] ĐÓNG KẸP")
+                move_gripper(args.close_pos, desc=f"[Chu kỳ {cycle}] ĐÓNG KẸP (0 mm)")
                 time.sleep(0.8)
             print("\n[✓] Hoàn thành bài test chu kỳ đóng mở kẹp thành công!")
 
         elif args.action == "open":
-            move_gripper(args.open_pos, desc="MỞ KẸP")
+            move_gripper(args.open_pos, desc="MỞ KẸP (43 mm)")
 
         elif args.action == "close":
-            move_gripper(args.close_pos, desc="ĐÓNG KẸP")
+            move_gripper(args.close_pos, desc="ĐÓNG KẸP (0 mm)")
 
         elif args.action == "toggle":
-            if abs(current_pos - args.close_pos) < 0.3:
-                move_gripper(args.open_pos, desc="Chuyển sang MỞ KẸP")
+            if abs(current_pos - args.close_pos) < 0.010:
+                move_gripper(args.open_pos, desc="Chuyển sang MỞ KẸP (43 mm)")
             else:
-                move_gripper(args.close_pos, desc="Chuyển sang ĐÓNG KẸP")
+                move_gripper(args.close_pos, desc="Chuyển sang ĐÓNG KẸP (0 mm)")
 
         elif args.action == "interactive":
             print("\nChế độ điều khiển bàn phím:")
-            print("  - Nhập 'o' hoặc 'open'  : Mở kẹp")
-            print("  - Nhập 'c' hoặc 'close' : Đóng kẹp")
-            print("  - Nhập một số (rad)     : Đưa kẹp đến góc tùy ý (ví dụ 0.5)")
+            print("  - Nhập 'o' hoặc 'open'  : Mở kẹp (43 mm)")
+            print("  - Nhập 'c' hoặc 'close' : Đóng kẹp (0 mm)")
+            print("  - Nhập một số (mm hoặc m): Đưa kẹp đến hành trình tùy ý (ví dụ: 20 mm hoặc 0.02 m)")
             print("  - Nhập 'q' hoặc 'exit'  : Thoát")
             while True:
-                cmd = input("\nLệnh kẹp (o/c/góc/q): ").strip().lower()
+                cmd = input("\nLệnh kẹp (o/c/mm/q): ").strip().lower()
                 if cmd in ["q", "exit"]:
                     break
                 elif cmd in ["o", "open"]:
@@ -113,8 +113,9 @@ def main():
                     move_gripper(args.close_pos, desc="Đóng kẹp")
                 else:
                     try:
-                        val = float(cmd)
-                        move_gripper(val, desc=f"Vị trí {val} rad")
+                        raw_val = float(cmd.replace("mm", "").replace("m", "").strip())
+                        val = raw_val / 1000.0 if raw_val > 0.043 else raw_val
+                        move_gripper(val, desc=f"Vị trí {val*1000:.1f} mm")
                     except ValueError:
                         print("Lệnh không hợp lệ.")
 

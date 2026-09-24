@@ -116,7 +116,7 @@ JOINT_LIMITS = {
     5: (-1.570, 1.570),
     6: (-0.785, 0.785),
     7: (-1.570, 1.570),
-    8: (0.000,  1.000),
+    8: (0.000,  0.043), # Left Gripper: Thanh kẹp ngang (Stroke: 0.0 - 0.043 m / 0 - 43 mm)
 
     # Right Arm (IDs 9..15) & Right Gripper (ID 16)
     9:  (-1.396, 3.490),
@@ -126,7 +126,7 @@ JOINT_LIMITS = {
     13: (-1.570, 1.570),
     14: (-0.785, 0.785),
     15: (-1.570, 1.570),
-    16: (0.000,  1.000),
+    16: (0.000,  0.043), # Right Gripper: Thanh kẹp ngang (Stroke: 0.0 - 0.043 m / 0 - 43 mm)
 }
 
 
@@ -160,7 +160,7 @@ class RealRobotHardwareBridge:
             5: RealDamiaoMotorState(5, "Left J5 (Forearm Twist)",  "left", 5, "DM4310", 0x05, 0x15, self.can_left_if, 12.5, 30.0, 10.0),
             6: RealDamiaoMotorState(6, "Left J6 (Wrist Pitch)",    "left", 6, "DM4310", 0x06, 0x16, self.can_left_if, 12.5, 30.0, 10.0),
             7: RealDamiaoMotorState(7, "Left J7 (Wrist Roll)",     "left", 7, "DM4310", 0x07, 0x17, self.can_left_if, 12.5, 30.0, 10.0),
-            8: RealDamiaoMotorState(8, "Left Gripper (J8 Kẹp)",    "left", 8, "DM4310", 0x08, 0x18, self.can_left_if, 12.5, 30.0, 10.0),
+            8: RealDamiaoMotorState(8, "Left Gripper (J8 Kẹp Ngang)",    "left", 8, "DM4310", 0x08, 0x18, self.can_left_if, 12.5, 30.0, 10.0),
 
             # RIGHT ARM (9..16) on can0 (Physical Right Arm)
             9:  RealDamiaoMotorState(9,  "Right J1 (Shoulder Pitch)", "right", 1, "DM8009", 0x01, 0x11, self.can_right_if, 12.5, 45.0, 54.0),
@@ -170,7 +170,7 @@ class RealRobotHardwareBridge:
             13: RealDamiaoMotorState(13, "Right J5 (Forearm Twist)",  "right", 5, "DM4310", 0x05, 0x15, self.can_right_if, 12.5, 30.0, 10.0),
             14: RealDamiaoMotorState(14, "Right J6 (Wrist Pitch)",    "right", 6, "DM4310", 0x06, 0x16, self.can_right_if, 12.5, 30.0, 10.0),
             15: RealDamiaoMotorState(15, "Right J7 (Wrist Roll)",     "right", 7, "DM4310", 0x07, 0x17, self.can_right_if, 12.5, 30.0, 10.0),
-            16: RealDamiaoMotorState(16, "Right Gripper (J8 Kẹp)",    "right", 8, "DM4310", 0x08, 0x18, self.can_right_if, 12.5, 30.0, 10.0),
+            16: RealDamiaoMotorState(16, "Right Gripper (J8 Kẹp Ngang)", "right", 8, "DM4310", 0x08, 0x18, self.can_right_if, 12.5, 30.0, 10.0),
         }
 
     def start(self):
@@ -564,7 +564,12 @@ class OpenArmDashboardServer:
 
         elif action == "set_gripper":
             pos_raw = float(payload.get("pos", 0.0))
-            pos = max(0.0, min(1.0, pos_raw)) # Clamp 0.0 .. 1.0
+            # Support both meters (0.0 .. 0.043 m) and mm (0.0 .. 43.0 mm)
+            if pos_raw > 0.043 and pos_raw <= 43.0:
+                pos_m = pos_raw / 1000.0
+            else:
+                pos_m = pos_raw
+            pos = max(0.0, min(0.043, pos_m)) # Clamp 0.0 .. 0.043 m (thanh kẹp ngang)
             target_arm = payload.get("arm", "both")
             target_id = payload.get("id")
 
