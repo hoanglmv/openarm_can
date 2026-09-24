@@ -11,6 +11,7 @@ Simulates Dual 7-DOF Robotic Arms (Left Arm & Right Arm) + Dual Grippers:
 - State telemetry frame encoding (100% compatible with openarm_can C++ & Python)
 """
 
+import subprocess
 import socket
 import struct
 import time
@@ -51,6 +52,8 @@ class VirtualDamiaoMotor:
         self.pMax = pMax
         self.vMax = vMax
         self.tMax = tMax
+        self.can_if = "vcan0"
+        self.has_physical_sync = True
 
         # Real-time state
         self.enabled = False
@@ -165,6 +168,15 @@ class VirtualDamiaoMotor:
         return bytes([d0, d1, d2, d3, val_bytes[0], val_bytes[1], val_bytes[2], val_bytes[3]])
 
     def to_dict(self):
+        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
+        if self.joint_idx == 8:
+            stroke_m = max(0.0, min(0.043, (abs(self.q) / 1.20) * 0.043))
+            q_val = round(stroke_m, 4)
+            q_deg_val = round(stroke_m * 1000.0, 1) # displayed as mm
+        else:
+            q_val = round(self.q, 4)
+            q_deg_val = round(math.degrees(self.q), 1)
+
         return {
             "id": self.id,
             "name": self.name,
@@ -175,8 +187,10 @@ class VirtualDamiaoMotor:
             "recv_id": hex(self.recv_id),
             "enabled": self.enabled,
             "error_code": self.error_code,
-            "q": round(self.q, 4),
-            "q_deg": round(math.degrees(self.q), 1),
+            "q": q_val,
+            "q_deg": q_deg_val,
+            "stroke_mm": round((abs(self.q) / 1.20) * 43.0, 1) if self.joint_idx == 8 else None,
+            "q_rad": round(self.q, 4),
             "dq": round(self.dq, 4),
             "tau": round(self.tau, 3),
             "t_mos": round(self.t_mos, 1),
@@ -235,6 +249,13 @@ class DamiaoArmSimulator:
 
     def start(self):
         self.running = True
+        if self.interface.startswith("vcan"):
+            try:
+                subprocess.run(["sudo", "modprobe", "vcan"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["sudo", "ip", "link", "add", "dev", self.interface, "type", "vcan"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["sudo", "ip", "link", "set", self.interface, "up"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
         self.sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
         try:
             self.sock.setsockopt(SOL_CAN_RAW, CAN_RAW_FD_FRAMES, 1)

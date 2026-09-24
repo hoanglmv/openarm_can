@@ -56,11 +56,20 @@ def main():
     arm.recv_all(500)
 
     current_pos = motor.get_position()
-    print(f"[i] Vị trí kẹp ban đầu: {current_pos*1000:.1f} mm ({current_pos:.4f} m), Nhiệt độ: {motor.get_state_tmos():.1f} °C")
+    cur_mm = (abs(current_pos) / 1.20) * 43.0
+    print(f"[i] Vị trí kẹp ban đầu: {cur_mm:.1f} mm ({current_pos:.4f} rad), Nhiệt độ: {motor.get_state_tmos():.1f} °C")
 
     def move_gripper(target_pos, desc=""):
-        print(f"\n--> {desc}: Đưa kẹp về vị trí {target_pos*1000:.1f} mm ({target_pos:.4f} m) (Tốc độ: {args.speed}, Lực: {args.force})...")
-        gripper.set_position(target_pos, speed_rad_s=args.speed, torque_pu=args.force)
+        # Convert stroke in meters (0.0 .. 0.043) to motor target radians (0.0 .. 1.20 rad)
+        if target_pos <= 0.043:
+            rad = (target_pos / 0.043) * 1.20
+            stroke_mm = target_pos * 1000.0
+        else:
+            rad = target_pos
+            stroke_mm = (abs(target_pos) / 1.20) * 43.0
+
+        print(f"\n--> {desc}: Đưa kẹp về {stroke_mm:.1f} mm ({rad:.3f} rad) (Tốc độ: {args.speed}, Lực: {args.force})...")
+        gripper.set_position(rad, speed_rad_s=args.speed, torque_pu=args.force)
         
         # Theo dõi quá trình dịch chuyển trong 1.5 giây
         t_end = time.time() + 1.5
@@ -70,7 +79,8 @@ def main():
             p = motor.get_position()
             v = motor.get_velocity()
             t = motor.get_torque()
-            print(f"\r    Hành trình kẹp: {p*1000:>6.1f} mm | Vận tốc: {v:>7.2f} | Lực phản hồi: {t:>6.2f} Nm", end="", flush=True)
+            p_mm = (abs(p) / 1.20) * 43.0
+            print(f"\r    Hành trình kẹp: {p_mm:>6.1f} mm ({p:>6.3f} rad) | Vận tốc: {v:>7.2f} | Lực phản hồi: {t:>6.2f} Nm", end="", flush=True)
             time.sleep(0.05)
         print(" [Hoàn thành]")
 

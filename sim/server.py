@@ -82,8 +82,18 @@ class RealDamiaoMotorState:
         self.kp = 18.0
         self.kd = 2.0
         self.last_update = 0.0
+        self.has_physical_sync = False
 
     def to_dict(self):
+        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
+        if self.joint_idx == 8:
+            stroke_m = max(0.0, min(0.043, (abs(self.q) / 1.20) * 0.043))
+            q_val = round(stroke_m, 4)
+            q_deg_val = round(stroke_m * 1000.0, 1) # displayed as mm
+        else:
+            q_val = round(self.q, 4)
+            q_deg_val = round(math.degrees(self.q), 1)
+
         return {
             "id": self.id,
             "name": self.name,
@@ -94,15 +104,18 @@ class RealDamiaoMotorState:
             "recv_id": hex(self.recv_id),
             "enabled": self.enabled,
             "error_code": self.error_code,
-            "q": round(self.q, 4),
-            "q_deg": round(math.degrees(self.q), 1),
+            "q": q_val,
+            "q_deg": q_deg_val,
+            "stroke_mm": round((abs(self.q) / 1.20) * 43.0, 1) if self.joint_idx == 8 else None,
+            "q_rad": round(self.q, 4),
             "dq": round(self.dq, 4),
             "tau": round(self.tau, 3),
             "t_mos": round(self.t_mos, 1),
             "t_rotor": round(self.t_rotor, 1),
             "q_des": round(self.q_des, 4),
             "kp": round(self.kp, 1),
-            "kd": round(self.kd, 2)
+            "kd": round(self.kd, 2),
+            "has_sync": self.has_physical_sync
         }
 
 
@@ -231,34 +244,31 @@ class RealRobotHardwareBridge:
         except Exception:
             pass
 
-        # For 8-byte Damiao management commands (0xFC, 0xFD, 0xFE, 0xFB), also transmit Classic CAN 16-byte frame
-        if len(data) == 8 and data[-1] in (0xFC, 0xFD, 0xFE, 0xFB):
+        # Also transmit Classic CAN frame for any 8-byte management, query, or control frame
+        # to ensure compatibility whether the motor is operating in CAN-FD or Classic CAN
+        if len(data) == 8:
             try:
                 frame_classic = struct.pack(CAN_FRAME_FMT, can_id, 8, data)
                 sock.send(frame_classic)
             except Exception:
                 pass
 
+    def query_all_physical(self):
+        """Immediately broadcast state query frames (0xCC) to all 16 physical motors"""
+        for m in self.motors.values():
+            query_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+            self.send_frame(m.can_if, 0x7FF, query_data)
+
     def _poll_loop(self):
         """Periodically query motor status so dashboard displays real angles even at standstill"""
+        # Initial burst query upon thread startup
+        time.sleep(0.1)
+        self.query_all_physical()
+
         while self.running:
             try:
-                # Query Left arm on can_left_if (can1)
-                if self.can_left_if and self.can_left_if in self.socks:
-                    for motor_id in range(1, 9):
-                        m = self.motors[motor_id]
-                        # Damiao management query: 0x7FF [send_id & FF, send_id >> 8, 0xCC, 0, 0, 0, 0, 0]
-                        query_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                        self.send_frame(m.can_if, 0x7FF, query_data)
-
-                # Query Right arm on can_right_if (can0)
-                if self.can_right_if and self.can_right_if in self.socks:
-                    for motor_id in range(9, 17):
-                        m = self.motors[motor_id]
-                        query_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                        self.send_frame(m.can_if, 0x7FF, query_data)
-
-            except Exception as e:
+                self.query_all_physical()
+            except Exception:
                 pass
             time.sleep(0.04) # 25 Hz
 
@@ -325,11 +335,18 @@ class RealRobotHardwareBridge:
             return
 
         with self.lock:
-            motor.error_code = error_code
-            if error_code >= 8:
-                motor.enabled = False
-            elif error_code == 1:
+            if motor.joint_idx == 8 and error_code >= 8:
+                # Motor 8 reached mechanical limit or grasped object (stall flag)
+                # Auto-clear fault and keep enabled so user can immediately close/open
+                self.send_frame(iface, motor.send_id, bytes([0xFF]*7 + [0xFB]))
+                motor.error_code = 1
                 motor.enabled = True
+            else:
+                motor.error_code = error_code
+                if error_code >= 8:
+                    motor.enabled = False
+                elif error_code == 1:
+                    motor.enabled = True
 
             q_uint = (d1 << 8) | d2
             dq_uint = (d3 << 4) | (d4 >> 4)
@@ -342,6 +359,14 @@ class RealRobotHardwareBridge:
             motor.t_rotor = float(d7)
             motor.last_update = time.time()
 
+            # First time receiving physical reading: synchronize initial target/command positions
+            if not motor.has_physical_sync:
+                motor.has_physical_sync = True
+                motor.q_target = motor.q
+                motor.q_cmd = motor.q
+                motor.q_des = motor.q
+                print(f"[Physical Sync] Motor {motor.id} ({motor.name}) synced real angle: {motor.q:.4f} rad ({math.degrees(motor.q):.1f}°)")
+
 
 class OpenArmDashboardServer:
     def __init__(self, mode: str = "real", can0_if: str = "can0", can1_if: Optional[str] = "can1"):
@@ -351,6 +376,7 @@ class OpenArmDashboardServer:
         self.clients = set()
         self.running = True
         self.velocity_limit = 0.25 # rad/s (~14°/s) gentle & safe velocity limit
+        self.gripper_invert = {8: False, 16: False} # Direction invert flag if needed
 
         if self.mode == "real":
             print(f"[Dashboard] Initializing in REAL ROBOT HARDWARE MODE on {can0_if} / {can1_if}")
@@ -419,97 +445,125 @@ class OpenArmDashboardServer:
         return None, None
 
     def _exec_connect_usb(self):
-        busid, desc = self._find_can_usb()
-        if not busid:
-            msg = "Chưa phát hiện thiết bị USB CAN cắm trên Windows. Vui lòng cắm cáp USB nối đến robot."
-            print(f"[USB] {msg}")
+        try:
+            print("[USB] Bắt đầu kết nối USB Robot...")
             if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("error", msg), self.loop)
-            return
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang quét cổng USB Robot..."), self.loop)
 
-        print(f"[USB] Đang kết nối thiết bị USB (BusID: {busid}, {desc}) vào WSL2...")
-        if hasattr(self, 'loop') and self.loop:
-            asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", f"Đang kết nối USB {busid} ({desc})..."), self.loop)
+            can0_present = os.path.exists("/sys/class/net/can0")
+            busid = None
+            desc = "PCAN-USB Pro FD"
 
-        # 1. usbipd attach
-        subprocess.run(["usbipd", "attach", "--wsl", "--busid", busid], capture_output=True, text=True)
+            if not can0_present:
+                busid, found_desc = self._find_can_usb()
+                if found_desc:
+                    desc = found_desc
+                if not busid:
+                    msg = "Chưa phát hiện thiết bị USB CAN cắm trên máy tính. Vui lòng cắm cáp USB nối đến robot."
+                    print(f"[USB Error] {msg}")
+                    if hasattr(self, 'loop') and self.loop:
+                        asyncio.run_coroutine_threadsafe(self.broadcast_notice("error", msg), self.loop)
+                    return
 
-        # 2. Kernel modules
-        for mod in ["vhci-hcd", "can", "can-raw", "can-dev", "peak_usb"]:
-            subprocess.run(["sudo", "modprobe", mod], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"[USB] Đang gắn thiết bị USB (BusID: {busid}, {desc}) vào WSL2...")
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", f"Đang gắn USB {busid} ({desc}) vào WSL2..."), self.loop)
 
-        # 3. Wait for can0 to appear
-        for _ in range(8):
-            if os.path.exists("/sys/class/net/can0"):
-                break
-            time.sleep(0.4)
+                # Attach via usbipd
+                att_res = subprocess.run(["usbipd", "attach", "--wsl", "--busid", busid], capture_output=True, text=True, timeout=8)
+                if att_res.returncode != 0 and "already attached" not in att_res.stderr.lower() and "already attached" not in att_res.stdout.lower():
+                    print(f"[USB] Thử detach rồi attach lại: {att_res.stderr.strip() or att_res.stdout.strip()}")
+                    subprocess.run(["usbipd", "detach", "--busid", busid], capture_output=True, text=True, timeout=5)
+                    time.sleep(0.5)
+                    subprocess.run(["usbipd", "attach", "--wsl", "--busid", busid], capture_output=True, text=True, timeout=8)
 
-        # 4. Bring up CAN-FD on can0 and can1
-        configured_any = False
-        for iface in ["can0", "can1"]:
-            if os.path.exists(f"/sys/class/net/{iface}"):
-                subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False)
-                cmd = [
-                    "sudo", "ip", "link", "set", iface, "type", "can",
-                    "bitrate", "1000000", "sample-point", "0.75",
-                    "dbitrate", "5000000", "dsample-point", "0.75",
-                    "dsjw", "2", "fd", "on"
-                ]
-                r = subprocess.run(cmd, check=False)
-                if r.returncode != 0:
-                    subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can", "bitrate", "1000000"], check=False)
-                subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
-                configured_any = True
+                # Load required kernel modules
+                for mod in ["vhci-hcd", "can", "can-raw", "can-dev", "peak_usb"]:
+                    subprocess.run(["sudo", "modprobe", mod], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        if configured_any:
-            time.sleep(0.5)
-            # Switch to real mode if not already
-            if self.mode != "real":
+                # Wait for can0 to appear in /sys/class/net
+                for _ in range(12):
+                    if os.path.exists("/sys/class/net/can0"):
+                        break
+                    time.sleep(0.3)
+
+            # Bring up CAN-FD on can0 and can1
+            configured_any = False
+            for iface in ["can0", "can1"]:
+                if os.path.exists(f"/sys/class/net/{iface}"):
+                    subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False)
+                    cmd = [
+                        "sudo", "ip", "link", "set", iface, "type", "can",
+                        "bitrate", "1000000", "sample-point", "0.75",
+                        "dbitrate", "5000000", "dsample-point", "0.75",
+                        "dsjw", "2", "fd", "on"
+                    ]
+                    r = subprocess.run(cmd, check=False)
+                    if r.returncode != 0:
+                        subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can", "bitrate", "1000000"], check=False)
+                    subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
+                    configured_any = True
+
+            if configured_any:
+                time.sleep(0.3)
+                # ALWAYS recreate hardware bridge so fresh SocketCAN file descriptors are bound
                 try:
+                    self.hw.stop()
                     new_hw = RealRobotHardwareBridge(self.can0_if, self.can1_if)
                     new_hw.start()
-                    self.hw.stop()
                     self.hw = new_hw
                     self.motors = self.hw.motors
                     self.mode = "real"
                     print(f"[USB] Kết nối thành công! Đang ở chế độ REAL ROBOT HARDWARE MODE ({self.can0_if}/{self.can1_if})")
+                    # Query all physical motor positions immediately
+                    self.hw.query_all_physical()
                 except Exception as e:
                     print(f"[USB Switch Error]: {e}")
-            msg = f"Đã kết nối thành công Robot thật qua USB ({desc}, Bus: {busid})!"
+
+                dev_info = f" ({desc}, Bus: {busid})" if busid else " (can0/can1)"
+                msg = f"Đã kết nối thành công Robot thật qua USB{dev_info}!"
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", msg), self.loop)
+            else:
+                msg = "Không tìm thấy interface can0/can1 sau khi gắn USB. Vui lòng kiểm tra nguồn và cáp robot."
+                print(f"[USB Warning] {msg}")
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", msg), self.loop)
+
+        except Exception as e:
+            err_msg = f"Lỗi trong quá trình kết nối USB: {e}"
+            print(f"[USB Exception] {err_msg}")
             if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", msg), self.loop)
-        else:
-            msg = f"Đã gắn USB {busid} nhưng chưa thấy interface can0/can1. Vui lòng kiểm tra nguồn robot."
-            if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", msg), self.loop)
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("error", err_msg), self.loop)
 
     def _exec_disconnect_usb(self):
-        print("[USB] Ngắt kết nối USB Robot...")
-        if hasattr(self, 'loop') and self.loop:
-            asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang ngắt kết nối USB và ngắt torque an toàn..."), self.loop)
+        try:
+            print("[USB] Ngắt kết nối USB Robot...")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang ngắt kết nối USB và ngắt torque an toàn..."), self.loop)
 
-        # 1. Disarm all motors safely first
-        with self.hw.lock:
-            for m in self.motors.values():
-                m.enabled = False
-                m.error_code = 0
-        if self.mode == "real":
-            for m in self.motors.values():
-                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFD]))
+            # 1. Disarm all motors safely first
+            with self.hw.lock:
+                for m in self.motors.values():
+                    m.enabled = False
+                    m.error_code = 0
+            if self.mode == "real":
+                for m in self.motors.values():
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFD]))
 
-        time.sleep(0.3)
+            time.sleep(0.3)
 
-        # 2. Down CAN interfaces
-        for iface in ["can0", "can1"]:
-            subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # 2. Down CAN interfaces
+            for iface in ["can0", "can1"]:
+                if os.path.exists(f"/sys/class/net/{iface}"):
+                    subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 3. Detach via usbipd
-        busid, desc = self._find_can_usb()
-        if busid:
-            subprocess.run(["usbipd", "detach", "--busid", busid], check=False)
+            # 3. Detach via usbipd
+            busid, _ = self._find_can_usb()
+            if busid:
+                subprocess.run(["usbipd", "detach", "--busid", busid], check=False, timeout=5)
 
-        # 4. Fallback to SIM
-        if self.mode == "real":
+            # 4. Fallback to SIM
             try:
                 self.hw.stop()
                 new_sim = DamiaoArmSimulator("vcan0")
@@ -521,8 +575,12 @@ class OpenArmDashboardServer:
             except Exception as e:
                 print(f"[USB Fallback Error]: {e}")
 
-        if hasattr(self, 'loop') and self.loop:
-            asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", "Đã ngắt kết nối USB Robot. Hệ thống đang ở chế độ Mô phỏng (SIM)."), self.loop)
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", "Đã ngắt kết nối USB Robot. Hệ thống đang ở chế độ Mô phỏng (SIM)."), self.loop)
+        except Exception as e:
+            print(f"[USB Disconnect Error]: {e}")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("error", f"Lỗi ngắt kết nối: {e}"), self.loop)
 
     async def broadcast_notice(self, level: str, message: str):
         msg = json.dumps({
@@ -545,6 +603,13 @@ class OpenArmDashboardServer:
             if self.mode == "sim" and can0_present:
                 print("[Hotplug] Detected physical can0 interface! Switching to REAL ROBOT HARDWARE MODE...")
                 try:
+                    for iface in ["can0", "can1"]:
+                        if os.path.exists(f"/sys/class/net/{iface}"):
+                            subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can",
+                                            "bitrate", "1000000", "sample-point", "0.75",
+                                            "dbitrate", "5000000", "dsample-point", "0.75",
+                                            "dsjw", "2", "fd", "on"], check=False)
+                            subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
                     new_hw = RealRobotHardwareBridge(self.can0_if, self.can1_if)
                     new_hw.start()
                     self.hw.stop()
@@ -552,6 +617,7 @@ class OpenArmDashboardServer:
                     self.motors = self.hw.motors
                     self.mode = "real"
                     print(f"[Hotplug] Switched to REAL HARDWARE MODE ({len(self.motors)} motors on {self.can0_if}/{self.can1_if})")
+                    self.hw.query_all_physical()
                     if hasattr(self, 'loop') and self.loop:
                         asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", "Đã tự động kết nối robot thật trên can0/can1!"), self.loop)
                 except Exception as e:
@@ -573,6 +639,26 @@ class OpenArmDashboardServer:
 
     async def ws_handler(self, websocket):
         self.clients.add(websocket)
+        # Send initial state immediately upon connection so frontend sliders & 3D model synchronize
+        try:
+            with self.hw.lock:
+                motors_data = [m.to_dict() for m in self.motors.values()]
+                rx_count = self.hw.frames_rx
+                tx_count = self.hw.frames_tx
+            init_msg = json.dumps({
+                "type": "telemetry",
+                "data": {
+                    "motors": motors_data,
+                    "frames_rx": rx_count,
+                    "frames_tx": tx_count,
+                    "mode": self.mode,
+                    "initial": True
+                }
+            })
+            await websocket.send(init_msg)
+        except Exception:
+            pass
+
         try:
             async for msg in websocket:
                 try:
@@ -595,6 +681,20 @@ class OpenArmDashboardServer:
             print("[Command] Disconnect USB Robot requested from Web UI")
             threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
 
+        elif action == "sync_robot_state":
+            print("[Command] Sync state from physical robot requested")
+            if self.mode == "real":
+                self.hw.query_all_physical()
+                time.sleep(0.08)
+                with self.hw.lock:
+                    for m in self.motors.values():
+                        m.q_cmd = m.q
+                        m.q_target = m.q
+                        m.q_des = m.q
+                        m.has_physical_sync = True
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", "Đã đọc và đồng bộ góc khớp thực tế từ Robot!"), self.loop)
+
         elif action == "set_velocity_limit":
             val = float(payload.get("v_limit", 0.25))
             self.velocity_limit = max(0.02, min(3.0, val))
@@ -612,6 +712,12 @@ class OpenArmDashboardServer:
                     m.q_des = m.q
             if self.mode == "real":
                 for m in self.motors.values():
+                    if m.joint_idx == 8:
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
+                        time.sleep(0.01)
+                        set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+                        self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
+                        time.sleep(0.02)
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
             else:
                 for m in self.hw.motors.values():
@@ -647,6 +753,12 @@ class OpenArmDashboardServer:
                     m.q_target = m.q
                     m.q_des = m.q
                 if self.mode == "real":
+                    if m.joint_idx == 8:
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
+                        time.sleep(0.01)
+                        set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+                        self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
+                        time.sleep(0.02)
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
                 else:
                     m.enabled = True
@@ -705,6 +817,44 @@ class OpenArmDashboardServer:
         elif action == "set_mit":
             motor_id = int(payload.get("id", 1))
             q_raw = float(payload.get("q", 0.0))
+
+            # If Joint 8 received via set_mit, route to set_gripper logic
+            if motor_id in [8, 16]:
+                m = self.motors.get(motor_id)
+                if m:
+                    pos_m = q_raw / 1000.0 if (q_raw > 0.043 and q_raw <= 43.0) else q_raw
+                    pos = max(0.0, min(0.043, pos_m))
+                    invert = self.gripper_invert.get(m.id, False)
+                    stroke_ratio = pos / 0.043
+                    ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+                    # On OpenArm physical hardware, closing is 0.0 rad, opening is -1.20 rad
+                    rad_target = -ratio * 1.20
+
+                    if not m.enabled or m.error_code >= 8:
+                        m.enabled = True
+                        m.error_code = 1
+                        m.q_cmd = m.q
+                        if self.mode == "real":
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
+                            time.sleep(0.01)
+                            set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+                            self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
+                            time.sleep(0.02)
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
+                            time.sleep(0.01)
+
+                    m.q_target = rad_target
+                    m.q_cmd = rad_target
+                    if self.mode == "real":
+                        posforce_can_id = m.send_id + 0x300
+                        vel_uint = 2500  # 25.0 rad/s
+                        i_uint = 1500    # 0.15 pu
+                        posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+                        self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+                        refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+                        self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+                return
+
             kp = float(payload.get("kp", 18.0))
             kd = float(payload.get("kd", 2.0))
             tau = float(payload.get("tau", 0.0))
@@ -750,12 +900,47 @@ class OpenArmDashboardServer:
                     if m: target_motors.append(m)
 
             for m in target_motors:
-                if not m.enabled:
+                # Convert linear stroke (0.0 .. 0.043 m) to motor target angle in radians (0.0 .. -1.20 rad)
+                invert = self.gripper_invert.get(m.id, False)
+                stroke_ratio = pos / 0.043
+                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+                # On OpenArm physical hardware, closing is 0.0 rad, opening is -1.20 rad
+                rad_target = -ratio * 1.20
+
+                if not m.enabled or m.error_code >= 8:
                     m.enabled = True
+                    m.error_code = 1
                     m.q_cmd = m.q
                     if self.mode == "real":
+                        # 1. Clear any active motor fault (stall/overload)
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFB]))
+                        time.sleep(0.01)
+                        # 2. Ensure motor is in POS_FORCE control mode (RID 10 = 4)
+                        set_mode_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+                        self.hw.send_frame(m.can_if, 0x7FF, set_mode_data)
+                        time.sleep(0.02)
+                        # 3. Enable motor
                         self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF]*7 + [0xFC]))
-                m.q_target = pos
+                        time.sleep(0.01)
+
+                m.q_target = rad_target
+                m.q_cmd = rad_target
+                if self.mode == "real":
+                    posforce_can_id = m.send_id + 0x300
+                    vel_uint = 2500  # 25.0 rad/s
+                    i_uint = 1500    # 0.15 pu safe current limit
+                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+
+                can_name = getattr(m, 'can_if', 'vcan0')
+                print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {pos*1000:.1f} mm ({rad_target:.3f} rad)")
+
+        elif action == "toggle_gripper_invert":
+            target_id = int(payload.get("id", 8))
+            self.gripper_invert[target_id] = not self.gripper_invert.get(target_id, False)
+            print(f"[Gripper] Motor {target_id} invert set to: {self.gripper_invert[target_id]}")
 
         elif action == "run_cli":
             cmd = payload.get("cmd", "")
@@ -780,8 +965,8 @@ class OpenArmDashboardServer:
 
                     # Velocity-limited step towards target
                     diff = m.q_target - m.q_cmd
-                    # If this is gripper, use gentle speed limit
-                    v_lim = min(self.velocity_limit, 0.6) if m.joint_idx == 8 else self.velocity_limit
+                    # If this is gripper, allow fast responsive travel up to 2.5 rad/s
+                    v_lim = 2.5 if m.joint_idx == 8 else self.velocity_limit
                     max_step = v_lim * dt
 
                     if abs(diff) <= max_step:
@@ -791,33 +976,43 @@ class OpenArmDashboardServer:
 
                     m.q_des = m.q_cmd
 
-                    # If in real mode and motor is enabled, send smooth MIT command
+                    # If in real mode and motor is enabled, send CAN command
                     if self.mode == "real":
-                        q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
-                        dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
-                        kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
-                        kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                        tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
-
-                        d0 = (q_uint >> 8) & 0xFF
-                        d1 = q_uint & 0xFF
-                        d2 = (dq_uint >> 4) & 0xFF
-                        d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
-                        d4 = kp_uint & 0xFF
-                        d5 = (kd_uint >> 4) & 0xFF
-                        d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
-                        d7 = tau_uint & 0xFF
-                        mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
-
-                        self.hw.send_frame(m.can_if, m.send_id, mit_data)
-
-                        # If gripper (joint_idx == 8), also send posforce with slow velocity
                         if m.joint_idx == 8:
-                            pos_bytes = struct.pack("<f", float(m.q_cmd))
-                            vel_uint = int(min(10000, 1.0 * 100)) # 1.0 rad/s gentle speed
-                            i_uint = int(min(10000, 0.10 * 10000)) # 0.10 pu current limit
-                            posforce_data = pos_bytes + struct.pack("<HH", vel_uint, i_uint)
-                            self.hw.send_frame(m.can_if, m.send_id, posforce_data)
+                            # -------------------------------------------------------------
+                            # JOINT 8: END-EFFECTOR PARALLEL GRIPPER (DM4310 in POS_FORCE)
+                            # -------------------------------------------------------------
+                            # Periodic keep-alive and telemetry refresh at 20 Hz (every 50 ms)
+                            now = time.time()
+                            if now - getattr(m, '_last_posforce_tx', 0) > 0.05:
+                                m._last_posforce_tx = now
+                                posforce_can_id = m.send_id + 0x300
+                                vel_uint = 2500  # 25.0 rad/s
+                                i_uint = 1500    # 0.15 pu
+                                posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
+                                self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+                                refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+                                self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+                        else:
+                            # -------------------------------------------------------------
+                            # JOINTS 1..7: 7-DOF ARM MOTORS (MIT MODE)
+                            # -------------------------------------------------------------
+                            q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                            dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+                            kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
+                            kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
+                            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+
+                            d0 = (q_uint >> 8) & 0xFF
+                            d1 = q_uint & 0xFF
+                            d2 = (dq_uint >> 4) & 0xFF
+                            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                            d4 = kp_uint & 0xFF
+                            d5 = (kd_uint >> 4) & 0xFF
+                            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                            d7 = tau_uint & 0xFF
+                            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                            self.hw.send_frame(m.can_if, m.send_id, mit_data)
                     else:
                         m.q = m.q_cmd
 
