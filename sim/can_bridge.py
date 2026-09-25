@@ -17,6 +17,7 @@ try:
         CANFD_FRAME_FMT,
         CAN_FRAME_FMT,
         CAN_RAW_FD_FRAMES,
+        MOTOR_DIRECTIONS,
         SOL_CAN_RAW,
         uint_to_double,
     )
@@ -26,6 +27,7 @@ except ImportError:
         CANFD_FRAME_FMT,
         CAN_FRAME_FMT,
         CAN_RAW_FD_FRAMES,
+        MOTOR_DIRECTIONS,
         SOL_CAN_RAW,
         uint_to_double,
     )
@@ -57,24 +59,24 @@ class RealRobotHardwareBridge:
         # 16-actuator dictionary (Dual 7-DOF Arms + 2 Grippers)
         self.motors: Dict[int, RealDamiaoMotorState] = {
             # LEFT ARM (1..8) on can1 (Physical Left Arm)
-            1: RealDamiaoMotorState(1, "Left J1 (Shoulder Pitch)", "left", 1, "DM8009", 0x01, 0x11, self.can_left_if, 12.5, 45.0, 54.0),
-            2: RealDamiaoMotorState(2, "Left J2 (Shoulder Roll)",  "left", 2, "DM8009", 0x02, 0x12, self.can_left_if, 12.5, 45.0, 54.0),
-            3: RealDamiaoMotorState(3, "Left J3 (Arm Twist)",      "left", 3, "DM4340", 0x03, 0x13, self.can_left_if, 12.5, 10.0, 28.0),
-            4: RealDamiaoMotorState(4, "Left J4 (Elbow Pitch)",    "left", 4, "DM4340", 0x04, 0x14, self.can_left_if, 12.5, 10.0, 28.0),
-            5: RealDamiaoMotorState(5, "Left J5 (Forearm Twist)",  "left", 5, "DM4310", 0x05, 0x15, self.can_left_if, 12.5, 30.0, 10.0),
-            6: RealDamiaoMotorState(6, "Left J6 (Wrist Pitch)",    "left", 6, "DM4310", 0x06, 0x16, self.can_left_if, 12.5, 30.0, 10.0),
-            7: RealDamiaoMotorState(7, "Left J7 (Wrist Roll)",     "left", 7, "DM4310", 0x07, 0x17, self.can_left_if, 12.5, 30.0, 10.0),
-            8: RealDamiaoMotorState(8, "Left Gripper (J8 Kẹp Ngang)", "left", 8, "DM4310", 0x08, 0x18, self.can_left_if, 12.5, 30.0, 10.0),
+            1: RealDamiaoMotorState(1, "Left J1 (Shoulder Pitch)", "left", 1, "DM8009", 0x01, 0x11, self.can_left_if, 12.5, 45.0, 54.0, direction=MOTOR_DIRECTIONS.get(1, -1.0)),
+            2: RealDamiaoMotorState(2, "Left J2 (Shoulder Roll)",  "left", 2, "DM8009", 0x02, 0x12, self.can_left_if, 12.5, 45.0, 54.0, direction=MOTOR_DIRECTIONS.get(2, 1.0)),
+            3: RealDamiaoMotorState(3, "Left J3 (Arm Twist)",      "left", 3, "DM4340", 0x03, 0x13, self.can_left_if, 12.5, 10.0, 28.0, direction=MOTOR_DIRECTIONS.get(3, 1.0)),
+            4: RealDamiaoMotorState(4, "Left J4 (Elbow Pitch)",    "left", 4, "DM4340", 0x04, 0x14, self.can_left_if, 12.5, 10.0, 28.0, direction=MOTOR_DIRECTIONS.get(4, 1.0)),
+            5: RealDamiaoMotorState(5, "Left J5 (Forearm Twist)",  "left", 5, "DM4310", 0x05, 0x15, self.can_left_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(5, 1.0)),
+            6: RealDamiaoMotorState(6, "Left J6 (Wrist Pitch)",    "left", 6, "DM4310", 0x06, 0x16, self.can_left_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(6, 1.0)),
+            7: RealDamiaoMotorState(7, "Left J7 (Wrist Roll)",     "left", 7, "DM4310", 0x07, 0x17, self.can_left_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(7, 1.0)),
+            8: RealDamiaoMotorState(8, "Left Gripper (J8 Kẹp Ngang)", "left", 8, "DM4310", 0x08, 0x18, self.can_left_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(8, 1.0)),
 
             # RIGHT ARM (9..16) on can0 (Physical Right Arm)
-            9:  RealDamiaoMotorState(9,  "Right J1 (Shoulder Pitch)", "right", 1, "DM8009", 0x01, 0x11, self.can_right_if, 12.5, 45.0, 54.0),
-            10: RealDamiaoMotorState(10, "Right J2 (Shoulder Roll)",  "right", 2, "DM8009", 0x02, 0x12, self.can_right_if, 12.5, 45.0, 54.0),
-            11: RealDamiaoMotorState(11, "Right J3 (Arm Twist)",      "right", 3, "DM4340", 0x03, 0x13, self.can_right_if, 12.5, 10.0, 28.0),
-            12: RealDamiaoMotorState(12, "Right J4 (Elbow Pitch)",    "right", 4, "DM4340", 0x04, 0x14, self.can_right_if, 12.5, 10.0, 28.0),
-            13: RealDamiaoMotorState(13, "Right J5 (Forearm Twist)",  "right", 5, "DM4310", 0x05, 0x15, self.can_right_if, 12.5, 30.0, 10.0),
-            14: RealDamiaoMotorState(14, "Right J6 (Wrist Pitch)",    "right", 6, "DM4310", 0x06, 0x16, self.can_right_if, 12.5, 30.0, 10.0),
-            15: RealDamiaoMotorState(15, "Right J7 (Wrist Roll)",     "right", 7, "DM4310", 0x07, 0x17, self.can_right_if, 12.5, 30.0, 10.0),
-            16: RealDamiaoMotorState(16, "Right Gripper (J8 Kẹp Ngang)", "right", 8, "DM4310", 0x08, 0x18, self.can_right_if, 12.5, 30.0, 10.0),
+            9:  RealDamiaoMotorState(9,  "Right J1 (Shoulder Pitch)", "right", 1, "DM8009", 0x01, 0x11, self.can_right_if, 12.5, 45.0, 54.0, direction=MOTOR_DIRECTIONS.get(9, 1.0)),
+            10: RealDamiaoMotorState(10, "Right J2 (Shoulder Roll)",  "right", 2, "DM8009", 0x02, 0x12, self.can_right_if, 12.5, 45.0, 54.0, direction=MOTOR_DIRECTIONS.get(10, 1.0)),
+            11: RealDamiaoMotorState(11, "Right J3 (Arm Twist)",      "right", 3, "DM4340", 0x03, 0x13, self.can_right_if, 12.5, 10.0, 28.0, direction=MOTOR_DIRECTIONS.get(11, 1.0)),
+            12: RealDamiaoMotorState(12, "Right J4 (Elbow Pitch)",    "right", 4, "DM4340", 0x04, 0x14, self.can_right_if, 12.5, 10.0, 28.0, direction=MOTOR_DIRECTIONS.get(12, 1.0)),
+            13: RealDamiaoMotorState(13, "Right J5 (Forearm Twist)",  "right", 5, "DM4310", 0x05, 0x15, self.can_right_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(13, 1.0)),
+            14: RealDamiaoMotorState(14, "Right J6 (Wrist Pitch)",    "right", 6, "DM4310", 0x06, 0x16, self.can_right_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(14, 1.0)),
+            15: RealDamiaoMotorState(15, "Right J7 (Wrist Roll)",     "right", 7, "DM4310", 0x07, 0x17, self.can_right_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(15, 1.0)),
+            16: RealDamiaoMotorState(16, "Right Gripper (J8 Kẹp Ngang)", "right", 8, "DM4310", 0x08, 0x18, self.can_right_if, 12.5, 30.0, 10.0, direction=MOTOR_DIRECTIONS.get(16, 1.0)),
         }
 
     def start(self):
@@ -111,10 +113,11 @@ class RealRobotHardwareBridge:
             except Exception as e:
                 print(f"[Hardware Bridge] Warning initializing gripper {gid}: {e}")
 
-    def init_gripper_motor(self, motor_id: int, save_flash: bool = True):
+    def init_gripper_motor(self, motor_id: int, save_flash: bool = False):
         """
-        Configure and enable gripper motor (Joint 8 / Joint 16) in POS_FORCE mode.
-        Ensures the motor reliably works across power-cycles and cable replugs.
+        Configure and enable gripper motor (Joint 8 / Joint 16).
+        Clears any hardware faults, sets RID 10 (CTRL_MODE) = 4 (POS_FORCE),
+        enables motor output (0xFC), and queries initial position.
         """
         m = self.motors.get(motor_id)
         if not m or m.joint_idx != 8:
@@ -125,28 +128,19 @@ class RealRobotHardwareBridge:
 
         # 1. Clear any fault/stall state (0xFB)
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFB]))
-        time.sleep(0.01)
+        time.sleep(0.015)
 
-        # 2. Disable motor to safely update registers (0xFD)
-        self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFD]))
-        time.sleep(0.01)
+        # 2. Write register RID 10 (CTRL_MODE) = 4 (POS_FORCE) via management ID 0x7FF
+        # Frame format: [send_id_low, send_id_high, 0x55 (write), RID (10), val0 (4), val1, val2, val3]
+        mode_write_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+        self.send_frame(iface, 0x7FF, mode_write_data)
+        time.sleep(0.015)
 
-        # 3. Write Control Mode = 4 (POS_FORCE) into register RID 10
-        set_mode_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
-        self.send_frame(iface, 0x7FF, set_mode_data)
-        time.sleep(0.02)
-
-        # 4. Burn into non-volatile Flash (0xAA) if requested so motor boots in POS_FORCE
-        if save_flash:
-            save_flash_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0xAA, 0, 0, 0, 0, 0])
-            self.send_frame(iface, 0x7FF, save_flash_data)
-            time.sleep(0.03)
-
-        # 5. Enable motor output (0xFC)
+        # 3. Enable motor output (0xFC)
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFC]))
-        time.sleep(0.01)
+        time.sleep(0.015)
 
-        # 6. Request initial state (0xCC)
+        # 4. Request initial state (0xCC)
         query_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
         self.send_frame(iface, 0x7FF, query_data)
 
@@ -299,9 +293,14 @@ class RealRobotHardwareBridge:
             dq_uint = (d3 << 4) | (d4 >> 4)
             tau_uint = ((d4 & 0x0F) << 8) | d5
 
-            motor.q = uint_to_double(q_uint, -motor.pMax, motor.pMax, 16)
-            motor.dq = uint_to_double(dq_uint, -motor.vMax, motor.vMax, 12)
-            motor.tau = uint_to_double(tau_uint, -motor.tMax, motor.tMax, 12)
+            raw_q = uint_to_double(q_uint, -motor.pMax, motor.pMax, 16)
+            raw_dq = uint_to_double(dq_uint, -motor.vMax, motor.vMax, 12)
+            raw_tau = uint_to_double(tau_uint, -motor.tMax, motor.tMax, 12)
+
+            motor_dir = getattr(motor, 'direction', 1.0)
+            motor.q = raw_q * motor_dir
+            motor.dq = raw_dq * motor_dir
+            motor.tau = raw_tau * motor_dir
             motor.t_mos = float(d6)
             motor.t_rotor = float(d7)
             motor.last_update = time.time()

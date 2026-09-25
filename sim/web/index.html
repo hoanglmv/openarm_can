@@ -24,24 +24,24 @@
                 <span class="badge badge-primary"><span class="pulse-dot"></span> SocketCAN: <strong id="iface-name">vcan0</strong></span>
                 <span class="badge badge-success" id="bus-health-badge">Bus: <strong>HEALTHY</strong></span>
                 <span class="badge badge-info" id="ws-status-badge">WebSocket: <strong>CONNECTING</strong></span>
-                <span class="badge badge-export" id="export-status-badge" title="Tần số xuất dữ liệu góc khớp 100Hz từ khi kết nối robot">
-                    <span class="pulse-dot pulse-export"></span> 100Hz: <strong id="export-badge-text">REC (0)</strong>
+                <span class="badge badge-export idle" id="export-status-badge" title="Trạng thái Record dữ liệu góc khớp 100Hz">
+                    <span class="pulse-dot pulse-export" id="header-rec-dot"></span> <strong id="export-badge-text">REC: Sẵn sàng</strong>
                 </span>
             </div>
         </div>
         <div class="header-right">
-            <a id="btn-export-download-header" href="/api/export/download" class="btn-tool-header" title="Tải file CSV 100Hz mới nhất về máy" download>
-                📥 CSV 100Hz
+            <a id="btn-export-download-header" href="/api/export/download" class="btn-tool-header" title="Tải file HDF5 (.hdf5) Record mới nhất về máy" download>
+                Tải HDF5
             </a>
             <button id="btn-usb-toggle" class="btn-usb-toggle btn-usb-disconnected" title="Kết nối hoặc Ngắt kết nối USB Robot qua SocketCAN">
                 <span class="usb-dot"></span>
                 <span id="usb-btn-text">Connect USB Robot</span>
             </button>
             <button id="btn-toggle-telemetry-header" class="btn-tool-header" title="Bật/Tắt hiển thị thông số 16 động cơ">
-                📊 Telemetry
+                Telemetry
             </button>
             <button id="btn-toggle-inspector" class="btn-tool-header" title="Mở rộng Terminal & CAN-FD Packet Inspector">
-                💻 Terminal & CAN
+                Terminal & CAN
             </button>
             <button id="btn-theme-toggle" class="btn-tool-header" title="Switch Theme">Studio Bright</button>
             <div class="header-stats">
@@ -66,13 +66,16 @@
             <!-- Essential Quick Actions Bar -->
             <div class="quick-action-bar">
                 <button class="btn btn-success" id="btn-enable-all" title="Bật lực giữ cho tất cả 16 động cơ (Enable Arms)">
-                    ⚡ Bật Robot
+                    Bật Robot
                 </button>
                 <button class="btn btn-danger" id="btn-disable-all" title="Ngắt lực cho tất cả động cơ (Torque OFF)">
-                    🛑 Ngắt Lực
+                    Ngắt Lực
+                </button>
+                <button class="btn btn-warning" id="btn-go-zero-pose" title="Đưa toàn bộ 14 khớp và 2 kẹp về vị trí 0 an toàn (0.0 rad, 0 mm) với lực giữ vững chắc">
+                    Zero Pose
                 </button>
                 <button class="btn btn-primary" id="btn-sync-state" title="Đọc trạng thái góc khớp thực tế từ robot vật lý và cập nhật vào thanh trượt">
-                    🔄 Sync Pose
+                    Sync Pose
                 </button>
             </div>
 
@@ -80,16 +83,16 @@
             <div class="mode-selector-wrapper">
                 <div class="mode-tabs">
                     <button class="mode-tab-btn active" id="btn-mode-joints" data-mode="joints">
-                        🕹️ Khớp Tay
+                        Khớp Tay
                     </button>
                     <button class="mode-tab-btn" id="btn-mode-grippers" data-mode="grippers">
-                        🤏 Tay Kẹp
+                        Tay Kẹp
                     </button>
-                    <button class="mode-tab-btn" id="btn-mode-presets" data-mode="presets" title="Chế độ robot múa và các bài tập nhảy có sẵn cùng tư thế mẫu">
-                        💃 Robot Múa & Presets
+                    <button class="mode-tab-btn" id="btn-mode-presets" data-mode="presets" title="Chế độ bài tập mẫu và tư thế đặt trước">
+                        Bài Tập & Presets
                     </button>
                     <button class="mode-tab-btn" id="btn-mode-target" data-mode="target" title="Nhập góc khớp mong muốn và gửi tín hiệu SDK điều khiển chuyển động">
-                        🎯 Nhập Joint State
+                        Nhập Joint State
                     </button>
                 </div>
             </div>
@@ -144,7 +147,7 @@
                                 <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0)">Đóng (0mm)</button>
                                 <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.0215)">50% (21.5mm)</button>
                                 <button class="btn-gripper-action" onclick="setGripperDirect('right', 0.043)">Mở (43mm)</button>
-                                <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('right')" title="Đảo ngược chiều quay của động cơ kẹp">⇄ Đảo chiều</button>
+                                <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('right')" title="Đảo ngược chiều quay của động cơ kẹp">Đảo chiều</button>
                             </div>
                         </div>
                     </div>
@@ -155,8 +158,8 @@
             <div class="mode-pane" id="pane-presets" style="display: none;">
                 <!-- Preset / Dance Sub-Navigation Bar -->
                 <div class="preset-tab-bar">
-                    <button class="preset-tab-btn active" id="tab-dance-mode" data-sub="dance">💃 Sân Khấu Vũ Điệu (Dance Studio)</button>
-                    <button class="preset-tab-btn" id="tab-poses-mode" data-sub="poses">🎭 Tư Thế Cơ Bản (Basic Poses)</button>
+                    <button class="preset-tab-btn active" id="tab-dance-mode" data-sub="dance">Vũ Điệu (Dance Studio)</button>
+                    <button class="preset-tab-btn" id="tab-poses-mode" data-sub="poses">Tư Thế Cơ Bản (Basic Poses)</button>
                 </div>
 
                 <!-- SUBSECTION A: DANCE STUDIO -->
@@ -195,17 +198,17 @@
                         <!-- Dance Action Controls -->
                         <div class="dance-control-actions">
                             <button class="btn btn-primary btn-dance-action" id="btn-dance-play">
-                                ▶ Bắt Đầu Múa
+                                Bắt Đầu Múa
                             </button>
                             <button class="btn btn-secondary btn-dance-action" id="btn-dance-pause" disabled>
-                                ⏸ Tạm Dừng
+                                Tạm Dừng
                             </button>
                             <button class="btn btn-danger btn-dance-action" id="btn-dance-stop">
-                                ⏹ Dừng & Về Nghỉ
+                                Dừng & Về Nghỉ
                             </button>
                             <label class="dance-loop-toggle" title="Lặp lại điệu nhảy liên tục cho đến khi bấm dừng">
                                 <input type="checkbox" id="dance-loop-checkbox" checked>
-                                <span>🔁 Lặp lại</span>
+                                <span>Lặp lại</span>
                             </label>
                         </div>
 
@@ -213,9 +216,9 @@
                         <div class="dance-tempo-row">
                             <span class="tempo-label">Tốc độ nhịp (Tempo):</span>
                             <div class="tempo-buttons">
-                                <button class="btn-tempo-opt" data-tempo="slow" data-bpm="70">🟢 Chậm (70 BPM)</button>
-                                <button class="btn-tempo-opt active" data-tempo="med" data-bpm="100">🔵 Vừa (100 BPM)</button>
-                                <button class="btn-tempo-opt" data-tempo="fast" data-bpm="130">🟣 Nhanh (130 BPM)</button>
+                                <button class="btn-tempo-opt" data-tempo="slow" data-bpm="70">Chậm (70 BPM)</button>
+                                <button class="btn-tempo-opt active" data-tempo="med" data-bpm="100">Vừa (100 BPM)</button>
+                                <button class="btn-tempo-opt" data-tempo="fast" data-bpm="130">Nhanh (130 BPM)</button>
                             </div>
                         </div>
                     </div>
@@ -225,7 +228,6 @@
                         <!-- Dance 1: Disco Wave -->
                         <div class="dance-card active" data-dance="disco">
                             <div class="dance-card-head">
-                                <span class="dance-card-icon">🕺</span>
                                 <div class="dance-card-meta">
                                     <span class="dance-name">Disco Wave (Sóng Disco)</span>
                                     <span class="dance-tag upbeat">Sôi Động • Đánh tay so le</span>
@@ -234,14 +236,13 @@
                             <p class="dance-desc">Hai tay giơ ngang ngực đánh sóng nhấp nhô so le, cổ tay dập dìu theo nhạc disco và búng kẹp nhịp nhàng.</p>
                             <div class="dance-card-footer">
                                 <span class="dance-diff">Dễ nhảy theo • Điệu múa kinh điển</span>
-                                <span class="dance-select-marker">✓ Đang chọn</span>
+                                <span class="dance-select-marker">Đang chọn</span>
                             </div>
                         </div>
 
                         <!-- Dance 2: Penguin Pop -->
                         <div class="dance-card" data-dance="penguin">
                             <div class="dance-card-head">
-                                <span class="dance-card-icon">🐧</span>
                                 <div class="dance-card-meta">
                                     <span class="dance-name">Penguin Pop (Cánh Cụt)</span>
                                     <span class="dance-tag cute">Hóm Hỉnh • Popping Robot</span>
@@ -257,7 +258,6 @@
                         <!-- Dance 3: Ocean Flow -->
                         <div class="dance-card" data-dance="ocean">
                             <div class="dance-card-head">
-                                <span class="dance-card-icon">🌊</span>
                                 <div class="dance-card-meta">
                                     <span class="dance-name">Ocean Flow (Biển Sóng)</span>
                                     <span class="dance-tag smooth">Uyển Chuyển • Body Wave</span>
@@ -273,7 +273,6 @@
                         <!-- Dance 4: Cheer Up -->
                         <div class="dance-card" data-dance="cheer">
                             <div class="dance-card-head">
-                                <span class="dance-card-icon">🎉</span>
                                 <div class="dance-card-meta">
                                     <span class="dance-name">Cheer Up (Vũ Điệu Cổ Vũ)</span>
                                     <span class="dance-tag energetic">Năng Lượng • Giơ tay chữ V</span>
@@ -289,7 +288,6 @@
                         <!-- Dance 5: Tai Chi Flow -->
                         <div class="dance-card" data-dance="taichi">
                             <div class="dance-card-head">
-                                <span class="dance-card-icon">🥋</span>
                                 <div class="dance-card-meta">
                                     <span class="dance-name">Tai Chi Flow (Thái Cực Quyền)</span>
                                     <span class="dance-tag zen">Dưỡng Sinh • Nhu hòa thư thái</span>
@@ -298,6 +296,51 @@
                             <p class="dance-desc">Động tác đẩy chưởng và xoay ôm quả cầu thái cực nhu hòa, chậm rãi, thư giãn tinh thần mỗi ngày cùng bạn.</p>
                             <div class="dance-card-footer">
                                 <span class="dance-diff">Dễ tập theo • Dưỡng sinh thư thái</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 6: Changquan Strike -->
+                        <div class="dance-card" data-dance="changquan">
+                            <div class="dance-card-head">
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Changquan (Trường Quyền Wushu)</span>
+                                    <span class="dance-tag energetic">Võ Thuật • Đấm & Xuất Quyền</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Vung quyền xuất thế, thu thủ thủ thế dứt khoát mô phỏng chuyển động võ thuật từ KungfuAthleteBot.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Nhanh dứt khoát • Quyền pháp Wushu</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 7: Cloud Sword -->
+                        <div class="dance-card" data-dance="sword">
+                            <div class="dance-card-head">
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Cloud Sword (Kiếm Pháp Wushu)</span>
+                                    <span class="dance-tag smooth">Võ Thuật • Múa Kiếm Song Thủ</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Múa kiếm vạch mây theo quỹ đạo số 8 uyển chuyển, biến ảo cổ tay điêu luyện như kiếm sĩ thực thụ.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Kỹ năng cao • Kiếm pháp uyển chuyển</span>
+                                <span class="dance-select-marker">Chọn điệu này</span>
+                            </div>
+                        </div>
+
+                        <!-- Dance 8: Shaolin Staff -->
+                        <div class="dance-card" data-dance="staff">
+                            <div class="dance-card-head">
+                                <div class="dance-card-meta">
+                                    <span class="dance-name">Shaolin Staff (Thiếu Lâm Côn Pháp)</span>
+                                    <span class="dance-tag upbeat">Võ Thuật • Loan Hoa Côn</span>
+                                </div>
+                            </div>
+                            <p class="dance-desc">Song thủ múa côn xoay tròn, đỡ gạt quét ngang dũng mãnh theo bài côn thuật Thiếu Lâm kinh điển.</p>
+                            <div class="dance-card-footer">
+                                <span class="dance-diff">Mạnh mẽ • Côn thuật dũng mãnh</span>
                                 <span class="dance-select-marker">Chọn điệu này</span>
                             </div>
                         </div>
@@ -310,13 +353,27 @@
                     <div class="preset-section">
                         <h3>Tư Thế & Chuyển Động Mẫu Cơ Bản</h3>
                         <div class="preset-btn-group">
-                            <button class="btn-preset active" data-preset="home">🏠 Về Nghỉ / Hang (0 rad)</button>
-                            <button class="btn-preset" data-preset="ready">🎯 Tư Thế Chuẩn Bị (Ready)</button>
-                            <button class="btn-preset" data-preset="wave">👋 Vẫy Tay (Wave)</button>
-                            <button class="btn-preset" data-preset="clap">🤝 Bắt Tay (Handshake)</button>
-                            <button class="btn-preset" data-preset="carry">📦 Nâng Đôi (Dual Lift)</button>
-                            <button class="btn-preset" data-preset="sine">〰️ Dao Động Sine (Sine)</button>
-                            <button class="btn-preset btn-preset-stop" data-preset="stop">🛑 Dừng Lại (Stop)</button>
+                            <button class="btn-preset active" data-preset="home">Về Nghỉ / Hang (0 rad)</button>
+                            <button class="btn-preset" data-preset="ready">Tư Thế Chuẩn Bị (Ready)</button>
+                            <button class="btn-preset" data-preset="wave">Vẫy Tay (Wave)</button>
+                            <button class="btn-preset" data-preset="clap">Bắt Tay (Handshake)</button>
+                            <button class="btn-preset" data-preset="carry">Nâng Đôi (Dual Lift)</button>
+                            <button class="btn-preset" data-preset="sine">Dao Động Sine (Sine)</button>
+                            <button class="btn-preset btn-preset-stop" data-preset="stop">Dừng Lại (Stop)</button>
+                        </div>
+                    </div>
+
+                    <!-- Kungfu Athlete Motion Trajectories (LuluCao/KungfuAthleteBot) -->
+                    <div class="preset-section kungfu-section" style="margin-top: 18px;">
+                        <div class="section-subhead">
+                            <h3>Võ Thuật Kung Fu (Kungfu Athlete Bot Mocap)</h3>
+                            <span class="badge badge-accent">Quy chuẩn 3 bước: Trạng thái hiện tại -> Về 0 -> Chạy quỹ đạo</span>
+                        </div>
+                        <div class="preset-btn-group">
+                            <button class="btn-preset btn-preset-kungfu" onclick="triggerKungfuRoutine('tai_chi_quan')">Thái Cực Quyền (Tai Chi)</button>
+                            <button class="btn-preset btn-preset-kungfu" onclick="triggerKungfuRoutine('chang_quan')">Trường Quyền (Changquan)</button>
+                            <button class="btn-preset btn-preset-kungfu" onclick="triggerKungfuRoutine('cloud_sword')">Võ Thuật Kiếm Pháp (Cloud Sword)</button>
+                            <button class="btn-preset btn-preset-kungfu" onclick="triggerKungfuRoutine('elementary_staff')">Thiếu Lâm Côn Pháp (Shaolin Staff)</button>
                         </div>
                     </div>
 
@@ -350,8 +407,8 @@
                         <button class="btn-unit-opt" id="btn-unit-rad" data-unit="rad">Radian (rad)</button>
                     </div>
                     <div class="target-quick-tools">
-                        <button class="btn-subtle-sm" id="btn-target-copy-current" title="Tự động đọc các góc khớp hiện tại của robot vào bảng">📥 Lấy góc hiện tại</button>
-                        <button class="btn-subtle-sm" id="btn-target-zero" title="Đặt lại toàn bộ các ô về 0">🎯 Về 0</button>
+                        <button class="btn-subtle-sm" id="btn-target-copy-current" title="Tự động đọc các góc khớp hiện tại của robot vào bảng">Lấy góc hiện tại</button>
+                        <button class="btn-subtle-sm" id="btn-target-zero" title="Đặt lại toàn bộ các ô về 0">Về 0</button>
                     </div>
                 </div>
 
@@ -364,7 +421,6 @@
                 <!-- View A: Form Table Inputs for Left & Right Arms -->
                 <div id="target-view-table" class="target-view-section">
                     <div class="target-limit-notice">
-                        <span class="notice-icon">🛡️</span>
                         <span class="notice-text"><strong>Giới hạn khớp (Joint Limits)</strong>: Ngưỡng an toàn cơ học hiển thị bên cạnh mỗi khớp. Nếu nhập vượt ngưỡng, ô sẽ báo đỏ và tự động kẹp về góc an toàn để chống quay quá khớp.</span>
                     </div>
                     <div class="target-dual-grid">
@@ -559,10 +615,10 @@
                 <!-- Execution Button (Big Primary) & Stop -->
                 <div class="target-action-box">
                     <button class="btn btn-primary btn-execute-target" id="btn-execute-target-pose">
-                        🚀 GỬI TÍN HIỆU SDK & CHUYỂN ĐỘNG
+                        GỬI TÍN HIỆU SDK & CHUYỂN ĐỘNG
                     </button>
                     <button class="btn btn-danger btn-compact" id="btn-target-stop">
-                        🛑 Dừng Lại
+                        Dừng Lại
                     </button>
                 </div>
 
@@ -581,16 +637,19 @@
             <!-- COLLAPSIBLE ACCORDION: MỤC HIỂN THỊ THÊM (ADVANCED ACTIONS) -->
             <details class="more-actions-details">
                 <summary class="more-actions-summary">
-                    <span>⚙️ Hiển thị thêm tùy chọn & Tác vụ nâng cao</span>
+                    <span>Tùy chọn & Tác vụ nâng cao</span>
                     <span class="summary-arrow">▼</span>
                 </summary>
                 <div class="more-actions-content">
                     <div class="more-actions-buttons">
-                        <button class="btn btn-secondary" id="btn-zero-all" title="Gán vị trí hiện tại thành điểm 0 (Set Zero All)">
-                            🎯 Đặt Lại Điểm Zero (Set Zero All)
+                        <button class="btn btn-warning" id="btn-zero-all" title="Đưa toàn bộ 14 khớp và 2 kẹp về vị trí 0 (0.0 rad, 0 mm) với lực giữ vững chắc">
+                            Đưa Về Zero Pose (0 rad)
                         </button>
                         <button class="btn btn-secondary" id="btn-clear-err" title="Gửi lệnh 0xFB xóa cờ lỗi driver động cơ">
-                            🧹 Xóa Lỗi Động Cơ (Clear Errors)
+                            Xóa Lỗi Động Cơ (Clear Errors)
+                        </button>
+                        <button class="btn btn-secondary" id="btn-calibrate-hw-zero" title="LƯU Ý BẢO DƯỠNG: Căn chỉnh lại điểm 0 cơ khí thực tế (Lệnh 0xFE ghi vào NVRAM motor)" style="grid-column: span 2; font-size: 0.78rem; opacity: 0.85; margin-top: 4px;">
+                            Căn Chỉnh Gốc 0 Cơ Khí (0xFE Hardware Calibration)
                         </button>
                     </div>
                     <!-- Hidden compatibility button for JS references -->
@@ -653,7 +712,7 @@
                     <div class="telem-header-left">
                         <span class="telem-arrow-indicator" id="telem-arrow">▶</span>
                         <h2>Thông Số 16 Động Cơ (Live Telemetry)</h2>
-                        <span class="badge badge-success" id="telem-summary-badge">🟢 16 Động cơ • 400Hz</span>
+                        <span class="badge badge-success" id="telem-summary-badge">16 Động cơ • 400Hz</span>
                     </div>
                     <div class="telem-header-right">
                         <div class="telem-tabs" id="telem-tabs-group" style="display: none;">
@@ -661,23 +720,25 @@
                             <button class="telem-tab-btn" data-filter="left">Tay Trái (7+1)</button>
                             <button class="telem-tab-btn" data-filter="right">Tay Phải (7+1)</button>
                         </div>
-                        <button class="btn-tool" id="btn-toggle-telem-expand">Mở rộng ▲</button>
+                        <button class="btn-tool" id="btn-toggle-telem-expand">Mở rộng</button>
                     </div>
                 </div>
-                <!-- 100Hz Joint State Continuous Exporter Widget Bar -->
-                <div class="export-widget-bar" id="export-widget-bar">
+                <!-- Joint State Record (100Hz) Bar -->
+                <div class="export-widget-bar record-widget-bar" id="export-widget-bar">
                     <div class="export-widget-left">
-                        <span class="export-status-dot active" id="export-dot"></span>
+                        <span class="export-status-dot idle" id="export-dot"></span>
                         <div class="export-text-group">
-                            <span class="export-main-title">Xuất Dữ Liệu Khớp 100Hz (Auto-Export)</span>
-                            <span class="export-sub-info" id="export-sub-info">Tần số: 100.0 Hz • Đang ghi: exports/joint_states_...csv • Cổng UDP: 9871</span>
+                            <span class="export-main-title" id="record-main-title">Ghi Dữ Liệu Khớp HDF5 (Joint State Record • 100Hz)</span>
+                            <span class="export-sub-info" id="export-sub-info">Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu HDF5 (.hdf5) • Cổng UDP: 9871</span>
                         </div>
                     </div>
                     <div class="export-widget-right">
-                        <span class="badge badge-accent" id="export-samples-badge">0 mẫu (0.0s)</span>
-                        <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file CSV 100Hz hiện tại về máy" download>📥 Tải CSV</a>
-                        <button class="btn-subtle-sm" id="btn-export-new" title="Kết thúc file hiện tại và mở file ghi 100Hz mới">🔁 File mới</button>
-                        <button class="btn-subtle-sm" id="btn-export-toggle" title="Tạm dừng hoặc Tiếp tục ghi">⏸ Tạm dừng</button>
+                        <span class="badge badge-outline" id="export-samples-badge">Chờ bắt đầu</span>
+                        <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file HDF5 (.hdf5) vừa ghi về máy" download>Tải HDF5</a>
+                        <button class="btn-record-main" id="btn-record-toggle" title="Bắt đầu hoặc Dừng Record">
+                            <span class="rec-icon" id="btn-record-icon">●</span>
+                            <span id="btn-record-text">Bắt đầu Record</span>
+                        </button>
                     </div>
                 </div>
                 <div class="telemetry-grid" id="telemetry-grid" style="display: none;">

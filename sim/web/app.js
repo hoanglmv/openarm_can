@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. Initialize Robot Dance Studio Subsystem
     initDanceEngine();
 
-    console.log("✓ OpenArm Modular Dashboard initialized successfully.");
+    console.log("[INIT] OpenArm Modular Dashboard initialized successfully.");
 });
 
 function initCameraFeed() {

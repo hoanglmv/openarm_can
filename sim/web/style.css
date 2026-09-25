@@ -365,12 +365,12 @@ body.theme-light .badge-success {
     padding: 10px;
 }
 
-/* Quick Action Bar (3 Primary Safety Buttons) */
+/* Quick Action Bar (4 Primary Safety Buttons) */
 .quick-action-bar {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 6px;
-    margin-bottom: 2px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-bottom: 3px;
 }
 
 /* Control Mode Selector Tabs */
@@ -550,6 +550,14 @@ body.theme-light .badge-success {
     background-color: var(--accent-blue-hover);
 }
 
+.btn-warning {
+    background-color: #d97706;
+    color: #ffffff;
+}
+.btn-warning:hover {
+    background-color: #b45309;
+}
+
 .btn-secondary {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -610,6 +618,23 @@ body.theme-light .btn-preset-stop {
     background-color: #fee2e2;
     border-color: #fca5a5;
     color: #991b1b;
+}
+
+.btn-preset-kungfu {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(217, 119, 6, 0.08));
+    border-color: rgba(234, 88, 12, 0.35);
+    color: #fb923c;
+    font-weight: 500;
+}
+.btn-preset-kungfu:hover {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.22), rgba(217, 119, 6, 0.16));
+    border-color: #ea580c;
+    color: #fdba74;
+}
+body.theme-light .btn-preset-kungfu {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
 }
 
 /* Velocity Control Section */
@@ -2574,5 +2599,69 @@ body.theme-light .export-widget-bar {
     display: inline-flex;
     align-items: center;
     gap: 3px;
+}
+
+/* Joint State Record UI */
+.export-status-dot.recording {
+    background-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.9);
+    animation: pulse-dot-red 1s infinite alternate;
+}
+
+@keyframes pulse-dot-red {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 12px rgba(239, 68, 68, 1); }
+}
+
+.btn-record-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 6px);
+    cursor: pointer;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    transition: all 0.2s ease;
+}
+
+.btn-record-main:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.btn-record-main .rec-icon {
+    font-size: 13px;
+    line-height: 1;
+    display: inline-block;
+}
+
+.btn-record-main.recording {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #b91c1c;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+    animation: pulse-rec-btn 1.4s infinite;
+}
+
+.btn-record-main.recording:hover {
+    background: #b91c1c;
+    border-color: #991b1b;
+}
+
+@keyframes pulse-rec-btn {
+    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.badge-export.recording {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.4);
 }
 

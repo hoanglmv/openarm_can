@@ -305,16 +305,16 @@ class RosImageSubscriber(Node):
         )
         self.get_logger().info(f"Subscribed to primary camera topic: {primary_topic}")
 
-        # Fallback subscription to raw RealSense color if primary is different
-        fallback_topic = "/camera/camera/color/image_raw"
-        self.sub_fallback = None
-        if primary_topic != fallback_topic:
-            self.sub_fallback = self.create_subscription(
-                Image, fallback_topic, self._on_fallback_image, qos
-            )
-            self.get_logger().info(
-                f"Subscribed to raw fallback camera topic: {fallback_topic}"
-            )
+        # Fallback subscriptions to raw RealSense color topics if primary is different
+        fallback_topics = ["/camera/camera/color/image_raw", "/camera/color/image_raw"]
+        self.sub_fallbacks = []
+        for fb_topic in fallback_topics:
+            if primary_topic != fb_topic:
+                sub = self.create_subscription(
+                    Image, fb_topic, self._on_fallback_image, qos
+                )
+                self.sub_fallbacks.append(sub)
+                self.get_logger().info(f"Subscribed to raw fallback camera topic: {fb_topic}")
 
     def _process_frame(self, message: Image) -> bytes:
         frame = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")

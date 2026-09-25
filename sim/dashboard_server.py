@@ -81,6 +81,33 @@ except ImportError:
     from .motor_simulator import DamiaoArmSimulator
 
 
+# Default high-stiffness / well-damped gains tailored to each actuator's torque capability:
+# DM8009 (J1, J2): 54 Nm rated, needs firm Kp=75.0, Kd=2.8 to prevent gravity sag on heavy shoulder
+# DM4340 (J3, J4): 28 Nm rated, arm twist and elbow pitch Kp=50.0, Kd=2.0
+# DM4310 (J5, J6, J7): 10 Nm rated, wrist motors Kp=30.0, Kd=1.0
+# DM4310 (J8, J16): Gripper actuators Kp=45.0, Kd=1.5
+DEFAULT_GAINS: Dict[int, Dict[str, float]] = {
+    # Left Arm
+    1: {"kp": 75.0, "kd": 2.8},
+    2: {"kp": 75.0, "kd": 2.8},
+    3: {"kp": 50.0, "kd": 2.0},
+    4: {"kp": 50.0, "kd": 2.0},
+    5: {"kp": 30.0, "kd": 1.0},
+    6: {"kp": 30.0, "kd": 1.0},
+    7: {"kp": 30.0, "kd": 1.0},
+    8: {"kp": 45.0, "kd": 1.5},
+    # Right Arm
+    9:  {"kp": 75.0, "kd": 2.8},
+    10: {"kp": 75.0, "kd": 2.8},
+    11: {"kp": 50.0, "kd": 2.0},
+    12: {"kp": 50.0, "kd": 2.0},
+    13: {"kp": 30.0, "kd": 1.0},
+    14: {"kp": 30.0, "kd": 1.0},
+    15: {"kp": 30.0, "kd": 1.0},
+    16: {"kp": 45.0, "kd": 1.5},
+}
+
+
 class OpenArmDashboardServer:
     """Core server orchestrating hardware/simulator, web server, and realtime comms."""
 
@@ -102,12 +129,14 @@ class OpenArmDashboardServer:
             self.hw = DamiaoArmSimulator("vcan0")
             self.motors = self.hw.motors
 
-        # Initialize smooth command states
+        # Initialize smooth command states and optimal motor gains
         for m in self.motors.values():
             m.q_target = 0.0
             m.q_cmd = 0.0
-            m.kp = 18.0
-            m.kd = 2.0
+            gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+            m.kp = gains["kp"]
+            m.kd = gains["kd"]
+            m.tau_ff = 0.0
 
         # Camera & ACT ROS 2 Bridge processes
         self.camera_process = None
@@ -128,6 +157,8 @@ class OpenArmDashboardServer:
         export_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
         self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=UDP_EXPORT_PORT)
         self.loop = None
+        self.active_trajectory_id = 0
+        self.trajectory_lock = threading.Lock()
 
     def start(self):
         """Start all background services, threads, and WebSocket server."""
@@ -167,11 +198,9 @@ class OpenArmDashboardServer:
         self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
         self.udp_thread.start()
 
-        # 8. Start continuous 100Hz Joint State Exporter thread
+        # 8. Start continuous 100Hz Joint State Exporter thread (waits for manual Record)
         self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
         self.export_thread.start()
-        if self.mode == "real":
-            self.exporter.start_session("robot_boot")
 
         # 9. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
@@ -182,10 +211,40 @@ class OpenArmDashboardServer:
             print("[Camera] Driver disabled by --no-camera")
             return
 
+        if "--remote-camera" in sys.argv or os.environ.get("OPENARM_REMOTE_CAMERA") == "1":
+            print("[Camera] Remote camera mode active: skipping local RealSense USB driver, receiving topics over ROS 2 network.")
+            return
+
         ros2 = shutil.which("ros2")
         if not ros2:
             print("[Camera] ros2 CLI not found; skipping RealSense launch")
             return
+
+        # Check if running under WSL2 without local USB attached
+        is_wsl = False
+        try:
+            with open("/proc/version", "r") as f:
+                if "microsoft" in f.read().lower():
+                    is_wsl = True
+        except Exception:
+            pass
+
+        if is_wsl:
+            has_realsense_usb = False
+            for p in glob.glob("/sys/bus/usb/devices/*/idVendor"):
+                try:
+                    with open(p, "r") as vf:
+                        if vf.read().strip() == "8086":
+                            has_realsense_usb = True
+                            break
+                except Exception:
+                    pass
+            if not has_realsense_usb:
+                print("[Camera] WSL2 detected without local RealSense USB device attached.")
+                print("[Camera] -> If RealSense is connected to Windows host: run scripts/attach_camera.bat (Run as Administrator).")
+                print("[Camera] -> If RealSense is connected to Ubuntu machine on LAN: ensure matching ROS_DOMAIN_ID.")
+                print("[Camera] Skipping local RealSense driver to avoid USB error. ROS 2 image bridge will continue listening.")
+                return
 
         try:
             subprocess.run(
@@ -536,7 +595,6 @@ class OpenArmDashboardServer:
                     self.mode = "real"
                     print(f"[USB] Kết nối thành công! Đang ở chế độ REAL ROBOT HARDWARE MODE ({self.can0_if}/{self.can1_if})")
                     self.hw.query_all_physical()
-                    self.exporter.start_session("usb_connected")
                 except Exception as e:
                     print(f"[USB Switch Error]: {e}")
 
@@ -737,6 +795,246 @@ class OpenArmDashboardServer:
         finally:
             self.clients.discard(websocket)
 
+    def _send_gripper_command(self, m, pos_m: float):
+        """
+        Send robust gripper command to physical robot / sim.
+        Maps linear stroke (0.0 .. 0.043 m) to motor angle:
+          - Left Gripper (Motor 8, can1): 0.0 rad (closed) to -1.20 rad (open 43 mm)
+          - Right Gripper (Motor 16, can0): +1.20 rad (closed) to 0.0 rad (open 43 mm)
+        Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
+        and MIT mode fallback.
+        """
+        safe_pos = min(0.043, max(0.0, pos_m))
+        stroke_ratio = safe_pos / 0.043
+        invert = self.gripper_invert.get(m.id, False)
+
+        # Left Arm Gripper (Motor 8): 0.0 rad (closed, 0mm) to -1.20 rad (open, 43mm)
+        # Right Arm Gripper (Motor 16): +1.20 rad (closed, 0mm) to 0.0 rad (open, 43mm)
+        is_left = (m.id == 8 or getattr(m, 'arm', '') == "left")
+        if is_left:
+            ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+            rad_target = -ratio * 1.20
+        else:
+            ratio = stroke_ratio if invert else (1.0 - stroke_ratio)
+            rad_target = ratio * 1.20
+
+        if not m.enabled:
+            m.enabled = True
+            if self.mode == "real":
+                self.hw.init_gripper_motor(m.id, save_flash=False)
+        elif m.error_code >= 8:
+            if self.mode == "real":
+                self.hw.init_gripper_motor(m.id, save_flash=False)
+            m.error_code = 1
+
+        m.q_target = rad_target
+        m.q_cmd = rad_target
+
+        if self.mode == "real":
+            # 1. Primary: POS_FORCE mode frame on m.send_id + 0x300 (0x308)
+            # Speed limit: 10.0 rad/s (vel_uint = 1000)
+            # Safe torque current limit: 15% (i_uint = 1500 ~ 1.5 Nm)
+            posforce_can_id = m.send_id + 0x300
+            vel_uint = 1000  # 10.0 rad/s
+            i_uint = 1500    # 15% current limit (1.5 Nm safe limit)
+            posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+            self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+
+            # 2. Secondary: MIT mode frame fallback on m.send_id (0x08)
+            q_uint = double_to_uint(rad_target, -m.pMax, m.pMax, 16)
+            dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+            kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
+            kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
+            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+            d0 = (q_uint >> 8) & 0xFF
+            d1 = q_uint & 0xFF
+            d2 = (dq_uint >> 4) & 0xFF
+            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+            d4 = kp_uint & 0xFF
+            d5 = (kd_uint >> 4) & 0xFF
+            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+            d7 = tau_uint & 0xFF
+            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+            self.hw.send_frame(m.can_if, m.send_id, mit_data)
+
+            # 3. State query frame
+            refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+            self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+
+        can_name = getattr(m, 'can_if', 'vcan0')
+        print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {safe_pos*1000:.1f} mm ({rad_target:.3f} rad)")
+
+    def _set_single_joint_target(self, motor_id: int, val: float):
+        """Set target for a single motor (arm joint or gripper)."""
+        m = self.motors.get(motor_id)
+        if not m:
+            return
+        if motor_id in [8, 16]:
+            pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
+            self._send_gripper_command(m, pos_m)
+        else:
+            lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
+            q = max(lim[0], min(lim[1], val))
+            gains = DEFAULT_GAINS.get(motor_id, {"kp": 35.0, "kd": 1.5})
+            m.kp = gains["kp"]
+            m.kd = gains["kd"]
+            if not m.enabled:
+                m.enabled = True
+                m.q_cmd = m.q
+                if self.mode == "real":
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            m.q_target = q
+
+    def _execute_trajectory(self, traj_points: list, joint_names: list, traj_id: int):
+        """
+        Execute trajectory according to safe 3-phase sequence:
+        1. Read current robot state (Đọc trạng thái hiện tại từ robot)
+        2. Drive all joints smoothly to Zero Pose (Đưa tất cả trạng thái về 0)
+        3. Then execute trajectory waypoints (Rồi mới thực hiện trajectory)
+        """
+        if not traj_points:
+            return
+
+        print(f"[Trajectory #{traj_id}] === BẮT ĐẦU CHU KỲ QUỸ ĐẠO AN TOÀN (3 BƯỚC) ===")
+
+        # -------------------------------------------------------------
+        # BƯỚC 1: ĐỌC TRẠNG THÁI HIỆN TẠI TỪ ROBOT
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 1/3: Đang đọc trạng thái góc khớp thực tế từ robot...")
+        if self.mode == "real":
+            self.hw.query_all_physical()
+            time.sleep(0.06)
+
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.enabled = True
+                m.error_code = 1
+                m.q_cmd = m.q  # bám sát góc vật lý hiện tại
+                gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                m.kp = gains["kp"]
+                m.kd = gains["kd"]
+
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info", "Trajectory (1/3): Đã đọc trạng thái góc khớp hiện tại từ robot."),
+                self.loop
+            )
+
+        if not self.running or self.active_trajectory_id != traj_id:
+            return
+
+        # -------------------------------------------------------------
+        # BƯỚC 2: ĐƯA TẤT CẢ TRẠNG THÁI VỀ 0
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 2/3: Đang đưa tất cả các khớp về Zero Pose (0.0 rad / 0 mm)...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info", "Trajectory (2/3): Đang đưa tất cả các khớp về Zero Pose trước khi chạy quỹ đạo..."),
+                self.loop
+            )
+
+        # Kích hoạt đưa về 0
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.q_target = 0.0
+                m.tau_ff = 0.0
+
+        if self.mode == "real":
+            for gid in [8, 16]:
+                m = self.motors.get(gid)
+                if m:
+                    self._send_gripper_command(m, 0.0)
+
+        # Chờ các khớp về 0 an toàn (với timeout tối đa 8 giây)
+        t_zero_start = time.perf_counter()
+        zero_timeout = 8.0
+        while self.running and (self.active_trajectory_id == traj_id):
+            now_t = time.perf_counter()
+            if now_t - t_zero_start > zero_timeout:
+                print(f"[Trajectory #{traj_id}] Cảnh báo: Hết thời gian chờ về 0, chuyển sang thực thi quỹ đạo.")
+                break
+
+            # Kiểm tra xem toàn bộ các khớp tay đã về gần 0 chưa
+            all_near_zero = True
+            with self.hw.lock:
+                for mid in range(1, 17):
+                    m = self.motors.get(mid)
+                    if m and m.joint_idx != 8:
+                        if abs(m.q_cmd) > 0.02 or abs(m.q) > 0.05:
+                            all_near_zero = False
+                            break
+
+            if all_near_zero:
+                print(f"[Trajectory #{traj_id}] Đã về Zero Pose thành công! Ổn định góc...")
+                break
+
+            time.sleep(0.01)
+
+        # Dừng 0.25 giây ở Zero Pose để robot triệt tiêu hoàn toàn quán tính
+        time.sleep(0.25)
+
+        if not self.running or self.active_trajectory_id != traj_id:
+            return
+
+        # -------------------------------------------------------------
+        # BƯỚC 3: RỒI MỚI THỰC HIỆN TRAJECTORY
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 3/3: Bắt đầu thực thi các điểm quỹ đạo Trajectory...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("success", "Trajectory (3/3): Đã về Zero Pose an toàn. Bắt đầu thực thi quỹ đạo!"),
+                self.loop
+            )
+
+        sorted_pts = sorted(traj_points, key=lambda p: p.get("time", 0.0))
+        start_time = time.perf_counter()
+        total_duration = sorted_pts[-1].get("time", 0.0)
+
+        joint_ids = []
+        for name in joint_names:
+            mid = JOINT_NAME_TO_ID.get(str(name).lower())
+            joint_ids.append(mid)
+
+        idx = 0
+        while self.running and (self.active_trajectory_id == traj_id):
+            now_rel = time.perf_counter() - start_time
+            if now_rel >= total_duration:
+                final_pt = sorted_pts[-1]
+                positions = final_pt.get("positions", [])
+                for mid, pos in zip(joint_ids, positions):
+                    if mid:
+                        self._set_single_joint_target(mid, pos)
+                break
+
+            while idx < len(sorted_pts) - 1 and sorted_pts[idx + 1].get("time", 0.0) < now_rel:
+                idx += 1
+
+            p0 = sorted_pts[idx]
+            p1 = sorted_pts[min(idx + 1, len(sorted_pts) - 1)]
+            t0 = p0.get("time", 0.0)
+            t1 = p1.get("time", 0.0)
+            pos0 = p0.get("positions", [])
+            pos1 = p1.get("positions", [])
+
+            alpha = 0.0
+            if t1 > t0:
+                alpha = min(1.0, max(0.0, (now_rel - t0) / (t1 - t0)))
+
+            for i, mid in enumerate(joint_ids):
+                if mid and i < len(pos0) and i < len(pos1):
+                    interp_pos = pos0[i] + alpha * (pos1[i] - pos0[i])
+                    self._set_single_joint_target(mid, interp_pos)
+
+            time.sleep(0.005)  # 200 Hz interpolation
+
+        if self.running and (self.active_trajectory_id == traj_id):
+            print(f"[Trajectory #{traj_id}] Hoàn thành toàn bộ quỹ đạo trajectory.")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice("success", "Trajectory: Đã hoàn thành thực thi toàn bộ quỹ đạo."),
+                    self.loop
+                )
+
     async def handle_action(self, action: str, payload: dict, ws):
         """Process incoming dashboard commands (enable/disable, zero calibration, MIT, Gripper, USB)."""
         if action == "connect_usb":
@@ -747,14 +1045,32 @@ class OpenArmDashboardServer:
             print("[Command] Disconnect USB Robot requested from Web UI")
             threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
 
-        elif action == "export_toggle":
+        elif action in ["record_start", "export_start"]:
+            self.exporter.start_session("record")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+
+        elif action in ["record_stop", "export_stop"]:
+            prev_samples = self.exporter.samples
+            prev_name = self.exporter.file_name or "joint_states"
+            self.exporter.close_session()
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+
+        elif action in ["record_toggle", "export_toggle"]:
             if self.exporter.active:
+                prev_samples = self.exporter.samples
+                prev_name = self.exporter.file_name or "joint_states"
                 self.exporter.close_session()
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
             else:
-                self.exporter.start_session("manual")
+                self.exporter.start_session("record")
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
 
         elif action == "export_new_session":
-            self.exporter.start_session("manual")
+            self.exporter.start_session("record")
 
         elif action == "sync_robot_state":
             print("[Command] Sync state from physical robot requested")
@@ -784,6 +1100,9 @@ class OpenArmDashboardServer:
                     m.q_cmd = m.q
                     m.q_target = m.q
                     m.q_des = m.q
+                    gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                    m.kp = gains["kp"]
+                    m.kd = gains["kd"]
             if self.mode == "real":
                 def _bg_enable():
                     for m in self.motors.values():
@@ -800,6 +1119,7 @@ class OpenArmDashboardServer:
 
         elif action == "disable_all":
             print("[Command] Disarm / Disable All Motors")
+            self.active_preset = None
             with self.hw.lock:
                 for m in self.motors.values():
                     m.enabled = False
@@ -825,6 +1145,9 @@ class OpenArmDashboardServer:
                     m.q_cmd = m.q
                     m.q_target = m.q
                     m.q_des = m.q
+                    gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                    m.kp = gains["kp"]
+                    m.kd = gains["kd"]
                 if self.mode == "real":
                     if m.joint_idx == 8:
                         self.hw.init_gripper_motor(m.id, save_flash=False)
@@ -851,8 +1174,24 @@ class OpenArmDashboardServer:
                     m.error_code = 0
                     self.hw._send_can(m.send_id, bytes([0xFF] * 7 + [0xFD]))
 
-        elif action == "set_zero_all":
-            print("[Command] Set Zero All")
+        elif action in ["go_to_zero_pose", "set_zero_all"]:
+            calibrate_hw = payload.get("calibrate_hardware", False)
+            if calibrate_hw:
+                print("[Command] Hardware 0xFE calibration explicitly requested!")
+                if self.mode == "real":
+                    threading.Thread(target=self._exec_set_zero_all, daemon=True).start()
+                else:
+                    for m in self.hw.motors.values():
+                        m.q = 0.0
+                        m.dq = 0.0
+                        m.q_des = 0.0
+                        self.hw._send_can(m.send_id, bytes([0xFF] * 7 + [0xFE]))
+            else:
+                print("[Command] Go To Zero Pose (0.0 rad, holding torque active)")
+                threading.Thread(target=self._exec_go_to_zero_pose, daemon=True).start()
+
+        elif action in ["calibrate_mechanical_zero", "calibrate_hardware_zero"]:
+            print("[Command] Mechanical 0xFE calibration explicitly requested")
             if self.mode == "real":
                 threading.Thread(target=self._exec_set_zero_all, daemon=True).start()
             else:
@@ -864,21 +1203,29 @@ class OpenArmDashboardServer:
 
         elif action == "set_zero_single":
             motor_id = int(payload.get("id", 1))
+            calibrate_hw = payload.get("calibrate_hardware", False)
             m = self.motors.get(motor_id)
             if m:
-                print(f"[Command] Set Zero Single Motor {motor_id}")
-                if self.mode == "real":
-                    threading.Thread(target=self._exec_set_zero_single, args=(m,), daemon=True).start()
+                if calibrate_hw:
+                    print(f"[Hardware] 0xFE calibration for Single Motor {motor_id}")
+                    if self.mode == "real":
+                        threading.Thread(target=self._exec_set_zero_single, args=(m,), daemon=True).start()
+                    else:
+                        m.q = 0.0
+                        m.dq = 0.0
+                        m.q_des = 0.0
                 else:
-                    m.q = 0.0
-                    m.dq = 0.0
-                    m.q_des = 0.0
+                    print(f"[Command] Drive Single Motor {motor_id} to 0.0 rad")
+                    self._set_single_joint_target(motor_id, 0.0)
 
         elif action == "clear_error_all":
             print("[Command] Clear Errors")
             if self.mode == "real":
                 for m in self.motors.values():
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                    if m.joint_idx == 8:
+                        time.sleep(0.01)
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             else:
                 for m in self.hw.motors.values():
                     m.error_code = 0
@@ -888,42 +1235,17 @@ class OpenArmDashboardServer:
             motor_id = int(payload.get("id", 1))
             q_raw = float(payload.get("q", 0.0))
 
-            # If Joint 8 received via set_mit, route to set_gripper logic
+            # If Joint 8 or 16 received via set_mit, route to gripper logic
             if motor_id in [8, 16]:
                 m = self.motors.get(motor_id)
                 if m:
                     pos_m = q_raw / 1000.0 if (q_raw > 0.043 and q_raw <= 43.0) else q_raw
-                    safe_pos = min(0.0415, max(0.0, pos_m))
-                    invert = self.gripper_invert.get(m.id, False)
-                    stroke_ratio = safe_pos / 0.0415
-                    ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                    rad_target = ratio * 1.15
-
-                    if not m.enabled:
-                        m.enabled = True
-                        if self.mode == "real":
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    elif m.error_code >= 8:
-                        if self.mode == "real":
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                            time.sleep(0.01)
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                        m.error_code = 1
-
-                    m.q_target = rad_target
-                    m.q_cmd = rad_target
-                    if self.mode == "real":
-                        posforce_can_id = m.send_id + 0x300
-                        vel_uint = 2500  # 25.0 rad/s
-                        i_uint = 2200    # 22% safe current limit
-                        posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                        self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                        refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                        self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+                    self._send_gripper_command(m, pos_m)
                 return
 
-            kp = float(payload.get("kp", 18.0))
-            kd = float(payload.get("kd", 2.0))
+            default_g = DEFAULT_GAINS.get(motor_id, {"kp": 35.0, "kd": 1.5})
+            kp = float(payload.get("kp", default_g["kp"]))
+            kd = float(payload.get("kd", default_g["kd"]))
             tau = float(payload.get("tau", 0.0))
 
             motor = self.motors.get(motor_id)
@@ -970,37 +1292,7 @@ class OpenArmDashboardServer:
                         target_motors.append(m)
 
             for m in target_motors:
-                safe_pos = min(0.0415, max(0.0, pos))
-                invert = self.gripper_invert.get(m.id, False)
-                stroke_ratio = safe_pos / 0.0415
-                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                rad_target = ratio * 1.15
-
-                if not m.enabled:
-                    m.enabled = True
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                elif m.error_code >= 8:
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        time.sleep(0.01)
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    m.error_code = 1
-
-                m.q_target = rad_target
-                m.q_cmd = rad_target
-
-                if self.mode == "real":
-                    posforce_can_id = m.send_id + 0x300
-                    vel_uint = 2500  # 25.0 rad/s
-                    i_uint = 2200    # 22% safe current limit
-                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
-
-                can_name = getattr(m, 'can_if', 'vcan0')
-                print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {pos*1000:.1f} mm ({rad_target:.3f} rad)")
+                self._send_gripper_command(m, pos)
 
         elif action == "toggle_gripper_invert":
             target_id = int(payload.get("id", 8))
@@ -1009,6 +1301,14 @@ class OpenArmDashboardServer:
             if m:
                 m.invert = self.gripper_invert[target_id]
             print(f"[Gripper] Motor {target_id} invert set to: {self.gripper_invert[target_id]}")
+
+        elif action == "set_motor_direction":
+            target_id = int(payload.get("id", 1))
+            dir_val = float(payload.get("direction", -1.0 if target_id == 1 else 1.0))
+            m = self.motors.get(target_id)
+            if m:
+                m.direction = dir_val
+                print(f"[Direction] Motor {target_id} ({m.name}) physical direction set to {dir_val}")
 
         elif action == "run_cli":
             cmd = payload.get("cmd", "")
@@ -1057,6 +1357,24 @@ class OpenArmDashboardServer:
         self.stream_stats["last_time"] = now
         self.stream_stats["packets"] += 1
         self.stream_stats["source"] = source
+
+        # Trajectory execution mode
+        if "trajectory" in payload and isinstance(payload["trajectory"], list):
+            traj_points = payload["trajectory"]
+            joint_names = payload.get("joint_names", JOINT_NAMES)
+            with self.trajectory_lock:
+                self.active_trajectory_id += 1
+                current_id = self.active_trajectory_id
+            threading.Thread(
+                target=self._execute_trajectory,
+                args=(traj_points, joint_names, current_id),
+                daemon=True,
+            ).start()
+            return
+
+        # Direct teleop / joint command preempts any background trajectory playback
+        with self.trajectory_lock:
+            self.active_trajectory_id += 1
 
         joint_map = {}
 
@@ -1111,51 +1429,7 @@ class OpenArmDashboardServer:
 
         # Apply to motors
         for motor_id, val in joint_map.items():
-            m = self.motors.get(motor_id)
-            if not m:
-                continue
-
-            if motor_id in [8, 16]:
-                # Gripper (Joint 8 / Joint 16)
-                pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
-                safe_pos = min(0.0415, max(0.0, pos_m))
-                invert = self.gripper_invert.get(motor_id, False)
-                stroke_ratio = safe_pos / 0.0415
-                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                rad_target = ratio * 1.15
-
-                if not m.enabled:
-                    m.enabled = True
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                elif m.error_code >= 8:
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        time.sleep(0.01)
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    m.error_code = 1
-
-                m.q_target = rad_target
-                m.q_cmd = rad_target
-
-                if self.mode == "real":
-                    posforce_can_id = m.send_id + 0x300
-                    vel_uint = 2500
-                    i_uint = 2200
-                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
-            else:
-                # Arm Joints (1..7, 9..15)
-                lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
-                q = max(lim[0], min(lim[1], val))
-                if not m.enabled:
-                    m.enabled = True
-                    m.q_cmd = m.q
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                m.q_target = q
+            self._set_single_joint_target(motor_id, val)
 
     def _trajectory_loop(self):
         """400 Hz trajectory generator & control loop that smoothly moves motors at limited velocity."""
@@ -1186,24 +1460,44 @@ class OpenArmDashboardServer:
                     # If in real mode and motor is enabled, send CAN command
                     if self.mode == "real":
                         if m.joint_idx == 8:
-                            # End-Effector parallel gripper (DM4310 in POS_FORCE)
+                            # End-Effector parallel gripper: POS_FORCE mode + MIT fallback
                             now = time.time()
-                            if now - getattr(m, '_last_posforce_tx', 0) > 0.05:
+                            if now - getattr(m, '_last_posforce_tx', 0) > 0.04:
                                 m._last_posforce_tx = now
+                                # 1. Primary: POS_FORCE frame on m.send_id + 0x300
                                 posforce_can_id = m.send_id + 0x300
-                                vel_uint = 2500  # 25.0 rad/s
-                                i_uint = 2200    # 0.22 pu safe torque limit
-                                posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
+                                vel_uint = 1000  # 10.0 rad/s
+                                i_uint = 1500    # 15% safe current limit (1.5 Nm)
+                                posforce_data = struct.pack("<fHH", float(m.q_cmd), vel_uint, i_uint)
                                 self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                                refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                                self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+
+                                # 2. Secondary: MIT mode frame fallback on m.send_id (0x08)
+                                q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                                dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+                                kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
+                                kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
+                                tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+                                d0 = (q_uint >> 8) & 0xFF
+                                d1 = q_uint & 0xFF
+                                d2 = (dq_uint >> 4) & 0xFF
+                                d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                                d4 = kp_uint & 0xFF
+                                d5 = (kd_uint >> 4) & 0xFF
+                                d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                                d7 = tau_uint & 0xFF
+                                mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                                self.hw.send_frame(m.can_if, m.send_id, mit_data)
                         else:
                             # 7-DOF Arm motors (MIT Mode)
-                            q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                            motor_dir = getattr(m, 'direction', 1.0)
+                            physical_q_cmd = m.q_cmd * motor_dir
+                            physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
+
+                            q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
                             dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
                             kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
                             kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+                            tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
 
                             d0 = (q_uint >> 8) & 0xFF
                             d1 = q_uint & 0xFF
@@ -1227,6 +1521,55 @@ class OpenArmDashboardServer:
                 time.sleep(sleep_time)
             elif sleep_time < -0.05:
                 next_tick = time.perf_counter()
+
+    def _exec_go_to_zero_pose(self):
+        """
+        Actively and smoothly drive all 14 arm joints and 2 grippers to 0.0 rad (0 mm for grippers).
+        Maintains full holding torque, enables motors if disabled, clears errors,
+        and uses velocity-limited 400Hz trajectory generation to avoid sudden jerks.
+        """
+        print("[Motion Control] Driving all joints to True Zero Pose (0.0 rad / 0 mm)...")
+        self.active_preset = None
+        with self.trajectory_lock:
+            self.active_trajectory_id += 1
+
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.enabled = True
+                m.error_code = 1
+                # Smooth transition: command interpolates starting from current actual position m.q
+                m.q_cmd = m.q
+                m.q_target = 0.0
+                m.tau_ff = 0.0
+                gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                m.kp = gains["kp"]
+                m.kd = gains["kd"]
+
+        if self.mode == "real":
+            # 1. Clear error flags on physical motors
+            for m in self.motors.values():
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+            time.sleep(0.015)
+
+            # 2. Enable all physical arm motors
+            for m in self.motors.values():
+                if m.joint_idx == 8:
+                    self.hw.init_gripper_motor(m.id, save_flash=False)
+                else:
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            time.sleep(0.015)
+
+            # 3. Drive both grippers to 0 mm (closed)
+            for gid in [8, 16]:
+                m = self.motors.get(gid)
+                if m:
+                    self._send_gripper_command(m, 0.0)
+
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("success", "Đang đưa toàn bộ 14 khớp và 2 kẹp về vị trí Zero Pose (0 rad, 0 mm) an toàn..."),
+                self.loop
+            )
 
     def _exec_set_zero_all(self):
         """Execute true DaMiao Zero Calibration sequence: Disable -> Set Zero -> Disable, then reset state."""

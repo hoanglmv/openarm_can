@@ -13,7 +13,7 @@ class RealDamiaoMotorState:
 
     def __init__(self, motor_id: int, name: str, arm: str, joint_idx: int,
                  motor_type: str, send_id: int, recv_id: int, can_if: str,
-                 pMax: float, vMax: float, tMax: float):
+                 pMax: float, vMax: float, tMax: float, direction: float = 1.0):
         self.id = motor_id
         self.name = name
         self.arm = arm               # "left" or "right"
@@ -25,6 +25,7 @@ class RealDamiaoMotorState:
         self.pMax = pMax
         self.vMax = vMax
         self.tMax = tMax
+        self.direction = direction   # Physical mounting direction (+1.0 normal, -1.0 inverted)
 
         # Operational state
         self.enabled = False
@@ -52,11 +53,16 @@ class RealDamiaoMotorState:
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize motor state into JSON-compatible dictionary for WebSocket/REST API."""
-        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.0415) and mm
+        # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
         if self.joint_idx == 8:
-            raw_ratio = max(0.0, min(1.0, abs(self.q) / 1.15))
-            ratio = (1.0 - raw_ratio) if getattr(self, 'invert', False) else raw_ratio
-            stroke_m = ratio * 0.0415
+            is_left = (self.id == 8 or getattr(self, 'arm', '') == "left")
+            raw_ratio = max(0.0, min(1.0, abs(self.q) / 1.20))
+            if is_left:
+                ratio = (1.0 - raw_ratio) if getattr(self, 'invert', False) else raw_ratio
+            else:
+                # Right arm motor is at +1.20 rad when closed (0 mm) and 0.0 rad when open (43 mm)
+                ratio = raw_ratio if getattr(self, 'invert', False) else (1.0 - raw_ratio)
+            stroke_m = ratio * 0.043
             q_val = round(stroke_m, 4)
             q_deg_val = round(stroke_m * 1000.0, 1)  # displayed as mm in UI
             stroke_mm_val = round(stroke_m * 1000.0, 1)
@@ -86,5 +92,6 @@ class RealDamiaoMotorState:
             "q_des": round(self.q_des, 4),
             "kp": round(self.kp, 1),
             "kd": round(self.kd, 2),
+            "direction": getattr(self, "direction", 1.0),
             "has_sync": self.has_physical_sync
         }

@@ -109,7 +109,7 @@ function startDance() {
     if (danceTimer) clearInterval(danceTimer);
     danceTimer = setInterval(tickDance, 50);
 
-    showToast("success", `💃 Bắt đầu bài múa: ${routine.name}!`);
+    showToast("success", `Bắt đầu bài múa: ${routine.name}!`);
 }
 
 function pauseDance() {
@@ -127,11 +127,11 @@ function pauseDance() {
     const btnDancePause = document.getElementById("btn-dance-pause");
     if (btnDancePlay) {
         btnDancePlay.disabled = false;
-        btnDancePlay.textContent = "▶ Tiếp Tục Múa";
+        btnDancePlay.textContent = "Tiếp Tục Múa";
     }
     if (btnDancePause) btnDancePause.disabled = true;
 
-    showToast("info", "⏸ Đã tạm dừng điệu múa!");
+    showToast("info", "Đã tạm dừng điệu múa!");
 }
 
 function stopDance(returnHome = true) {
@@ -151,7 +151,7 @@ function stopDance(returnHome = true) {
     const btnDancePause = document.getElementById("btn-dance-pause");
     if (btnDancePlay) {
         btnDancePlay.disabled = false;
-        btnDancePlay.textContent = "▶ Bắt Đầu Múa";
+        btnDancePlay.textContent = "Bắt Đầu Múa";
     }
     if (btnDancePause) btnDancePause.disabled = true;
 
@@ -166,7 +166,7 @@ function stopDance(returnHome = true) {
         // Smoothly send robot to Home pose (0 rad)
         const homePose = new Array(16).fill(0.0);
         sendAction("set_joint_state", { positions: homePose });
-        showToast("info", "⏹ Đã dừng bài múa. Robot trở về vị trí nghỉ an toàn.");
+        showToast("info", "Đã dừng bài múa. Robot trở về vị trí nghỉ an toàn.");
     }
 }
 
@@ -184,7 +184,7 @@ function initDanceEngine() {
     if (danceLoopCheckbox) {
         danceLoopCheckbox.addEventListener("change", (e) => {
             isDanceLoop = e.target.checked;
-            showToast("info", isDanceLoop ? "🔁 Đã BẬT lặp lại bài múa liên tục" : "Đã TẮT lặp lại (múa 1 chu kỳ)");
+            showToast("info", isDanceLoop ? "Đã BẬT lặp lại bài múa liên tục" : "Đã TẮT lặp lại (múa 1 chu kỳ)");
         });
     }
 
@@ -205,7 +205,7 @@ function initDanceEngine() {
             });
             card.classList.add("active");
             const activeMarker = card.querySelector(".dance-select-marker");
-            if (activeMarker) activeMarker.textContent = "✓ Đang chọn";
+            if (activeMarker) activeMarker.textContent = "Đang chọn";
 
             const danceTitlePlaying = document.getElementById("dance-title-playing");
             if (danceTitlePlaying) {
@@ -214,7 +214,7 @@ function initDanceEngine() {
                     : `Đã chọn: ${routine.name} (${routine.desc})`;
             }
 
-            showToast("info", `🎵 Đã chọn: ${routine.name}`);
+            showToast("info", `Đã chọn: ${routine.name}`);
         });
     });
 
@@ -227,7 +227,7 @@ function initDanceEngine() {
             document.querySelectorAll(".btn-tempo-opt").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
 
-            showToast("info", `⏱️ Nhịp điệu: ${bpm} BPM`);
+            showToast("info", `Nhịp điệu: ${bpm} BPM`);
         });
     });
 
@@ -280,15 +280,14 @@ function triggerPreset(preset) {
     sendAction("enable_all");
 
     if (preset === "home") {
-        // Natural resting pose: arms hang down vertically beside pillar (0 rad)
-        for (let id = 1; id <= 16; id++) {
-            const isGripper = (id === 8 || id === 16);
-            if (isGripper) {
-                sendAction("set_gripper", { id, pos: 0.0 });
-            } else {
-                sendAction("set_mit", { id, q: 0.0, kp: 35.0, kd: 1.2, tau: 0.0 });
+        // Natural resting pose: all 14 arm joints to 0.0 rad, grippers closed (0 mm) with strong holding torque
+        sendAction("go_to_zero_pose");
+        document.querySelectorAll(".joint-slider-input").forEach(s => s.value = 0.0);
+        document.querySelectorAll(".joint-val").forEach(disp => {
+            if (disp.id.startsWith("val-disp-")) {
+                disp.textContent = disp.id.includes("-7") ? "0.0 mm (Đóng)" : "0.00 rad (0°)";
             }
-        }
+        });
     } else if (preset === "ready") {
         // Ready stance: Both arms raised forward at chest height
         [1, 9].forEach(baseId => {
@@ -379,3 +378,28 @@ function triggerPreset(preset) {
         }, 50);
     }
 }
+
+// ==============================================================================
+// KUNGFU ATHLETE BOT TRAJECTORY DISPATCHER
+// ==============================================================================
+window.triggerKungfuRoutine = async function(routineId) {
+    stopDance(false);
+    stopPresets();
+    showToast("info", "Đang nạp quỹ đạo võ thuật: " + routineId + "...");
+    try {
+        const resp = await fetch("/api/kungfu/play", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: routineId })
+        });
+        const res = await resp.json();
+        if (res.status === "ok") {
+            showToast("success", `Đã phát lệnh võ thuật (${res.points} điểm)! Robot đang tự động đưa về 0 và thực hiện quỹ đạo.`);
+        } else {
+            showToast("error", "Lỗi: " + (res.message || "Không thể phát quỹ đạo"));
+        }
+    } catch (e) {
+        showToast("error", "Lỗi kết nối tới máy chủ: " + e.message);
+    }
+};
+

@@ -34,15 +34,23 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                 exporter = self.server.app.exporter
                 file_path = exporter.file_path or exporter.get_latest_file()
                 if file_path and os.path.exists(file_path):
-                    if exporter.file:
-                        try:
-                            exporter.file.flush()
-                        except Exception:
-                            pass
+                    with exporter.lock:
+                        if getattr(exporter, 'h5_file', None):
+                            try:
+                                exporter._flush_h5_buffer_locked()
+                                exporter.h5_file.flush()
+                            except Exception:
+                                pass
+                        if getattr(exporter, 'csv_file', None):
+                            try:
+                                exporter.csv_file.flush()
+                            except Exception:
+                                pass
                     with open(file_path, "rb") as f:
                         data = f.read()
+                    content_type = "application/x-hdf5" if file_path.endswith(".hdf5") else "text/csv"
                     self.send_response(200)
-                    self.send_header('Content-Type', 'text/csv')
+                    self.send_header('Content-Type', content_type)
                     self.send_header('Content-Disposition', f'attachment; filename="{os.path.basename(file_path)}"')
                     self.send_header('Content-Length', str(len(data)))
                     self.end_headers()
@@ -54,14 +62,46 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(b'{"error": "No export file found"}')
                     return
-        elif self.path == "/api/export/new_session":
+        elif self.path in ["/api/record/start", "/api/export/new_session"]:
             if hasattr(self.server, 'app') and self.server.app:
-                self.server.app.exporter.start_session("manual")
+                self.server.app.exporter.start_session("record")
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
                 return
+        elif self.path == "/api/record/stop":
+            if hasattr(self.server, 'app') and self.server.app:
+                self.server.app.exporter.close_session()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
+                return
+        elif self.path == "/api/kungfu/list":
+            kungfu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kungfu")
+            routines = []
+            if os.path.exists(kungfu_dir):
+                for fname in sorted(os.listdir(kungfu_dir)):
+                    if fname.endswith(".json"):
+                        fpath = os.path.join(kungfu_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                meta = json.load(f)
+                            routines.append({
+                                "id": fname.replace(".json", ""),
+                                "title": meta.get("title", fname),
+                                "duration_sec": meta.get("duration_sec", 0),
+                                "num_points": meta.get("num_points", 0),
+                                "source": meta.get("source", "KungfuAthleteBot")
+                            })
+                        except Exception:
+                            pass
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"routines": routines}).encode('utf-8'))
+            return
 
         super().do_GET()
 
@@ -77,6 +117,36 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(b'{"status": "ok"}')
+            except Exception as e:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+            return
+        elif self.path == "/api/kungfu/play":
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body.decode('utf-8'))
+                routine_id = data.get("id") or data.get("name")
+                kungfu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kungfu")
+                json_path = os.path.join(kungfu_dir, f"{routine_id}.json")
+                if not os.path.exists(json_path):
+                    json_path = os.path.join(kungfu_dir, f"kungfu_clip_{routine_id}.json")
+                if not os.path.exists(json_path):
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"Routine '{routine_id}' not found"}).encode('utf-8'))
+                    return
+                with open(json_path, "r", encoding="utf-8") as f:
+                    traj_data = json.load(f)
+                if hasattr(self.server, 'app') and self.server.app:
+                    self.server.app.apply_joint_states(traj_data, source=f"Kungfu: {routine_id}")
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "routine": routine_id, "points": traj_data.get("num_points")}).encode('utf-8'))
             except Exception as e:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
