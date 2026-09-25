@@ -39,23 +39,24 @@ at sample `t`, which is the controller command for the next motion step.
 ## Runtime topics
 
 ```text
-/camera/act/rgb             sensor_msgs/Image, rgb8, 640x480
-/camera/act/depth           sensor_msgs/Image, 16UC1, 640x480
+/camera/act/rgb             sensor_msgs/Image, rgb8, 424x240 @ 25 Hz
+/camera/act/depth           sensor_msgs/Image, 16UC1, 424x240 @ 25 Hz
 /openarm/joint_states       sensor_msgs/JointState (position, velocity, effort)
 /openarm/joint_commands     sensor_msgs/JointState (absolute target position)
 ```
 
 The RealSense wrapper publishes synchronized color and aligned depth. The RGB-D
-preprocessor samples the source at 50 Hz. The backend publishes robot telemetry
+preprocessor samples the source at 25 Hz. The backend publishes robot telemetry
 and command targets at 50 Hz; the recorder accepts synchronized messages within
 12 ms.
 
-The default RealSense source profile is `640x480x60`. Override it for a camera
+The default RealSense source profile is `424x240x30`; the preprocessor emits
+bandwidth-limited `424x240` RGB-D at 25 Hz. Override the source profile for a camera
 with different supported profiles:
 
 ```bash
-export OPENARM_CAMERA_COLOR_PROFILE=640x480x60
-export OPENARM_CAMERA_DEPTH_PROFILE=640x480x60
+export OPENARM_CAMERA_COLOR_PROFILE=640x480x30
+export OPENARM_CAMERA_DEPTH_PROFILE=640x480x30
 ```
 
 Do not use a source slower than 50 FPS if every dataset timestep must contain a

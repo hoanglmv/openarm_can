@@ -27,10 +27,13 @@ try:
     from config import (
         CAMERA_ALIGNED_DEPTH_TOPIC,
         CAMERA_DEPTH_TOPIC,
+        CAMERA_FREQUENCY_HZ,
+        CAMERA_HEIGHT,
         CAMERA_RAW_DEPTH_TOPIC,
         CAMERA_RAW_RGB_TOPIC,
         CAMERA_STREAM_PORT,
         CAMERA_TOPIC,
+        CAMERA_WIDTH,
         CONTROL_FREQ,
         DATA_FREQUENCY_HZ,
         HTTP_PORT,
@@ -52,10 +55,13 @@ except ImportError:
     from .config import (
         CAMERA_ALIGNED_DEPTH_TOPIC,
         CAMERA_DEPTH_TOPIC,
+        CAMERA_FREQUENCY_HZ,
+        CAMERA_HEIGHT,
         CAMERA_RAW_DEPTH_TOPIC,
         CAMERA_RAW_RGB_TOPIC,
         CAMERA_STREAM_PORT,
         CAMERA_TOPIC,
+        CAMERA_WIDTH,
         CONTROL_FREQ,
         DATA_FREQUENCY_HZ,
         HTTP_PORT,
@@ -194,10 +200,10 @@ class OpenArmDashboardServer:
 
         try:
             color_profile = os.environ.get(
-                "OPENARM_CAMERA_COLOR_PROFILE", "640x480x30"
+                "OPENARM_CAMERA_COLOR_PROFILE", "424x240x30"
             )
             depth_profile = os.environ.get(
-                "OPENARM_CAMERA_DEPTH_PROFILE", "640x480x30"
+                "OPENARM_CAMERA_DEPTH_PROFILE", "424x240x30"
             )
             self.camera_driver_process = subprocess.Popen(
                 [
@@ -221,7 +227,7 @@ class OpenArmDashboardServer:
             print(f"[Camera] Could not start RealSense driver: {error}")
 
     def _start_rgbd_preprocessor(self):
-        """Launch synchronized ACT RGB-D output preprocessor (640x480 @ 50 Hz)."""
+        """Launch the bandwidth-limited synchronized ACT RGB-D preprocessor."""
         if "--no-camera" in sys.argv:
             return
 
@@ -244,15 +250,16 @@ class OpenArmDashboardServer:
                     "--depth-output",
                     CAMERA_DEPTH_TOPIC,
                     "--width",
-                    "640",
+                    str(CAMERA_WIDTH),
                     "--height",
-                    "480",
+                    str(CAMERA_HEIGHT),
                     "--rate",
-                    str(int(DATA_FREQUENCY_HZ)),
+                    str(CAMERA_FREQUENCY_HZ),
                 ],
             )
             print(
-                f"[Camera] Starting synchronized ACT RGB-D output (640x480 @ {int(DATA_FREQUENCY_HZ)} Hz)"
+                "[Camera] Starting synchronized ACT RGB-D output "
+                f"({CAMERA_WIDTH}x{CAMERA_HEIGHT} @ {CAMERA_FREQUENCY_HZ:g} Hz)"
             )
         except Exception as error:
             print(f"[Camera] Could not start RGB-D preprocessor: {error}")
@@ -284,6 +291,14 @@ class OpenArmDashboardServer:
                     CAMERA_TOPIC,
                     "--port",
                     str(CAMERA_STREAM_PORT),
+                    "--width",
+                    str(CAMERA_WIDTH),
+                    "--height",
+                    str(CAMERA_HEIGHT),
+                    "--rate",
+                    str(CAMERA_FREQUENCY_HZ),
+                    "--max-width",
+                    str(CAMERA_WIDTH),
                 ],
             )
             print(

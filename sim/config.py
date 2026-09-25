@@ -24,6 +24,9 @@ DATA_FREQUENCY_HZ = 50.0 # Hz for ACT dataset and ROS 2 bridges
 
 # RealSense Camera & ROS 2 ACT Pipeline Bridge configuration
 CAMERA_STREAM_PORT = int(os.environ.get("OPENARM_CAMERA_STREAM_PORT", "8890"))
+CAMERA_WIDTH = int(os.environ.get("OPENARM_CAMERA_WIDTH", "424"))
+CAMERA_HEIGHT = int(os.environ.get("OPENARM_CAMERA_HEIGHT", "240"))
+CAMERA_FREQUENCY_HZ = float(os.environ.get("OPENARM_CAMERA_FREQUENCY_HZ", "25"))
 CAMERA_RAW_RGB_TOPIC = os.environ.get(
     "OPENARM_CAMERA_RAW_RGB_TOPIC",
     "/camera/camera/color/image_raw",

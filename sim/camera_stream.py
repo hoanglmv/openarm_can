@@ -20,9 +20,12 @@ from sensor_msgs.msg import Image
 
 
 class CameraFrameStore:
-    def __init__(self, topic: str):
+    def __init__(self, topic: str, width: int, height: int, rate: float):
         self.condition = threading.Condition()
         self.topic = topic
+        self.width = width
+        self.height = height
+        self.rate = rate
         self.jpeg = None
         self.sequence = 0
         self.last_frame_at = 0.0
@@ -66,8 +69,10 @@ class CameraFrameStore:
         self._usb_realsense_status = "not_found"
         return self._usb_realsense_status
 
-    def generate_standby_frame(self, width: int = 640, height: int = 480) -> bytes:
+    def generate_standby_frame(self) -> bytes:
         """Render a crisp, high-tech standby monitor frame when camera feed is not publishing."""
+        width = self.width
+        height = self.height
         img = np.zeros((height, width, 3), dtype=np.uint8)
 
         # Subtle dark-slate gradient background
@@ -110,7 +115,7 @@ class CameraFrameStore:
         )
 
         # Standby Status Box
-        box_w, box_h = 440, 95
+        box_w, box_h = min(400, width - 24), min(95, height - 100)
         bx1 = cx - box_w // 2
         by1 = cy - 80
         cv2.rectangle(
@@ -149,7 +154,7 @@ class CameraFrameStore:
         # Topic target line
         cv2.putText(
             img,
-            f"ROS 2 Topic: {self.topic} (640x480 @ 50 Hz)",
+            f"ROS 2 Topic: {self.topic} ({self.width}x{self.height} @ {self.rate:g} Hz)",
             (bx1 + 38, by1 + 56),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.42,
@@ -246,7 +251,7 @@ class CameraFrameStore:
 
         # When no live frame is active or timed out, yield a standby frame
         time.sleep(0.08)  # ~12 FPS cadence for standby
-        standby_bytes = self.generate_standby_frame(640, 480)
+        standby_bytes = self.generate_standby_frame()
         with self.condition:
             self.sequence += 1
             seq = self.sequence
@@ -267,6 +272,9 @@ class CameraFrameStore:
                 "frames": self.sequence,
                 "frame_age_seconds": round(age, 3) if age is not None else None,
                 "topic": self.topic,
+                "width": self.width,
+                "height": self.height,
+                "rate_hz": self.rate,
                 "usb_realsense": self._check_usb_realsense(),
             }
 
@@ -400,11 +408,17 @@ def main():
     parser.add_argument("--topic", default="/camera/act/rgb")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8890)
-    parser.add_argument("--max-width", type=int, default=640)
+    parser.add_argument("--width", type=int, default=424)
+    parser.add_argument("--height", type=int, default=240)
+    parser.add_argument("--rate", type=float, default=25.0)
+    parser.add_argument("--max-width", type=int, default=424)
     parser.add_argument("--jpeg-quality", type=int, default=80)
     args = parser.parse_args()
 
-    frames = CameraFrameStore(topic=args.topic)
+    if args.width <= 0 or args.height <= 0 or args.rate <= 0:
+        parser.error("width, height, and rate must be positive")
+
+    frames = CameraFrameStore(args.topic, args.width, args.height, args.rate)
     ThreadingHTTPServer.allow_reuse_address = True
     httpd = ThreadingHTTPServer(
         (args.host, args.port), make_handler(frames, args.topic)
