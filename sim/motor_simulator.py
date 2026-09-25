@@ -170,12 +170,21 @@ class VirtualDamiaoMotor:
     def to_dict(self):
         # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
         if self.joint_idx == 8:
-            stroke_m = max(0.0, min(0.043, (abs(self.q) / 1.20) * 0.043))
+            is_left = (self.id == 8 or getattr(self, 'arm', '') == "left")
+            raw_ratio = max(0.0, min(1.0, abs(self.q) / 1.20))
+            if is_left:
+                ratio = (1.0 - raw_ratio) if getattr(self, 'invert', False) else raw_ratio
+            else:
+                # Right arm motor is at +1.20 rad when closed (0 mm) and 0.0 rad when open (43 mm)
+                ratio = raw_ratio if getattr(self, 'invert', False) else (1.0 - raw_ratio)
+            stroke_m = ratio * 0.043
             q_val = round(stroke_m, 4)
             q_deg_val = round(stroke_m * 1000.0, 1) # displayed as mm
+            stroke_mm_val = round(stroke_m * 1000.0, 1)
         else:
             q_val = round(self.q, 4)
             q_deg_val = round(math.degrees(self.q), 1)
+            stroke_mm_val = None
 
         return {
             "id": self.id,
@@ -189,7 +198,7 @@ class VirtualDamiaoMotor:
             "error_code": self.error_code,
             "q": q_val,
             "q_deg": q_deg_val,
-            "stroke_mm": round((abs(self.q) / 1.20) * 43.0, 1) if self.joint_idx == 8 else None,
+            "stroke_mm": stroke_mm_val,
             "q_rad": round(self.q, 4),
             "dq": round(self.dq, 4),
             "tau": round(self.tau, 3),

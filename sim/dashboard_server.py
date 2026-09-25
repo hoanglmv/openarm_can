@@ -803,20 +803,23 @@ class OpenArmDashboardServer:
         Send robust gripper command to physical robot / sim.
         Maps linear stroke (0.0 .. 0.043 m) to motor angle:
           - Left Gripper (Motor 8, can1): 0.0 rad (closed) to -1.20 rad (open 43 mm)
-          - Right Gripper (Motor 16, can0): 0.0 rad (closed) to +1.20 rad (open 43 mm)
+          - Right Gripper (Motor 16, can0): +1.20 rad (closed) to 0.0 rad (open 43 mm)
         Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
         and MIT mode fallback.
         """
         safe_pos = min(0.043, max(0.0, pos_m))
-        invert = self.gripper_invert.get(m.id, False)
         stroke_ratio = safe_pos / 0.043
-        ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+        invert = self.gripper_invert.get(m.id, False)
 
-        # Left Arm Gripper (Motor 8): 0.0 (closed) to -1.20 rad (open 43mm)
-        # Right Arm Gripper (Motor 16): 0.0 (closed) to +1.20 rad (open 43mm)
+        # Left Arm Gripper (Motor 8): 0.0 rad (closed, 0mm) to -1.20 rad (open, 43mm)
+        # Right Arm Gripper (Motor 16): +1.20 rad (closed, 0mm) to 0.0 rad (open, 43mm)
         is_left = (m.id == 8 or getattr(m, 'arm', '') == "left")
-        sign = -1.0 if is_left else 1.0
-        rad_target = sign * ratio * 1.20
+        if is_left:
+            ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+            rad_target = -ratio * 1.20
+        else:
+            ratio = stroke_ratio if invert else (1.0 - stroke_ratio)
+            rad_target = ratio * 1.20
 
         if not m.enabled:
             m.enabled = True
