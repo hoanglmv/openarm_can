@@ -225,9 +225,9 @@ class OpenArmDashboardServer:
             return
 
         script = os.path.join(os.path.dirname(__file__), "rgbd_preprocessor.py")
-        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
-        if not os.path.exists(camera_python):
-            camera_python = shutil.which("python3") or sys.executable
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON")
+        if not camera_python or not os.path.exists(camera_python):
+            camera_python = sys.executable or shutil.which("python3") or "/usr/bin/python3"
 
         try:
             self.rgbd_process = subprocess.Popen(
@@ -263,9 +263,9 @@ class OpenArmDashboardServer:
             return
 
         bridge_script = os.path.join(os.path.dirname(__file__), "camera_stream.py")
-        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
-        if not os.path.exists(camera_python):
-            camera_python = shutil.which("python3") or sys.executable
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON")
+        if not camera_python or not os.path.exists(camera_python):
+            camera_python = sys.executable or shutil.which("python3") or "/usr/bin/python3"
 
         try:
             self.camera_process = subprocess.Popen(
@@ -288,9 +288,9 @@ class OpenArmDashboardServer:
     def _start_joint_bridge(self):
         """Launch OpenArm ROS 2 joint bridge node."""
         script = os.path.join(os.path.dirname(__file__), "openarm_joint_bridge.py")
-        ros_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
-        if not os.path.exists(ros_python):
-            ros_python = shutil.which("python3") or sys.executable
+        ros_python = os.environ.get("OPENARM_CAMERA_PYTHON")
+        if not ros_python or not os.path.exists(ros_python):
+            ros_python = sys.executable or shutil.which("python3") or "/usr/bin/python3"
         try:
             self.joint_bridge_process = subprocess.Popen(
                 [ros_python, script, "--port", str(JOINT_BRIDGE_PORT)],
