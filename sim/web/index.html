@@ -24,14 +24,14 @@
                 <span class="badge badge-primary"><span class="pulse-dot"></span> SocketCAN: <strong id="iface-name">vcan0</strong></span>
                 <span class="badge badge-success" id="bus-health-badge">Bus: <strong>HEALTHY</strong></span>
                 <span class="badge badge-info" id="ws-status-badge">WebSocket: <strong>CONNECTING</strong></span>
-                <span class="badge badge-export" id="export-status-badge" title="Tần số xuất dữ liệu góc khớp 100Hz từ khi kết nối robot">
-                    <span class="pulse-dot pulse-export"></span> 100Hz: <strong id="export-badge-text">REC (0)</strong>
+                <span class="badge badge-export idle" id="export-status-badge" title="Trạng thái Record dữ liệu góc khớp 100Hz">
+                    <span class="pulse-dot pulse-export" id="header-rec-dot"></span> <strong id="export-badge-text">REC: Sẵn sàng</strong>
                 </span>
             </div>
         </div>
         <div class="header-right">
-            <a id="btn-export-download-header" href="/api/export/download" class="btn-tool-header" title="Tải file CSV 100Hz mới nhất về máy" download>
-                CSV 100Hz
+            <a id="btn-export-download-header" href="/api/export/download" class="btn-tool-header" title="Tải file CSV Record mới nhất về máy" download>
+                Tải CSV Record
             </a>
             <button id="btn-usb-toggle" class="btn-usb-toggle btn-usb-disconnected" title="Kết nối hoặc Ngắt kết nối USB Robot qua SocketCAN">
                 <span class="usb-dot"></span>
@@ -723,20 +723,22 @@
                         <button class="btn-tool" id="btn-toggle-telem-expand">Mở rộng</button>
                     </div>
                 </div>
-                <!-- 100Hz Joint State Continuous Exporter Widget Bar -->
-                <div class="export-widget-bar" id="export-widget-bar">
+                <!-- Joint State Record (100Hz) Bar -->
+                <div class="export-widget-bar record-widget-bar" id="export-widget-bar">
                     <div class="export-widget-left">
-                        <span class="export-status-dot active" id="export-dot"></span>
+                        <span class="export-status-dot idle" id="export-dot"></span>
                         <div class="export-text-group">
-                            <span class="export-main-title">Xuất Dữ Liệu Khớp 100Hz (Auto-Export)</span>
-                            <span class="export-sub-info" id="export-sub-info">Tần số: 100.0 Hz • Đang ghi: exports/joint_states_...csv • Cổng UDP: 9871</span>
+                            <span class="export-main-title" id="record-main-title">Ghi Dữ Liệu Khớp (Joint State Record • 100Hz)</span>
+                            <span class="export-sub-info" id="export-sub-info">Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu • Cổng UDP: 9871</span>
                         </div>
                     </div>
                     <div class="export-widget-right">
-                        <span class="badge badge-accent" id="export-samples-badge">0 mẫu (0.0s)</span>
-                        <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file CSV 100Hz hiện tại về máy" download>Tải CSV</a>
-                        <button class="btn-subtle-sm" id="btn-export-new" title="Kết thúc file hiện tại và mở file ghi 100Hz mới">File Mới</button>
-                        <button class="btn-subtle-sm" id="btn-export-toggle" title="Tạm dừng hoặc Tiếp tục ghi">Tạm Dừng</button>
+                        <span class="badge badge-outline" id="export-samples-badge">Chờ bắt đầu</span>
+                        <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file CSV vừa ghi về máy" download>Tải CSV</a>
+                        <button class="btn-record-main" id="btn-record-toggle" title="Bắt đầu hoặc Dừng Record">
+                            <span class="rec-icon" id="btn-record-icon">●</span>
+                            <span id="btn-record-text">Bắt đầu Record</span>
+                        </button>
                     </div>
                 </div>
                 <div class="telemetry-grid" id="telemetry-grid" style="display: none;">

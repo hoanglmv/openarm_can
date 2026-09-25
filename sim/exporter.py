@@ -45,7 +45,7 @@ class JointStateExporter100Hz:
         except Exception:
             pass
 
-    def start_session(self, tag: str = "robot"):
+    def start_session(self, tag: str = "record"):
         """Begin a new CSV recording session with full timestamped header."""
         with self.lock:
             if self.active and self.file:
@@ -73,16 +73,16 @@ class JointStateExporter100Hz:
                 header.append(f"t_mos_{i}")
             self.file.write(",".join(header) + "\n")
             self.file.flush()
-            print(f"[Export 100Hz] 🟢 Bắt đầu xuất & ghi dữ liệu Joint State 100Hz: {self.file_path} (UDP port: {self.udp_port})")
+            print(f"[Record 100Hz] 🔴 Bắt đầu Record dữ liệu Joint State: {self.file_path} (UDP: {self.udp_port})")
 
     def _close_session_locked(self):
         if self.file:
             try:
                 self.file.flush()
                 self.file.close()
-                print(f"[Export 100Hz] ⏹ Đã lưu file Joint State ({self.samples} mẫu): {self.file_path}")
+                print(f"[Record 100Hz] ⏹ Đã dừng Record và lưu file ({self.samples} mẫu): {self.file_path}")
             except Exception as e:
-                print(f"[Export Error]: {e}")
+                print(f"[Record Error]: {e}")
             self.file = None
         self.active = False
 
@@ -107,18 +107,26 @@ class JointStateExporter100Hz:
         now = time.time()
         dur = round(now - self.start_time, 1) if (self.active and self.start_time > 0) else 0.0
         file_size_kb = 0
-        if self.file_path and os.path.exists(self.file_path):
+        latest_file = self.get_latest_file()
+        target_path = self.file_path or latest_file
+        if target_path and os.path.exists(target_path):
             try:
-                file_size_kb = round(os.path.getsize(self.file_path) / 1024, 1)
+                file_size_kb = round(os.path.getsize(target_path) / 1024, 1)
             except Exception:
                 pass
+        curr_name = self.file_name or (os.path.basename(latest_file) if latest_file else "")
         return {
             "active": self.active,
+            "recording": self.active,
             "hz": round(self.hz, 1) if self.active else 0.0,
+            "sample_rate_hz": round(self.hz, 1) if self.active else 100.0,
             "samples": self.samples,
+            "samples_recorded": self.samples,
             "duration_s": dur,
-            "file_name": self.file_name or (os.path.basename(self.get_latest_file()) if self.get_latest_file() else ""),
-            "file_path": self.file_path or (self.get_latest_file() or ""),
+            "elapsed_sec": dur,
+            "file_name": curr_name,
+            "filepath": curr_name,
+            "file_path": target_path or "",
             "file_size_kb": file_size_kb,
             "udp_port": self.udp_port
         }
@@ -160,10 +168,14 @@ class JointStateExporter100Hz:
                 for mid in range(1, 17):
                     m = self.server.motors.get(mid)
                     if m:
-                        if mid in [8, 16]:
-                            raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.15))
+                        if mid == 8:
+                            raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
                             ratio = (1.0 - raw_ratio) if getattr(m, 'invert', False) else raw_ratio
-                            pos = ratio * 0.0415
+                            pos = ratio * 0.043
+                        elif mid == 16:
+                            raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
+                            ratio = raw_ratio if getattr(m, 'invert', False) else (1.0 - raw_ratio)
+                            pos = ratio * 0.043
                         else:
                             pos = m.q
                         positions.append(pos)

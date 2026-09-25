@@ -198,11 +198,9 @@ class OpenArmDashboardServer:
         self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
         self.udp_thread.start()
 
-        # 8. Start continuous 100Hz Joint State Exporter thread
+        # 8. Start continuous 100Hz Joint State Exporter thread (waits for manual Record)
         self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
         self.export_thread.start()
-        if self.mode == "real":
-            self.exporter.start_session("robot_boot")
 
         # 9. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
@@ -597,7 +595,6 @@ class OpenArmDashboardServer:
                     self.mode = "real"
                     print(f"[USB] Kết nối thành công! Đang ở chế độ REAL ROBOT HARDWARE MODE ({self.can0_if}/{self.can1_if})")
                     self.hw.query_all_physical()
-                    self.exporter.start_session("usb_connected")
                 except Exception as e:
                     print(f"[USB Switch Error]: {e}")
 
@@ -1048,14 +1045,32 @@ class OpenArmDashboardServer:
             print("[Command] Disconnect USB Robot requested from Web UI")
             threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
 
-        elif action == "export_toggle":
+        elif action in ["record_start", "export_start"]:
+            self.exporter.start_session("record")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+
+        elif action in ["record_stop", "export_stop"]:
+            prev_samples = self.exporter.samples
+            prev_name = self.exporter.file_name or "joint_states"
+            self.exporter.close_session()
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+
+        elif action in ["record_toggle", "export_toggle"]:
             if self.exporter.active:
+                prev_samples = self.exporter.samples
+                prev_name = self.exporter.file_name or "joint_states"
                 self.exporter.close_session()
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
             else:
-                self.exporter.start_session("manual")
+                self.exporter.start_session("record")
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
 
         elif action == "export_new_session":
-            self.exporter.start_session("manual")
+            self.exporter.start_session("record")
 
         elif action == "sync_robot_state":
             print("[Command] Sync state from physical robot requested")

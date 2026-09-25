@@ -638,19 +638,19 @@ function setupEventHandlers() {
         });
     });
 
-    // 100Hz Joint State Continuous Exporter actions
-    const btnExportNew = document.getElementById("btn-export-new");
-    if (btnExportNew) {
-        btnExportNew.addEventListener("click", () => {
-            sendAction("export_new_session");
-            showToast("info", "Đã khởi tạo file ghi CSV 100Hz mới!");
+    // Joint State Record actions (Start / Stop Record)
+    const btnRecordToggle = document.getElementById("btn-record-toggle") || document.getElementById("btn-export-toggle");
+    if (btnRecordToggle) {
+        btnRecordToggle.addEventListener("click", () => {
+            sendAction("record_toggle");
         });
     }
 
-    const btnExportToggle = document.getElementById("btn-export-toggle");
-    if (btnExportToggle) {
-        btnExportToggle.addEventListener("click", () => {
-            sendAction("export_toggle");
+    const btnExportNew = document.getElementById("btn-export-new");
+    if (btnExportNew) {
+        btnExportNew.addEventListener("click", () => {
+            sendAction("record_start");
+            showToast("info", "Đã khởi tạo phiên Record CSV mới!");
         });
     }
 }

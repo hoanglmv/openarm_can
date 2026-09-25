@@ -7,6 +7,7 @@ Test script to verify Zero Pose execution, gains, and motor states.
 import sys
 import os
 import time
+import asyncio
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sim"))
 from dashboard_server import OpenArmDashboardServer, DEFAULT_GAINS
@@ -203,10 +204,46 @@ def test_gripper_d4310_and_origins():
     print("✓ Gripper feedback to_dict() verified: Left (0 rad -> 0mm, -1.2 rad -> 43mm), Right (1.2 rad -> 0mm, 0 rad -> 43mm)")
 
 
+def test_record_workflow():
+    print("\n[TEST] Testing Joint State Record Workflow (Start / Stop / Toggle)...")
+    server = OpenArmDashboardServer(mode="sim")
+    
+    # 1. Must NOT auto-record on startup
+    assert not server.exporter.active, "Exporter must be IDLE on startup (no auto-record)"
+    stats_init = server.exporter.get_stats()
+    assert not stats_init["recording"], "get_stats() must report recording=False"
+    print("✓ Initial state verified: Exporter is idle, waiting for user Record")
+
+    # 2. Start Record
+    asyncio.run(server.handle_action("record_start", {}, None))
+    assert server.exporter.active, "Exporter must be ACTIVE after record_start"
+    time.sleep(0.06)
+    stats_rec = server.exporter.get_stats()
+    assert stats_rec["recording"], "get_stats() must report recording=True"
+    assert "record" in stats_rec["file_name"], f"File name must include 'record': {stats_rec['file_name']}"
+    print(f"✓ Record start verified: recording={stats_rec['recording']}, file={stats_rec['file_name']}")
+
+    # 3. Stop Record (End)
+    asyncio.run(server.handle_action("record_stop", {}, None))
+    assert not server.exporter.active, "Exporter must be INACTIVE after record_stop"
+    stats_end = server.exporter.get_stats()
+    assert not stats_end["recording"], "get_stats() must report recording=False after record_stop"
+    assert stats_end["file_path"] and os.path.exists(stats_end["file_path"]), f"Recorded CSV file must exist on disk: {stats_end['file_path']}"
+    print(f"✓ Record stop verified: cleanly saved file with {stats_end['samples']} samples at {stats_end['file_path']}")
+
+    # 4. Record Toggle
+    asyncio.run(server.handle_action("record_toggle", {}, None))
+    assert server.exporter.active, "record_toggle from idle must start recording"
+    asyncio.run(server.handle_action("record_toggle", {}, None))
+    assert not server.exporter.active, "record_toggle while recording must stop recording"
+    print("✓ Record toggle verified: start -> stop seamlessly")
+
+
 if __name__ == "__main__":
     test_zero_pose_logic()
     test_trajectory_sequence()
     test_joint1_left_shoulder_direction()
     test_gripper_d4310_and_origins()
+    test_record_workflow()
     print("\nALL VERIFICATION TESTS PASSED SUCCESSFULLY! ✓")
 

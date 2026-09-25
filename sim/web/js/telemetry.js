@@ -206,7 +206,7 @@ function handleTelemetry(data) {
     }
 }
 
-// 100Hz Continuous Export UI Updater
+// Joint State Record (100Hz) UI Updater
 function handleExportStats(stats) {
     if (!stats) return;
     const badgeText = document.getElementById("export-badge-text");
@@ -214,52 +214,57 @@ function handleExportStats(stats) {
     const dot = document.getElementById("export-dot");
     const subInfo = document.getElementById("export-sub-info");
     const samplesBadge = document.getElementById("export-samples-badge");
-    const toggleBtn = document.getElementById("btn-export-toggle");
+    const recordBtn = document.getElementById("btn-record-toggle") || document.getElementById("btn-export-toggle");
+    const recordText = document.getElementById("btn-record-text");
+    const recordIcon = document.getElementById("btn-record-icon");
 
     const hz = stats.sample_rate_hz > 0 ? stats.sample_rate_hz.toFixed(1) : "100.0";
-    const samples = stats.samples_recorded || 0;
+    const samples = stats.samples_recorded !== undefined ? stats.samples_recorded : (stats.samples || 0);
     const elapsed = stats.elapsed_sec ? stats.elapsed_sec.toFixed(1) : (samples / 100).toFixed(1);
-    const filename = stats.filepath || "chờ kết nối...";
+    const filename = stats.filepath || stats.file_name || "";
 
     if (stats.recording && stats.active) {
-        if (headerBadge) headerBadge.className = "badge badge-export active";
+        // --- RECORDING STATE ---
+        if (headerBadge) headerBadge.className = "badge badge-export recording";
         if (badgeText) badgeText.textContent = `REC (${samples.toLocaleString()})`;
-        if (dot) dot.className = "export-status-dot active";
-        if (subInfo) subInfo.textContent = `Tần số: ${hz} Hz • Đang ghi: exports/${filename} • UDP :${stats.udp_port || 9871}`;
+        if (dot) dot.className = "export-status-dot recording";
+        if (subInfo) subInfo.textContent = `🔴 Đang record: exports/${filename} • ${hz} Hz • UDP :${stats.udp_port || 9871}`;
         if (samplesBadge) {
-            samplesBadge.className = "badge badge-success";
-            samplesBadge.textContent = `${samples.toLocaleString()} mẫu (${elapsed}s)`;
+            samplesBadge.className = "badge badge-danger";
+            samplesBadge.textContent = `🔴 Đang Record: ${samples.toLocaleString()} mẫu (${elapsed}s)`;
         }
-        if (toggleBtn) {
-            toggleBtn.textContent = "Tạm dừng";
-            toggleBtn.className = "btn-subtle-sm";
+        if (recordBtn) {
+            recordBtn.className = "btn-record-main recording";
+            recordBtn.title = "Bấm để dừng và lưu file Record";
         }
-    } else if (stats.active && !stats.recording) {
-        if (headerBadge) headerBadge.className = "badge badge-export paused";
-        if (badgeText) badgeText.textContent = `PAUSED (${samples.toLocaleString()})`;
-        if (dot) dot.className = "export-status-dot paused";
-        if (subInfo) subInfo.textContent = `TẠM DỪNG GHI • File: exports/${filename} • UDP :${stats.udp_port || 9871}`;
-        if (samplesBadge) {
-            samplesBadge.className = "badge badge-warning";
-            samplesBadge.textContent = `Tạm dừng • ${samples.toLocaleString()} mẫu`;
-        }
-        if (toggleBtn) {
-            toggleBtn.textContent = "Tiếp tục";
-            toggleBtn.className = "btn-subtle-sm btn-subtle-primary";
-        }
+        if (recordIcon) recordIcon.textContent = "■";
+        if (recordText) recordText.textContent = "Dừng Record (End)";
     } else {
+        // --- IDLE / STOPPED STATE ---
         if (headerBadge) headerBadge.className = "badge badge-export idle";
-        if (badgeText) badgeText.textContent = "IDLE (Chờ robot)";
+        if (badgeText) badgeText.textContent = "REC: Sẵn sàng";
         if (dot) dot.className = "export-status-dot idle";
-        if (subInfo) subInfo.textContent = `Tự động xuất 100Hz khi cắm USB/CAN robot • UDP :${stats.udp_port || 9871}`;
-        if (samplesBadge) {
-            samplesBadge.className = "badge badge-outline";
-            samplesBadge.textContent = "Chờ kết nối";
+
+        if (samples > 0 && filename) {
+            if (subInfo) subInfo.textContent = `✓ Đã lưu: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
+            if (samplesBadge) {
+                samplesBadge.className = "badge badge-success";
+                samplesBadge.textContent = `✓ Đã lưu • ${samples.toLocaleString()} mẫu (${elapsed}s)`;
+            }
+        } else {
+            if (subInfo) subInfo.textContent = `Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu • UDP :${stats.udp_port || 9871}`;
+            if (samplesBadge) {
+                samplesBadge.className = "badge badge-outline";
+                samplesBadge.textContent = "Chờ bắt đầu";
+            }
         }
-        if (toggleBtn) {
-            toggleBtn.textContent = "Bắt đầu ghi";
-            toggleBtn.className = "btn-subtle-sm";
+
+        if (recordBtn) {
+            recordBtn.className = "btn-record-main";
+            recordBtn.title = "Bấm để bắt đầu Record dữ liệu góc khớp";
         }
+        if (recordIcon) recordIcon.textContent = "●";
+        if (recordText) recordText.textContent = "Bắt đầu Record";
     }
 }
 

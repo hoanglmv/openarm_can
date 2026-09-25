@@ -54,9 +54,17 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(b'{"error": "No export file found"}')
                     return
-        elif self.path == "/api/export/new_session":
+        elif self.path in ["/api/record/start", "/api/export/new_session"]:
             if hasattr(self.server, 'app') and self.server.app:
-                self.server.app.exporter.start_session("manual")
+                self.server.app.exporter.start_session("record")
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
+                return
+        elif self.path == "/api/record/stop":
+            if hasattr(self.server, 'app') and self.server.app:
+                self.server.app.exporter.close_session()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
