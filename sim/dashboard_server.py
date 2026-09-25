@@ -64,7 +64,7 @@ class OpenArmDashboardServer:
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = True
         self.velocity_limit = 0.25  # rad/s (~14°/s) gentle & safe velocity limit
-        self.gripper_invert = {8: True, 16: True}  # Direction invert flag (default True: 0mm=closed/1.15rad, 41.5mm=open/0.0rad)
+        self.gripper_invert = {8: False, 16: False}  # Direction invert flag (default False: 0mm=closed/0.0rad, 41.5mm=open/1.15rad)
 
         if self.mode == "real":
             print(f"[Dashboard] Initializing in REAL ROBOT HARDWARE MODE on {can0_if} / {can1_if}")
@@ -464,11 +464,13 @@ class OpenArmDashboardServer:
                     m.q_target = m.q
                     m.q_des = m.q
             if self.mode == "real":
-                for m in self.motors.values():
-                    if m.joint_idx == 8:
-                        self.hw.init_gripper_motor(m.id, save_flash=False)
-                    else:
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                def _bg_enable():
+                    for m in self.motors.values():
+                        if m.joint_idx == 8:
+                            self.hw.init_gripper_motor(m.id, save_flash=False)
+                        else:
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                threading.Thread(target=_bg_enable, daemon=True).start()
             else:
                 for m in self.hw.motors.values():
                     m.enabled = True
@@ -571,21 +573,28 @@ class OpenArmDashboardServer:
                 if m:
                     pos_m = q_raw / 1000.0 if (q_raw > 0.043 and q_raw <= 43.0) else q_raw
                     safe_pos = min(0.0415, max(0.0, pos_m))
-                    invert = self.gripper_invert.get(m.id, True)
+                    invert = self.gripper_invert.get(m.id, False)
                     stroke_ratio = safe_pos / 0.0415
                     ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
                     rad_target = ratio * 1.15
 
-                    m.enabled = True
-                    m.error_code = 1
+                    if not m.enabled:
+                        m.enabled = True
+                        if self.mode == "real":
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                    elif m.error_code >= 8:
+                        if self.mode == "real":
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                            time.sleep(0.01)
+                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                        m.error_code = 1
+
                     m.q_target = rad_target
                     m.q_cmd = rad_target
                     if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
                         posforce_can_id = m.send_id + 0x300
                         vel_uint = 2500  # 25.0 rad/s
-                        i_uint = 1800    # 18% safe current limit
+                        i_uint = 2200    # 22% safe current limit
                         posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
                         self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                         refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
@@ -641,22 +650,29 @@ class OpenArmDashboardServer:
 
             for m in target_motors:
                 safe_pos = min(0.0415, max(0.0, pos))
-                invert = self.gripper_invert.get(m.id, True)
+                invert = self.gripper_invert.get(m.id, False)
                 stroke_ratio = safe_pos / 0.0415
                 ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
                 rad_target = ratio * 1.15
 
-                m.enabled = True
-                m.error_code = 1
+                if not m.enabled:
+                    m.enabled = True
+                    if self.mode == "real":
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                elif m.error_code >= 8:
+                    if self.mode == "real":
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                        time.sleep(0.01)
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                    m.error_code = 1
+
                 m.q_target = rad_target
                 m.q_cmd = rad_target
 
                 if self.mode == "real":
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
                     posforce_can_id = m.send_id + 0x300
                     vel_uint = 2500  # 25.0 rad/s
-                    i_uint = 1800    # 18% safe current limit
+                    i_uint = 2200    # 22% safe current limit
                     posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
                     self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                     refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
@@ -782,22 +798,29 @@ class OpenArmDashboardServer:
                 # Gripper (Joint 8 / Joint 16)
                 pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
                 safe_pos = min(0.0415, max(0.0, pos_m))
-                invert = self.gripper_invert.get(motor_id, True)
+                invert = self.gripper_invert.get(motor_id, False)
                 stroke_ratio = safe_pos / 0.0415
                 ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
                 rad_target = ratio * 1.15
 
-                m.enabled = True
-                m.error_code = 1
+                if not m.enabled:
+                    m.enabled = True
+                    if self.mode == "real":
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                elif m.error_code >= 8:
+                    if self.mode == "real":
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                        time.sleep(0.01)
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                    m.error_code = 1
+
                 m.q_target = rad_target
                 m.q_cmd = rad_target
 
                 if self.mode == "real":
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
                     posforce_can_id = m.send_id + 0x300
                     vel_uint = 2500
-                    i_uint = 1800
+                    i_uint = 2200
                     posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
                     self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                     refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
@@ -848,7 +871,7 @@ class OpenArmDashboardServer:
                                 m._last_posforce_tx = now
                                 posforce_can_id = m.send_id + 0x300
                                 vel_uint = 2500  # 25.0 rad/s
-                                i_uint = 1800    # 0.18 pu safe torque limit
+                                i_uint = 2200    # 0.22 pu safe torque limit
                                 posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
                                 self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                                 refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])

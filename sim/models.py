@@ -42,7 +42,7 @@ class RealDamiaoMotorState:
         self.tau_ff = 0.0
         self.last_update = 0.0
         self.has_physical_sync = False
-        self.invert = True if joint_idx == 8 else False
+        self.invert = False
         self.gripper_ready = False
 
         # Internal rate limiters & recovery timestamps
@@ -55,7 +55,7 @@ class RealDamiaoMotorState:
         # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.0415) and mm
         if self.joint_idx == 8:
             raw_ratio = max(0.0, min(1.0, abs(self.q) / 1.15))
-            ratio = (1.0 - raw_ratio) if getattr(self, 'invert', True) else raw_ratio
+            ratio = (1.0 - raw_ratio) if getattr(self, 'invert', False) else raw_ratio
             stroke_m = ratio * 0.0415
             q_val = round(stroke_m, 4)
             q_deg_val = round(stroke_m * 1000.0, 1)  # displayed as mm in UI

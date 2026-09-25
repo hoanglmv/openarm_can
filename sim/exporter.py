@@ -162,7 +162,7 @@ class JointStateExporter100Hz:
                     if m:
                         if mid in [8, 16]:
                             raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.15))
-                            ratio = (1.0 - raw_ratio) if getattr(m, 'invert', True) else raw_ratio
+                            ratio = (1.0 - raw_ratio) if getattr(m, 'invert', False) else raw_ratio
                             pos = ratio * 0.0415
                         else:
                             pos = m.q

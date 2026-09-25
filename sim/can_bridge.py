@@ -279,34 +279,17 @@ class RealRobotHardwareBridge:
             return
 
         with self.lock:
+            motor.error_code = error_code
             if motor.joint_idx == 8:
-                now = time.time()
-                if error_code >= 8:
-                    # Motor reached mechanical limit or grasped object (stall flag)
-                    # Auto-clear fault (0xFB) AND re-enable (0xFC)
-                    if now - getattr(motor, '_last_clear_err', 0) > 0.05:
-                        motor._last_clear_err = now
-                        self.send_frame(iface, motor.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        self.send_frame(iface, motor.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    motor.error_code = 1
+                if error_code == 1:
                     motor.enabled = True
-                elif error_code == 0:
+                elif error_code == 0 and motor.enabled:
                     # Motor was power-cycled / unplugged and replugged!
-                    # Auto re-arm in POS_FORCE mode and re-enable so it immediately recovers without manual intervention
-                    if now - getattr(motor, '_last_rearm', 0) > 0.4:
+                    now = time.time()
+                    if now - getattr(motor, '_last_rearm', 0) > 1.0:
                         motor._last_rearm = now
-                        self.send_frame(iface, motor.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        set_mode_data = bytes([motor.send_id & 0xFF, (motor.send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
-                        self.send_frame(iface, 0x7FF, set_mode_data)
-                        self.send_frame(iface, motor.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    motor.error_code = 1
-                    motor.enabled = True
-                else:
-                    motor.error_code = error_code
-                    if error_code == 1:
-                        motor.enabled = True
+                        self.init_gripper_motor(motor.id, save_flash=False)
             else:
-                motor.error_code = error_code
                 if error_code >= 8:
                     motor.enabled = False
                 elif error_code == 1:
