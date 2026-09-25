@@ -116,8 +116,8 @@ class RealRobotHardwareBridge:
     def init_gripper_motor(self, motor_id: int, save_flash: bool = False):
         """
         Configure and enable gripper motor (Joint 8 / Joint 16).
-        Clears any hardware faults, enables output, and queries initial angle.
-        Supports both MIT Impedance Mode (default) and POS_FORCE Mode.
+        Clears any hardware faults, sets RID 10 (CTRL_MODE) = 4 (POS_FORCE),
+        enables motor output (0xFC), and queries initial position.
         """
         m = self.motors.get(motor_id)
         if not m or m.joint_idx != 8:
@@ -128,20 +128,26 @@ class RealRobotHardwareBridge:
 
         # 1. Clear any fault/stall state (0xFB)
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFB]))
-        time.sleep(0.01)
+        time.sleep(0.015)
 
-        # 2. Enable motor output (0xFC)
+        # 2. Write register RID 10 (CTRL_MODE) = 4 (POS_FORCE) via management ID 0x7FF
+        # Frame format: [send_id_low, send_id_high, 0x55 (write), RID (10), val0 (4), val1, val2, val3]
+        mode_write_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
+        self.send_frame(iface, 0x7FF, mode_write_data)
+        time.sleep(0.015)
+
+        # 3. Enable motor output (0xFC)
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFC]))
-        time.sleep(0.01)
+        time.sleep(0.015)
 
-        # 3. Request initial state (0xCC)
+        # 4. Request initial state (0xCC)
         query_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
         self.send_frame(iface, 0x7FF, query_data)
 
         m.enabled = True
         m.error_code = 1
         m.gripper_ready = True
-        print(f"[Hardware Bridge] Gripper Motor {motor_id} ({m.name}) armed on {iface}")
+        print(f"[Hardware Bridge] Gripper Motor {motor_id} ({m.name}) armed in POS_FORCE mode on {iface}")
 
     def stop(self):
         """Stop reader loops and close SocketCAN sockets."""

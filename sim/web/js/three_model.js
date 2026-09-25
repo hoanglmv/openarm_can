@@ -193,9 +193,9 @@ function buildBimanualOpenArm() {
     logoGroup.add(makeBar({x: -0.014, y: 0.012}, {x: 0, y: -0.010}));
     logoGroup.add(makeBar({x: 0, y: -0.010}, {x: 0.014, y: 0.012}));
 
-    // 4. Build Left Arm and Right Arm - Tightly and gracefully flanking the column
-    buildSingleArm(torso, "left",  -0.075, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
-    buildSingleArm(torso, "right",  0.075, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
+    // 4. Build Left Arm and Right Arm - Positioned at exact OpenArm v2.0 Joint 1 Origins (y = +/-0.0625m)
+    buildSingleArm(torso, "left",  -0.0625, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
+    buildSingleArm(torso, "right",  0.0625, 0.045, 0, matteBlackMat, motorCasingMat, silverMetalMat, cableMat, labelMat);
 }
 
 // Single 7-DOF Arm + 2-Finger Gripper Kinematic Assembly
@@ -258,8 +258,11 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
     // Joint 2: Shoulder Roll / Abduction (rotates around Z axis)
     // Hinge located at outer shoulder pod, swings arm outward away from torso
     // ====================================================
+    // Joint 2: Shoulder Roll / Abduction (rotates around Z axis)
+    // Lateral offset from J1: 0.060m (y: -0.0600 in OpenArm v2.0 URDF)
+    // ====================================================
     const j2 = new THREE.Group();
-    j2.position.set(sign * 0.036, 0, 0);
+    j2.position.set(sign * 0.060, 0, 0);
     j1.add(j2);
     armJoints[1] = { group: j2, axis: 'z' };
 
@@ -269,8 +272,8 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
     j2Hub.castShadow = true;
     j2.add(j2Hub);
 
-    // Upper Arm Link: Ergonomic curved sculpted black casing (~0.23m long)
-    const upperArmLength = 0.23;
+    // Upper Arm Link: Ergonomic curved sculpted black casing (0.220m total from J2 to J4)
+    const upperArmLength = 0.220;
     const upperArmBody = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.036, upperArmLength, 24), blackMat);
     upperArmBody.position.y = -upperArmLength / 2;
     upperArmBody.castShadow = true;
@@ -299,9 +302,10 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
 
     // ====================================================
     // Joint 3: Elbow Roll (rotates around Y axis)
+    // Offset from J2: -0.06625m (z: -0.06625 in OpenArm v2.0 URDF)
     // ====================================================
     const j3 = new THREE.Group();
-    j3.position.y = -upperArmLength;
+    j3.position.y = -0.06625;
     j2.add(j3);
     armJoints[2] = { group: j3, axis: 'y' };
 
@@ -318,10 +322,11 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
 
     // ====================================================
     // Joint 4: Elbow Pitch (rotates around X axis)
+    // Offset from J3: -0.15375m (z: -0.15375 in OpenArm v2.0 URDF)
     // Features authentic DM4340 motor with circular bolt pattern & spec label
     // ====================================================
     const j4 = new THREE.Group();
-    j4.position.y = -0.045;
+    j4.position.y = -0.15375;
     j3.add(j4);
     armJoints[3] = { group: j4, axis: 'x' };
 
@@ -361,8 +366,8 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
     labelBand.rotation.y = -Math.PI / 2;
     j4.add(labelBand);
 
-    // Forearm Link: Sleek black link (~0.19m long)
-    const forearmLength = 0.19;
+    // Forearm Link: Sleek black link (0.216m total from J4 to J6)
+    const forearmLength = 0.216;
     const forearmBody = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.030, forearmLength, 24), blackMat);
     forearmBody.position.y = -forearmLength / 2;
     forearmBody.castShadow = true;
@@ -381,9 +386,10 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
 
     // ====================================================
     // Joint 5: Wrist Roll (rotates around Y axis)
+    // Offset from J4: -0.0955m (z: -0.0955 in OpenArm v2.0 URDF)
     // ====================================================
     const j5 = new THREE.Group();
-    j5.position.y = -forearmLength;
+    j5.position.y = -0.0955;
     j4.add(j5);
     armJoints[4] = { group: j5, axis: 'y' };
 
@@ -398,10 +404,11 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
 
     // ====================================================
     // Joint 6: Wrist Pitch (rotates around X axis)
+    // Offset from J5: -0.1205m (z: -0.1205 in OpenArm v2.0 URDF)
     // Features signature Machined Silver Clevis / Dual-Prong Fork Bracket
     // ====================================================
     const j6 = new THREE.Group();
-    j6.position.y = -0.036;
+    j6.position.y = -0.1205;
     j5.add(j6);
     armJoints[5] = { group: j6, axis: 'x' };
 
@@ -434,10 +441,11 @@ function buildSingleArm(parent, side, offsetX, offsetY, offsetZ, blackMat, motor
 
     // ====================================================
     // Joint 7: Wrist Yaw / End-Effector Roll (rotates around Y axis)
+    // Offset from J6: 0.0m (z: 0.0 in OpenArm v2.0 URDF)
     // Features vertical black DM4310 motor cylinder with silver flanges
     // ====================================================
     const j7 = new THREE.Group();
-    j7.position.y = -0.040;
+    j7.position.y = 0.0;
     j6.add(j7);
     armJoints[6] = { group: j7, axis: 'y' };
 

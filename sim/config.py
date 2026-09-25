@@ -98,6 +98,17 @@ JOINT_LIMITS = {
     16: (0.000, 0.043),     # Right Gripper: Stroke: 0.0 - 0.043 m (0 - 43 mm)
 }
 
+# OpenArm v2.0 Kinematic Joint Origins (from Enactic OpenArm v2.0 joint_origins.yaml)
+JOINT_ORIGINS = {
+    "joint1": {"x": 0.0, "y": -0.0625, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint2": {"x": 0.0, "y": -0.0600000000000001, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint3": {"x": 0.0, "y": 0.0, "z": -0.06625000000000079, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint4": {"x": 0.0, "y": 0.0, "z": -0.15375, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint5": {"x": 0.0, "y": 0.0, "z": -0.0955000000000005, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint6": {"x": 0.0, "y": 0.0, "z": -0.120499999999998, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+    "joint7": {"x": 0.0, "y": 0.0, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+}
+
 # Motor physical mounting direction multiplier (+1.0: normal, -1.0: inverted physical mounting)
 # On OpenArm, Left Shoulder Pitch (Motor 1) is mechanically mirrored relative to Right Shoulder Pitch (Motor 9).
 # Setting -1.0 ensures that a positive angle (+q) moves both left and right arms forward.

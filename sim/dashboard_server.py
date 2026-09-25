@@ -801,41 +801,50 @@ class OpenArmDashboardServer:
     def _send_gripper_command(self, m, pos_m: float):
         """
         Send robust gripper command to physical robot / sim.
-        Uses MIT Mode (primary, compatible with factory default DM4310)
-        and POS_FORCE mode (secondary dual-broadcast).
-        Handles sign differences between Left (+rad) and Right (-rad) grippers.
+        Maps linear stroke (0.0 .. 0.043 m) to motor angle:
+          - Left Gripper (Motor 8, can1): 0.0 rad (closed) to -1.20 rad (open 43 mm)
+          - Right Gripper (Motor 16, can0): 0.0 rad (closed) to +1.20 rad (open 43 mm)
+        Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
+        and MIT mode fallback.
         """
-        safe_pos = min(0.0415, max(0.0, pos_m))
+        safe_pos = min(0.043, max(0.0, pos_m))
         invert = self.gripper_invert.get(m.id, False)
-        stroke_ratio = safe_pos / 0.0415
+        stroke_ratio = safe_pos / 0.043
         ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
 
-        # Left Arm Gripper (Motor 8): 0.0 to +1.50 rad
-        # Right Arm Gripper (Motor 16): 0.0 to -1.50 rad
-        is_right = (m.id == 16 or getattr(m, 'arm', '') == "right")
-        sign = -1.0 if is_right else 1.0
-        rad_target = sign * ratio * 1.50
+        # Left Arm Gripper (Motor 8): 0.0 (closed) to -1.20 rad (open 43mm)
+        # Right Arm Gripper (Motor 16): 0.0 (closed) to +1.20 rad (open 43mm)
+        is_left = (m.id == 8 or getattr(m, 'arm', '') == "left")
+        sign = -1.0 if is_left else 1.0
+        rad_target = sign * ratio * 1.20
 
         if not m.enabled:
             m.enabled = True
             if self.mode == "real":
-                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                self.hw.init_gripper_motor(m.id, save_flash=False)
         elif m.error_code >= 8:
             if self.mode == "real":
-                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                time.sleep(0.01)
-                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                self.hw.init_gripper_motor(m.id, save_flash=False)
             m.error_code = 1
 
         m.q_target = rad_target
         m.q_cmd = rad_target
 
         if self.mode == "real":
-            # 1. MIT mode frame on m.send_id (0x08 / 0x10)
+            # 1. Primary: POS_FORCE mode frame on m.send_id + 0x300 (0x308)
+            # Speed limit: 10.0 rad/s (vel_uint = 1000)
+            # Safe torque current limit: 15% (i_uint = 1500 ~ 1.5 Nm)
+            posforce_can_id = m.send_id + 0x300
+            vel_uint = 1000  # 10.0 rad/s
+            i_uint = 1500    # 15% current limit (1.5 Nm safe limit)
+            posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+            self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+
+            # 2. Secondary: MIT mode frame fallback on m.send_id (0x08)
             q_uint = double_to_uint(rad_target, -m.pMax, m.pMax, 16)
             dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
-            kp_uint = double_to_uint(45.0, 0.0, 500.0, 12)
-            kd_uint = double_to_uint(1.5, 0.0, 5.0, 12)
+            kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
+            kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
             tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
             d0 = (q_uint >> 8) & 0xFF
             d1 = q_uint & 0xFF
@@ -848,12 +857,7 @@ class OpenArmDashboardServer:
             mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
             self.hw.send_frame(m.can_if, m.send_id, mit_data)
 
-            # 2. Dual-broadcast POS_FORCE frame on m.send_id + 0x300
-            posforce_can_id = m.send_id + 0x300
-            vel_uint = 2500  # 25.0 rad/s
-            i_uint = 2500    # 25% safe torque limit
-            posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-            self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+            # 3. State query frame
             refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
             self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
 
@@ -1438,15 +1442,22 @@ class OpenArmDashboardServer:
                     # If in real mode and motor is enabled, send CAN command
                     if self.mode == "real":
                         if m.joint_idx == 8:
-                            # End-Effector parallel gripper: Dual MIT + POS_FORCE mode
+                            # End-Effector parallel gripper: POS_FORCE mode + MIT fallback
                             now = time.time()
                             if now - getattr(m, '_last_posforce_tx', 0) > 0.04:
                                 m._last_posforce_tx = now
-                                # 1. MIT mode frame on m.send_id (0x08 / 0x10)
-                                q_uint = double_to_uint(m.q_target, -m.pMax, m.pMax, 16)
+                                # 1. Primary: POS_FORCE frame on m.send_id + 0x300
+                                posforce_can_id = m.send_id + 0x300
+                                vel_uint = 1000  # 10.0 rad/s
+                                i_uint = 1500    # 15% safe current limit (1.5 Nm)
+                                posforce_data = struct.pack("<fHH", float(m.q_cmd), vel_uint, i_uint)
+                                self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+
+                                # 2. Secondary: MIT mode frame fallback on m.send_id (0x08)
+                                q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
                                 dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
-                                kp_uint = double_to_uint(45.0, 0.0, 500.0, 12)
-                                kd_uint = double_to_uint(1.5, 0.0, 5.0, 12)
+                                kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
+                                kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
                                 tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
                                 d0 = (q_uint >> 8) & 0xFF
                                 d1 = q_uint & 0xFF
@@ -1458,15 +1469,6 @@ class OpenArmDashboardServer:
                                 d7 = tau_uint & 0xFF
                                 mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
                                 self.hw.send_frame(m.can_if, m.send_id, mit_data)
-
-                                # 2. POS_FORCE mode frame on m.send_id + 0x300
-                                posforce_can_id = m.send_id + 0x300
-                                vel_uint = 2500  # 25.0 rad/s
-                                i_uint = 2500    # 25% safe torque limit
-                                posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
-                                self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                                refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                                self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
                         else:
                             # 7-DOF Arm motors (MIT Mode)
                             motor_dir = getattr(m, 'direction', 1.0)

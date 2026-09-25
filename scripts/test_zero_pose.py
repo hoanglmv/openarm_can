@@ -151,9 +151,56 @@ def test_joint1_left_shoulder_direction():
     print("✓ Real Left Arm now swings FORWARD synchronously with Right Arm and 3D Simulation!")
 
 
+def test_gripper_d4310_and_origins():
+    print("\n[TEST] Testing Gripper DM4310 Mapping & OpenArm v2.0 Joint Origins...")
+    from config import JOINT_ORIGINS, JOINT_LIMITS
+    from models import RealDamiaoMotorState
+
+    # 1. Verify OpenArm v2.0 Kinematic Joint Origins
+    assert "joint1" in JOINT_ORIGINS and JOINT_ORIGINS["joint1"]["y"] == -0.0625
+    assert "joint2" in JOINT_ORIGINS and abs(JOINT_ORIGINS["joint2"]["y"] - (-0.0600)) < 1e-6
+    assert "joint3" in JOINT_ORIGINS and abs(JOINT_ORIGINS["joint3"]["z"] - (-0.06625)) < 1e-6
+    assert "joint4" in JOINT_ORIGINS and JOINT_ORIGINS["joint4"]["z"] == -0.15375
+    assert "joint5" in JOINT_ORIGINS and abs(JOINT_ORIGINS["joint5"]["z"] - (-0.0955)) < 1e-6
+    assert "joint6" in JOINT_ORIGINS and abs(JOINT_ORIGINS["joint6"]["z"] - (-0.1205)) < 1e-6
+    assert "joint7" in JOINT_ORIGINS and JOINT_ORIGINS["joint7"]["z"] == 0.0
+    print("✓ OpenArm v2.0 Joint Origins verified (J1: y=-0.0625, J2: y=-0.060, J3: z=-0.06625, J4: z=-0.15375, J5: z=-0.0955, J6: z=-0.1205, J7: z=0.0)")
+
+    # 2. Test Gripper Direction & Command Mapping
+    server = OpenArmDashboardServer(mode="sim")
+    m_left_grip = server.motors[8]
+    m_right_grip = server.motors[16]
+
+    # Test Closed (0.0 m)
+    server._send_gripper_command(m_left_grip, 0.0)
+    server._send_gripper_command(m_right_grip, 0.0)
+    assert abs(m_left_grip.q_target - 0.0) < 1e-5, f"Left gripper closed target must be 0.0 rad, got {m_left_grip.q_target}"
+    assert abs(m_right_grip.q_target - 0.0) < 1e-5, f"Right gripper closed target must be 0.0 rad, got {m_right_grip.q_target}"
+
+    # Test Fully Open (0.043 m / 43 mm)
+    server._send_gripper_command(m_left_grip, 0.043)
+    server._send_gripper_command(m_right_grip, 0.043)
+    assert abs(m_left_grip.q_target - (-1.20)) < 1e-5, f"Left gripper open target must be -1.20 rad, got {m_left_grip.q_target}"
+    assert abs(m_right_grip.q_target - (+1.20)) < 1e-5, f"Right gripper open target must be +1.20 rad, got {m_right_grip.q_target}"
+    print("✓ Gripper command mapping verified: Left opens negative (-1.20 rad), Right opens positive (+1.20 rad), both close at 0.0 rad")
+
+    # 3. Test Gripper Feedback to_dict() display in mm
+    # Left Gripper at -0.60 rad (half open ~ 21.5 mm)
+    m_left_grip.q = -0.60
+    dict_l = m_left_grip.to_dict()
+    assert abs(dict_l["q_deg"] - 21.5) < 0.5, f"Left gripper mm display mismatch: {dict_l['q_deg']}"
+
+    # Right Gripper at +0.60 rad (half open ~ 21.5 mm)
+    m_right_grip.q = 0.60
+    dict_r = m_right_grip.to_dict()
+    assert abs(dict_r["q_deg"] - 21.5) < 0.5, f"Right gripper mm display mismatch: {dict_r['q_deg']}"
+    print(f"✓ Gripper feedback to_dict() verified: reports linear stroke in mm (Left: {dict_l['q_deg']} mm, Right: {dict_r['q_deg']} mm)")
+
+
 if __name__ == "__main__":
     test_zero_pose_logic()
     test_trajectory_sequence()
     test_joint1_left_shoulder_direction()
+    test_gripper_d4310_and_origins()
     print("\nALL VERIFICATION TESTS PASSED SUCCESSFULLY! ✓")
 
