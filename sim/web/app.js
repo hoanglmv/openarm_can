@@ -66,7 +66,6 @@ function initCameraFeed() {
     image.addEventListener("load", () => {
         image.classList.add("is-live");
         placeholder.style.display = "none";
-        setStatus("live", "LIVE");
     });
 
     image.addEventListener("error", () => {
@@ -85,14 +84,22 @@ function initCameraFeed() {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (data.streaming) {
-                setStatus("live", "LIVE");
+                image.classList.add("is-live");
+                placeholder.style.display = "none";
+                if (data.has_live_feed) {
+                    setStatus("live", "LIVE");
+                } else {
+                    setStatus("waiting", "STANDBY");
+                }
                 if (!streamRequested) connectStream();
             } else {
                 image.classList.remove("is-live");
                 placeholder.style.display = "flex";
-                setStatus("waiting", "WAITING");
+                setStatus("offline", "OFFLINE");
             }
         } catch (_error) {
+            image.classList.remove("is-live");
+            placeholder.style.display = "flex";
             setStatus("offline", "OFFLINE");
         }
     };

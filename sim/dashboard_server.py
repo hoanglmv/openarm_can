@@ -7,6 +7,7 @@ external UDP teleop stream receiver, and USB hotplug monitoring.
 """
 
 import asyncio
+import glob
 import json
 import math
 import os
@@ -193,10 +194,10 @@ class OpenArmDashboardServer:
 
         try:
             color_profile = os.environ.get(
-                "OPENARM_CAMERA_COLOR_PROFILE", "640x480x60"
+                "OPENARM_CAMERA_COLOR_PROFILE", "640x480x30"
             )
             depth_profile = os.environ.get(
-                "OPENARM_CAMERA_DEPTH_PROFILE", "640x480x60"
+                "OPENARM_CAMERA_DEPTH_PROFILE", "640x480x30"
             )
             self.camera_driver_process = subprocess.Popen(
                 [
@@ -268,6 +269,13 @@ class OpenArmDashboardServer:
             camera_python = sys.executable or shutil.which("python3") or "/usr/bin/python3"
 
         try:
+            subprocess.run(
+                ["fuser", "-k", f"{CAMERA_STREAM_PORT}/tcp"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            time.sleep(0.2)
             self.camera_process = subprocess.Popen(
                 [
                     camera_python,
@@ -415,12 +423,36 @@ class OpenArmDashboardServer:
 
         return None, None
 
+    def _find_realsense_usb(self):
+        """Query usbipd on Windows host for connected RealSense cameras."""
+        try:
+            res = subprocess.run(["usbipd", "list"], capture_output=True, text=True, timeout=2)
+            for line in res.stdout.splitlines():
+                if "REALSENSE" in line.upper() or "8086:0B3A" in line.upper():
+                    parts = line.split()
+                    if parts and len(parts[0].split("-")) == 2 and all(p.isdigit() for p in parts[0].split("-")):
+                        return parts[0], "Intel RealSense Depth Camera D435i"
+        except Exception:
+            pass
+        return None, None
+
     def _exec_connect_usb(self):
         """Execute automated USB attach and CAN-FD configuration sequence."""
         try:
             print("[USB] Bắt đầu kết nối USB Robot...")
             if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang quét cổng USB Robot..."), self.loop)
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang quét cổng USB Robot & Camera..."), self.loop)
+
+            # Check and attach RealSense camera if present on Windows host
+            cam_busid, cam_desc = self._find_realsense_usb()
+            if cam_busid:
+                try:
+                    print(f"[USB] Đang gắn camera RealSense (BusID: {cam_busid}) vào WSL2...")
+                    subprocess.run(["usbipd", "attach", "--wsl", "--busid", cam_busid], capture_output=True, text=True, timeout=5)
+                    if self.camera_driver_process is None or self.camera_driver_process.poll() is not None:
+                        self._start_camera_driver()
+                except Exception as ce:
+                    print(f"[USB Camera Warning]: {ce}")
 
             can0_present = os.path.exists("/sys/class/net/can0")
             busid = None
@@ -628,6 +660,22 @@ class OpenArmDashboardServer:
                         asyncio.run_coroutine_threadsafe(self.broadcast_notice("warning", "Cáp USB đã tháo. Đang hoạt động ở chế độ Mô phỏng (vcan0)"), self.loop)
                 except Exception as e:
                     print(f"[Hotplug] Error falling back to sim mode: {e}")
+
+            # Camera driver auto-recovery / hotplug
+            has_realsense_wsl = False
+            for p in glob.glob("/sys/bus/usb/devices/*/idVendor"):
+                try:
+                    with open(p, "r") as f:
+                        if f.read().strip() == "8086":
+                            has_realsense_wsl = True
+                            break
+                except Exception:
+                    pass
+
+            if has_realsense_wsl:
+                if self.camera_driver_process is None or self.camera_driver_process.poll() is not None:
+                    print("[Hotplug] RealSense camera detected in WSL2! Starting camera driver...")
+                    self._start_camera_driver()
 
     async def ws_handler(self, websocket):
         """Handle incoming WebSocket client connections and dispatch actions."""
