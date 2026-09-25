@@ -10,9 +10,11 @@ import asyncio
 import json
 import math
 import os
+import shutil
 import socket
 import struct
 import subprocess
+import sys
 import threading
 import time
 from http.server import ThreadingHTTPServer
@@ -22,10 +24,19 @@ import websockets
 
 try:
     from config import (
+        CAMERA_ALIGNED_DEPTH_TOPIC,
+        CAMERA_DEPTH_TOPIC,
+        CAMERA_RAW_DEPTH_TOPIC,
+        CAMERA_RAW_RGB_TOPIC,
+        CAMERA_STREAM_PORT,
+        CAMERA_TOPIC,
         CONTROL_FREQ,
+        DATA_FREQUENCY_HZ,
         HTTP_PORT,
+        JOINT_BRIDGE_PORT,
         JOINT_LIMITS,
         JOINT_NAME_TO_ID,
+        JOINT_NAMES,
         TELEMETRY_FREQ,
         UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
@@ -38,10 +49,19 @@ try:
     from motor_simulator import DamiaoArmSimulator
 except ImportError:
     from .config import (
+        CAMERA_ALIGNED_DEPTH_TOPIC,
+        CAMERA_DEPTH_TOPIC,
+        CAMERA_RAW_DEPTH_TOPIC,
+        CAMERA_RAW_RGB_TOPIC,
+        CAMERA_STREAM_PORT,
+        CAMERA_TOPIC,
         CONTROL_FREQ,
+        DATA_FREQUENCY_HZ,
         HTTP_PORT,
+        JOINT_BRIDGE_PORT,
         JOINT_LIMITS,
         JOINT_NAME_TO_ID,
+        JOINT_NAMES,
         TELEMETRY_FREQ,
         UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
@@ -82,6 +102,13 @@ class OpenArmDashboardServer:
             m.kp = 18.0
             m.kd = 2.0
 
+        # Camera & ACT ROS 2 Bridge processes
+        self.camera_process = None
+        self.camera_driver_process = None
+        self.rgbd_process = None
+        self.joint_bridge_process = None
+        self.joint_udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
         # External joint state streaming diagnostics & metrics
         self.stream_stats = {
             "packets": 0,
@@ -97,18 +124,31 @@ class OpenArmDashboardServer:
 
     def start(self):
         """Start all background services, threads, and WebSocket server."""
-        # 1. Start hardware bridge or simulator
+        # 1. Start camera & ROS 2 bridges
+        self._start_camera_driver()
+        self._start_rgbd_preprocessor()
+        self._start_camera_bridge()
+        self._start_joint_bridge()
+
+        # 2. Start hardware bridge or simulator
         self.hw.start()
 
-        # 2. Start smooth trajectory generator thread (400 Hz)
+        # 3. Start smooth trajectory generator thread (400 Hz)
         self.traj_thread = threading.Thread(target=self._trajectory_loop, daemon=True)
         self.traj_thread.start()
 
-        # 3. Start auto-hotplug interface monitor
+        # 4. Start 50Hz UDP joint stream for ACT data recorder & ROS bridge
+        self.joint_stream_thread = threading.Thread(
+            target=self._joint_stream_loop,
+            daemon=True,
+        )
+        self.joint_stream_thread.start()
+
+        # 5. Start auto-hotplug interface monitor
         self.hotplug_thread = threading.Thread(target=self._hotplug_monitor_loop, daemon=True)
         self.hotplug_thread.start()
 
-        # 4. Start HTTP server thread
+        # 6. Start HTTP server thread
         ThreadingHTTPServer.allow_reuse_address = True
         self.httpd = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), CustomHTTPHandler)
         self.httpd.app = self
@@ -116,18 +156,236 @@ class OpenArmDashboardServer:
         self.http_thread.start()
         print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state, /api/export/*)")
 
-        # 5. Start high-speed UDP Joint Stream receiver (port 9870 for zero-latency ROS 2 / teleop streams)
+        # 7. Start high-speed UDP Joint Stream receiver (port 9870 for zero-latency ROS 2 / teleop streams)
         self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
         self.udp_thread.start()
 
-        # 6. Start continuous 100Hz Joint State Exporter thread
+        # 8. Start continuous 100Hz Joint State Exporter thread
         self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
         self.export_thread.start()
         if self.mode == "real":
             self.exporter.start_session("robot_boot")
 
-        # 7. Start WebSocket & Telemetry Broadcaster
+        # 9. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
+
+    def _start_camera_driver(self):
+        """Launch Intel RealSense ROS 2 camera driver if available."""
+        if "--no-camera" in sys.argv:
+            print("[Camera] Driver disabled by --no-camera")
+            return
+
+        ros2 = shutil.which("ros2")
+        if not ros2:
+            print("[Camera] ros2 CLI not found; skipping RealSense launch")
+            return
+
+        try:
+            subprocess.run(
+                ["ros2", "node", "list"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1.5,
+                check=False,
+            )
+        except Exception:
+            pass
+
+        try:
+            color_profile = os.environ.get(
+                "OPENARM_CAMERA_COLOR_PROFILE", "640x480x60"
+            )
+            depth_profile = os.environ.get(
+                "OPENARM_CAMERA_DEPTH_PROFILE", "640x480x60"
+            )
+            self.camera_driver_process = subprocess.Popen(
+                [
+                    ros2,
+                    "launch",
+                    "realsense2_camera",
+                    "rs_launch.py",
+                    "enable_color:=true",
+                    "enable_depth:=true",
+                    "enable_sync:=true",
+                    "align_depth.enable:=true",
+                    "rgb_camera.color_profile:=" + color_profile,
+                    "depth_module.depth_profile:=" + depth_profile,
+                ],
+            )
+            print(
+                "[Camera] Starting Intel RealSense RGB + aligned depth "
+                f"(color={color_profile}, depth={depth_profile})"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start RealSense driver: {error}")
+
+    def _start_rgbd_preprocessor(self):
+        """Launch synchronized ACT RGB-D output preprocessor (640x480 @ 50 Hz)."""
+        if "--no-camera" in sys.argv:
+            return
+
+        script = os.path.join(os.path.dirname(__file__), "rgbd_preprocessor.py")
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
+        if not os.path.exists(camera_python):
+            camera_python = shutil.which("python3") or sys.executable
+
+        try:
+            self.rgbd_process = subprocess.Popen(
+                [
+                    camera_python,
+                    script,
+                    "--rgb-input",
+                    CAMERA_RAW_RGB_TOPIC,
+                    "--depth-input",
+                    CAMERA_ALIGNED_DEPTH_TOPIC,
+                    "--rgb-output",
+                    CAMERA_TOPIC,
+                    "--depth-output",
+                    CAMERA_DEPTH_TOPIC,
+                    "--width",
+                    "640",
+                    "--height",
+                    "480",
+                    "--rate",
+                    str(int(DATA_FREQUENCY_HZ)),
+                ],
+            )
+            print(
+                f"[Camera] Starting synchronized ACT RGB-D output (640x480 @ {int(DATA_FREQUENCY_HZ)} Hz)"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start RGB-D preprocessor: {error}")
+
+    def _start_camera_bridge(self):
+        """Launch ROS image bridge to HTTP MJPEG stream (port 8890)."""
+        if "--no-camera" in sys.argv:
+            print("[Camera] Bridge disabled by --no-camera")
+            return
+
+        bridge_script = os.path.join(os.path.dirname(__file__), "camera_stream.py")
+        camera_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
+        if not os.path.exists(camera_python):
+            camera_python = shutil.which("python3") or sys.executable
+
+        try:
+            self.camera_process = subprocess.Popen(
+                [
+                    camera_python,
+                    bridge_script,
+                    "--topic",
+                    CAMERA_TOPIC,
+                    "--port",
+                    str(CAMERA_STREAM_PORT),
+                ],
+            )
+            print(
+                f"[Camera] Starting ROS image bridge for {CAMERA_TOPIC} "
+                f"on port {CAMERA_STREAM_PORT}"
+            )
+        except Exception as error:
+            print(f"[Camera] Could not start ROS image bridge: {error}")
+
+    def _start_joint_bridge(self):
+        """Launch OpenArm ROS 2 joint bridge node."""
+        script = os.path.join(os.path.dirname(__file__), "openarm_joint_bridge.py")
+        ros_python = os.environ.get("OPENARM_CAMERA_PYTHON", "/usr/bin/python3")
+        if not os.path.exists(ros_python):
+            ros_python = shutil.which("python3") or sys.executable
+        try:
+            self.joint_bridge_process = subprocess.Popen(
+                [ros_python, script, "--port", str(JOINT_BRIDGE_PORT)],
+            )
+            print(
+                f"[ROS] Publishing /openarm/joint_states and /openarm/joint_commands at {int(DATA_FREQUENCY_HZ)} Hz"
+            )
+        except Exception as error:
+            print(f"[ROS] Could not start OpenArm joint bridge: {error}")
+
+    def _joint_stream_loop(self):
+        """Stream joint states and commands over UDP to the ROS 2 joint bridge at 50 Hz."""
+        period = 1.0 / DATA_FREQUENCY_HZ
+        next_tick = time.perf_counter()
+        while self.running:
+            try:
+                with self.hw.lock:
+                    qpos = []
+                    qvel = []
+                    effort = []
+                    action = []
+                    for motor_id in range(1, 17):
+                        motor = self.motors[motor_id]
+                        # The ACT dataset stores all 16 motor axes, including
+                        # both gripper motors, in their native angular units.
+                        qpos.append(float(motor.q))
+                        qvel.append(float(motor.dq))
+                        effort.append(float(motor.tau))
+                        action.append(float(motor.q_target))
+                payload = json.dumps(
+                    {
+                        "timestamp_ns": time.time_ns(),
+                        "names": JOINT_NAMES,
+                        "qpos": qpos,
+                        "qvel": qvel,
+                        "effort": effort,
+                        "action": action,
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                self.joint_udp_socket.sendto(
+                    payload,
+                    ("127.0.0.1", JOINT_BRIDGE_PORT),
+                )
+            except Exception:
+                pass
+
+            next_tick += period
+            sleep_time = next_tick - time.perf_counter()
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            elif sleep_time < -period:
+                next_tick = time.perf_counter()
+
+    def stop(self):
+        """Clean shutdown of all background threads, processes, and sockets."""
+        self.running = False
+        try:
+            self.hw.stop()
+        except Exception:
+            pass
+        if getattr(self, "httpd", None):
+            try:
+                self.httpd.shutdown()
+                self.httpd.server_close()
+            except Exception:
+                pass
+        try:
+            self.joint_udp_socket.close()
+        except Exception:
+            pass
+        if self.camera_process and self.camera_process.poll() is None:
+            self.camera_process.terminate()
+            try:
+                self.camera_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.camera_process.kill()
+        if self.rgbd_process and self.rgbd_process.poll() is None:
+            self.rgbd_process.terminate()
+            try:
+                self.rgbd_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.rgbd_process.kill()
+        if self.joint_bridge_process and self.joint_bridge_process.poll() is None:
+            self.joint_bridge_process.terminate()
+            try:
+                self.joint_bridge_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.joint_bridge_process.kill()
+        if self.camera_driver_process and self.camera_driver_process.poll() is None:
+            self.camera_driver_process.terminate()
+            try:
+                self.camera_driver_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.camera_driver_process.kill()
 
     def _find_can_usb(self):
         """Query usbipd on Windows host for connected CAN adapters."""

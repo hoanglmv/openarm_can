@@ -27,12 +27,77 @@ document.addEventListener("DOMContentLoaded", () => {
     // 4. Connect to backend WebSocket (Telemetry & CAN-FD)
     initWebSocket();
 
-    // 5. Wire UI event listeners & tools
+    // 5. Initialize RealSense Camera Feed & ROS 2 Preview
+    initCameraFeed();
+
+    // 6. Wire UI event listeners & tools
     setupEventHandlers();
     setupTargetJointUI();
 
-    // 6. Initialize Robot Dance Studio Subsystem
+    // 7. Initialize Robot Dance Studio Subsystem
     initDanceEngine();
 
     console.log("✓ OpenArm Modular Dashboard initialized successfully.");
 });
+
+function initCameraFeed() {
+    const image = document.getElementById("camera-feed");
+    const status = document.getElementById("camera-feed-status");
+    const placeholder = document.getElementById("camera-feed-placeholder");
+    if (!image || !status || !placeholder) return;
+
+    const cameraHost = window.location.hostname || "127.0.0.1";
+    const cameraBase = `http://${cameraHost}:8890`;
+    let retryTimer = null;
+    let streamRequested = false;
+
+    const setStatus = (state, label) => {
+        status.className = `camera-feed-status ${state}`;
+        status.innerHTML = `<span class="camera-status-dot"></span>${label}`;
+    };
+
+    const connectStream = () => {
+        clearTimeout(retryTimer);
+        streamRequested = true;
+        setStatus("waiting", "WAITING");
+        image.src = `${cameraBase}/stream.mjpg?t=${Date.now()}`;
+    };
+
+    image.addEventListener("load", () => {
+        image.classList.add("is-live");
+        placeholder.style.display = "none";
+        setStatus("live", "LIVE");
+    });
+
+    image.addEventListener("error", () => {
+        streamRequested = false;
+        image.classList.remove("is-live");
+        placeholder.style.display = "flex";
+        setStatus("offline", "OFFLINE");
+        retryTimer = setTimeout(connectStream, 3000);
+    });
+
+    const refreshStatus = async () => {
+        try {
+            const response = await fetch(`${cameraBase}/status?t=${Date.now()}`, {
+                cache: "no-store",
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (data.streaming) {
+                setStatus("live", "LIVE");
+                if (!streamRequested) connectStream();
+            } else {
+                image.classList.remove("is-live");
+                placeholder.style.display = "flex";
+                setStatus("waiting", "WAITING");
+            }
+        } catch (_error) {
+            setStatus("offline", "OFFLINE");
+        }
+    };
+
+    connectStream();
+    refreshStatus();
+    window.setInterval(refreshStatus, 2500);
+}

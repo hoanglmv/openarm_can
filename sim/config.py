@@ -19,7 +19,33 @@ UDP_EXPORT_PORT = 9871   # Outbound 100Hz telemetry stream broadcast
 # Loop frequencies
 CONTROL_FREQ = 400.0     # Hz for smooth trajectory generator & interpolation loop
 TELEMETRY_FREQ = 40.0    # Hz for WebSocket state broadcasting
-POLL_FREQ = 25.0         # Hz for hardware state query frames
+POLL_FREQ = 50.0         # Hz for hardware state query frames (matched to ACT dataset frequency)
+DATA_FREQUENCY_HZ = 50.0 # Hz for ACT dataset and ROS 2 bridges
+
+# RealSense Camera & ROS 2 ACT Pipeline Bridge configuration
+CAMERA_STREAM_PORT = int(os.environ.get("OPENARM_CAMERA_STREAM_PORT", "8890"))
+CAMERA_RAW_RGB_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_RAW_RGB_TOPIC",
+    "/camera/camera/color/image_raw",
+)
+CAMERA_RAW_DEPTH_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_RAW_DEPTH_TOPIC",
+    "/camera/camera/depth/image_rect_raw",
+)
+CAMERA_ALIGNED_DEPTH_TOPIC = os.environ.get(
+    "OPENARM_CAMERA_ALIGNED_DEPTH_TOPIC",
+    "/camera/camera/aligned_depth_to_color/image_raw",
+)
+CAMERA_TOPIC = os.environ.get("OPENARM_CAMERA_TOPIC", "/camera/act/rgb")
+CAMERA_DEPTH_TOPIC = os.environ.get("OPENARM_CAMERA_DEPTH_TOPIC", "/camera/act/depth")
+JOINT_BRIDGE_PORT = int(os.environ.get("OPENARM_JOINT_BRIDGE_PORT", "8891"))
+
+JOINT_NAMES = [
+    "left_j1", "left_j2", "left_j3", "left_j4",
+    "left_j5", "left_j6", "left_j7", "left_gripper",
+    "right_j1", "right_j2", "right_j3", "right_j4",
+    "right_j5", "right_j6", "right_j7", "right_gripper",
+]
 
 # SocketCAN low-level definitions
 SOL_CAN_RAW = getattr(socket, "SOL_CAN_RAW", 101)

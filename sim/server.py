@@ -7,6 +7,7 @@ Unified Server Entry Point for OpenArm Bimanual 7-DOF Control Dashboard & Digita
 - Serves HTTP static files (HTML/CSS/JS) on port 8888
 - Serves WebSocket real-time telemetry and dual-arm control on port 8889 (40 Hz)
 - Streams high-frequency joint state teleop on UDP ports 9870 / 9871
+- Streams ACT camera feed (8890) and ROS 2 joint states / commands (8891)
 """
 
 import os
@@ -19,10 +20,19 @@ if _sim_dir not in sys.path:
 
 # Re-export core components for backward compatibility
 from config import (
+    CAMERA_ALIGNED_DEPTH_TOPIC,
+    CAMERA_DEPTH_TOPIC,
+    CAMERA_RAW_DEPTH_TOPIC,
+    CAMERA_RAW_RGB_TOPIC,
+    CAMERA_STREAM_PORT,
+    CAMERA_TOPIC,
     CONTROL_FREQ,
+    DATA_FREQUENCY_HZ,
     HTTP_PORT,
+    JOINT_BRIDGE_PORT,
     JOINT_LIMITS,
     JOINT_NAME_TO_ID,
+    JOINT_NAMES,
     TELEMETRY_FREQ,
     UDP_EXPORT_PORT,
     UDP_STREAM_PORT,
@@ -51,6 +61,15 @@ __all__ = [
     "HTTP_PORT",
     "WS_PORT",
     "WEB_DIR",
+    "CAMERA_STREAM_PORT",
+    "CAMERA_RAW_RGB_TOPIC",
+    "CAMERA_RAW_DEPTH_TOPIC",
+    "CAMERA_ALIGNED_DEPTH_TOPIC",
+    "CAMERA_TOPIC",
+    "CAMERA_DEPTH_TOPIC",
+    "JOINT_BRIDGE_PORT",
+    "DATA_FREQUENCY_HZ",
+    "JOINT_NAMES",
 ]
 
 
@@ -66,7 +85,12 @@ def main():
 
     print(f"[Dashboard] Mode selected: {mode.upper()} (can0 available: {can0_available})")
     server = OpenArmDashboardServer(mode=mode, can0_if="can0", can1_if="can1")
-    server.start()
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        print("\n[Dashboard] Stopping...")
+    finally:
+        server.stop()
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@
 /.cache/
 /.vscode
 /build
+/dataset/
 /openarm-can-*.tar.gz
 /packages/apt/build.sh
 /packages/apt/build/
@@ -33,3 +34,12 @@
 /python/vendor/
 __pycache__/
 *.pyc
+SETUP_WSL_GUIDE.md
+*.local.md
+test_wrist_pitch.py
+stop_robot.py
+.venv*/
+dataset/
+*.pth
+*.hdf5
+
