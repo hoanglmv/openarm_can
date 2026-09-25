@@ -34,15 +34,23 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                 exporter = self.server.app.exporter
                 file_path = exporter.file_path or exporter.get_latest_file()
                 if file_path and os.path.exists(file_path):
-                    if exporter.file:
-                        try:
-                            exporter.file.flush()
-                        except Exception:
-                            pass
+                    with exporter.lock:
+                        if getattr(exporter, 'h5_file', None):
+                            try:
+                                exporter._flush_h5_buffer_locked()
+                                exporter.h5_file.flush()
+                            except Exception:
+                                pass
+                        if getattr(exporter, 'csv_file', None):
+                            try:
+                                exporter.csv_file.flush()
+                            except Exception:
+                                pass
                     with open(file_path, "rb") as f:
                         data = f.read()
+                    content_type = "application/x-hdf5" if file_path.endswith(".hdf5") else "text/csv"
                     self.send_response(200)
-                    self.send_header('Content-Type', 'text/csv')
+                    self.send_header('Content-Type', content_type)
                     self.send_header('Content-Disposition', f'attachment; filename="{os.path.basename(file_path)}"')
                     self.send_header('Content-Length', str(len(data)))
                     self.end_headers()

@@ -217,10 +217,11 @@ def test_record_workflow():
     # 2. Start Record
     asyncio.run(server.handle_action("record_start", {}, None))
     assert server.exporter.active, "Exporter must be ACTIVE after record_start"
-    time.sleep(0.06)
+    time.sleep(0.08)
     stats_rec = server.exporter.get_stats()
     assert stats_rec["recording"], "get_stats() must report recording=True"
     assert "record" in stats_rec["file_name"], f"File name must include 'record': {stats_rec['file_name']}"
+    assert stats_rec["file_name"].endswith(".hdf5"), f"File name must end with .hdf5: {stats_rec['file_name']}"
     print(f"✓ Record start verified: recording={stats_rec['recording']}, file={stats_rec['file_name']}")
 
     # 3. Stop Record (End)
@@ -228,8 +229,24 @@ def test_record_workflow():
     assert not server.exporter.active, "Exporter must be INACTIVE after record_stop"
     stats_end = server.exporter.get_stats()
     assert not stats_end["recording"], "get_stats() must report recording=False after record_stop"
-    assert stats_end["file_path"] and os.path.exists(stats_end["file_path"]), f"Recorded CSV file must exist on disk: {stats_end['file_path']}"
-    print(f"✓ Record stop verified: cleanly saved file with {stats_end['samples']} samples at {stats_end['file_path']}")
+    assert stats_end["file_path"] and os.path.exists(stats_end["file_path"]), f"Recorded HDF5 file must exist on disk: {stats_end['file_path']}"
+    assert stats_end["file_path"].endswith(".hdf5")
+
+    # Validate HDF5 file contents using h5py
+    import h5py
+    with h5py.File(stats_end["file_path"], "r") as h5:
+        assert "observations/qpos" in h5, "observations/qpos dataset missing in HDF5"
+        assert "observations/qvel" in h5, "observations/qvel dataset missing in HDF5"
+        assert "observations/effort" in h5, "observations/effort dataset missing in HDF5"
+        assert "action" in h5, "action dataset missing in HDF5"
+        assert "timestamp" in h5, "timestamp dataset missing in HDF5"
+        assert h5.attrs["robot_type"] == "OpenArm_Bimanual_16DOF"
+        assert h5.attrs["num_joints"] == 16
+        assert h5.attrs["frequency_hz"] == 100
+        qpos_shape = h5["observations/qpos"].shape
+        print(f"✓ HDF5 file schema verified: {stats_end['file_path']} contains qpos shape {qpos_shape}, attributes: {dict(h5.attrs)}")
+
+    print(f"✓ Record stop verified: cleanly saved HDF5 with {stats_end['samples']} samples at {stats_end['file_path']}")
 
     # 4. Record Toggle
     asyncio.run(server.handle_action("record_toggle", {}, None))

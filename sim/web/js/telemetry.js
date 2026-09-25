@@ -245,14 +245,21 @@ function handleExportStats(stats) {
         if (badgeText) badgeText.textContent = "REC: Sẵn sàng";
         if (dot) dot.className = "export-status-dot idle";
 
+        const dlBtn = document.getElementById("btn-export-download");
+        const dlHeaderBtn = document.getElementById("btn-export-download-header");
+        if (filename) {
+            if (dlBtn) dlBtn.setAttribute("download", filename);
+            if (dlHeaderBtn) dlHeaderBtn.setAttribute("download", filename);
+        }
+
         if (samples > 0 && filename) {
-            if (subInfo) subInfo.textContent = `✓ Đã lưu: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
+            if (subInfo) subInfo.textContent = `✓ Đã lưu HDF5: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
             if (samplesBadge) {
                 samplesBadge.className = "badge badge-success";
                 samplesBadge.textContent = `✓ Đã lưu • ${samples.toLocaleString()} mẫu (${elapsed}s)`;
             }
         } else {
-            if (subInfo) subInfo.textContent = `Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu • UDP :${stats.udp_port || 9871}`;
+            if (subInfo) subInfo.textContent = `Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu HDF5 (.hdf5) • UDP :${stats.udp_port || 9871}`;
             if (samplesBadge) {
                 samplesBadge.className = "badge badge-outline";
                 samplesBadge.textContent = "Chờ bắt đầu";

@@ -2,8 +2,9 @@
 # Copyright 2026 Enactic, Inc. / OpenArm Control & Simulation
 """
 100Hz High-Precision Joint State Continuous Exporter & UDP Streamer.
-Logs 16-axis positions, velocities, torques, and temperatures to CSV.
-Broadcasts low-latency JSON packets over UDP for ROS 2 / external telemetry.
+Logs 16-axis positions, velocities, torques, and temperatures into HDF5 (.hdf5)
+compliant with robotic imitation learning (ALOHA, ACT, Robomimic).
+Also writes companion CSV and broadcasts real-time UDP packets.
 """
 
 import json
@@ -12,15 +13,36 @@ import socket
 import threading
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+
+try:
+    import h5py
+    import numpy as np
+    HAS_H5PY = True
+except ImportError:
+    HAS_H5PY = False
+
+JOINT_NAMES = [
+    "left_j1", "left_j2", "left_j3", "left_j4",
+    "left_j5", "left_j6", "left_j7", "left_gripper",
+    "right_j1", "right_j2", "right_j3", "right_j4",
+    "right_j5", "right_j6", "right_j7", "right_gripper",
+]
 
 
 class JointStateExporter100Hz:
     """
-    100Hz Joint State Continuous Exporter & Streamer:
-    - Automatically activates upon connecting to the physical robot
+    100Hz Joint State Exporter into HDF5 (.hdf5) and CSV format:
+    - Creates HDF5 datasets:
+        /observations/qpos          [T, 16] float32
+        /observations/qvel          [T, 16] float32
+        /observations/effort        [T, 16] float32
+        /observations/temperatures  [T, 16] float32
+        /action                     [T, 16] float32
+        /timestamp                  [T]     float64
+        /timestamp_ns               [T]     int64
+        /rel_time_s                 [T]     float32
     - Precision loop running at 100 Hz (10 ms interval via perf_counter)
-    - Saves high-precision CSV file to `exports/joint_states_<tag>_<timestamp>.csv`
     - Broadcasts real-time UDP stream on port 9871 for ROS 2 / external consumers
     """
 
@@ -31,9 +53,25 @@ class JointStateExporter100Hz:
         self.udp_port = udp_port
         self.running = False
         self.active = False
-        self.file = None
-        self.file_path: Optional[str] = None
+
+        # File handles & paths
+        self.h5_file = None
+        self.h5_datasets = {}
+        self.csv_file = None
+        self.file_path: Optional[str] = None       # Primary file (.hdf5)
         self.file_name: Optional[str] = None
+        self.csv_path: Optional[str] = None
+
+        # Buffers for high-speed batch append to HDF5
+        self._buf_qpos: List[List[float]] = []
+        self._buf_qvel: List[List[float]] = []
+        self._buf_effort: List[List[float]] = []
+        self._buf_temps: List[List[float]] = []
+        self._buf_action: List[List[float]] = []
+        self._buf_time: List[float] = []
+        self._buf_time_ns: List[int] = []
+        self._buf_rel_time: List[float] = []
+
         self.samples = 0
         self.start_time = 0.0
         self.last_flush = 0.0
@@ -46,22 +84,61 @@ class JointStateExporter100Hz:
             pass
 
     def start_session(self, tag: str = "record"):
-        """Begin a new CSV recording session with full timestamped header."""
+        """Begin a new HDF5 & CSV recording session with metadata."""
         with self.lock:
-            if self.active and self.file:
+            if self.active and (self.h5_file or self.csv_file):
                 self._close_session_locked()
 
             now = datetime.now()
             now_str = now.strftime("%Y%m%d_%H%M%S")
-            self.file_name = f"joint_states_{tag}_{now_str}.csv"
-            self.file_path = os.path.join(self.export_dir, self.file_name)
-            self.file = open(self.file_path, "w", buffering=1024 * 64, newline="")
-            self.samples = 0
-            self.start_time = time.time()
-            self.last_flush = time.time()
-            self.active = True
 
-            # CSV Header: timestamp, rel_time_s, q_1..16, dq_1..16, tau_1..16, t_mos_1..16
+            # 1. HDF5 Primary File
+            self.file_name = f"joint_states_{tag}_{now_str}.hdf5"
+            self.file_path = os.path.join(self.export_dir, self.file_name)
+
+            if HAS_H5PY:
+                self.h5_file = h5py.File(self.file_path, "w", libver="latest")
+                obs_grp = self.h5_file.create_group("observations")
+                self.h5_datasets = {
+                    "qpos": obs_grp.create_dataset(
+                        "qpos", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                    ),
+                    "qvel": obs_grp.create_dataset(
+                        "qvel", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                    ),
+                    "effort": obs_grp.create_dataset(
+                        "effort", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                    ),
+                    "temperatures": obs_grp.create_dataset(
+                        "temperatures", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                    ),
+                    "action": self.h5_file.create_dataset(
+                        "action", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                    ),
+                    "timestamp": self.h5_file.create_dataset(
+                        "timestamp", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.float64
+                    ),
+                    "timestamp_ns": self.h5_file.create_dataset(
+                        "timestamp_ns", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.int64
+                    ),
+                    "rel_time_s": self.h5_file.create_dataset(
+                        "rel_time_s", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.float32
+                    ),
+                }
+                # Attributes
+                is_sim = bool(getattr(self.server, "mode", "sim") == "sim")
+                self.h5_file.attrs["sim"] = is_sim
+                self.h5_file.attrs["frequency_hz"] = 100
+                self.h5_file.attrs["robot_type"] = "OpenArm_Bimanual_16DOF"
+                self.h5_file.attrs["num_joints"] = 16
+                self.h5_file.attrs["created_at"] = now.isoformat()
+                self.h5_file.attrs["joint_names"] = JOINT_NAMES
+                self.h5_file.flush()
+
+            # 2. Companion CSV File
+            self.csv_name = f"joint_states_{tag}_{now_str}.csv"
+            self.csv_path = os.path.join(self.export_dir, self.csv_name)
+            self.csv_file = open(self.csv_path, "w", buffering=1024 * 64, newline="")
             header = ["timestamp", "rel_time_s"]
             for i in range(1, 17):
                 header.append(f"q_{i}")
@@ -71,19 +148,78 @@ class JointStateExporter100Hz:
                 header.append(f"tau_{i}")
             for i in range(1, 17):
                 header.append(f"t_mos_{i}")
-            self.file.write(",".join(header) + "\n")
-            self.file.flush()
-            print(f"[Record 100Hz] 🔴 Bắt đầu Record dữ liệu Joint State: {self.file_path} (UDP: {self.udp_port})")
+            self.csv_file.write(",".join(header) + "\n")
+            self.csv_file.flush()
+
+            self._clear_buffers()
+            self.samples = 0
+            self.start_time = time.time()
+            self.last_flush = time.time()
+            self.active = True
+            print(f"[Record 100Hz] 🔴 Bắt đầu Record dữ liệu HDF5 (.hdf5): {self.file_path} (UDP: {self.udp_port})")
+
+    def _clear_buffers(self):
+        self._buf_qpos.clear()
+        self._buf_qvel.clear()
+        self._buf_effort.clear()
+        self._buf_temps.clear()
+        self._buf_action.clear()
+        self._buf_time.clear()
+        self._buf_time_ns.clear()
+        self._buf_rel_time.clear()
+
+    def _flush_h5_buffer_locked(self):
+        if not HAS_H5PY or not self.h5_file or not self._buf_qpos:
+            return
+        n = len(self._buf_qpos)
+        old_size = self.h5_datasets["qpos"].shape[0]
+        new_size = old_size + n
+
+        for key, buf in [
+            ("qpos", self._buf_qpos),
+            ("qvel", self._buf_qvel),
+            ("effort", self._buf_effort),
+            ("temperatures", self._buf_temps),
+            ("action", self._buf_action),
+        ]:
+            ds = self.h5_datasets[key]
+            ds.resize(new_size, axis=0)
+            ds[old_size:new_size] = np.array(buf, dtype=np.float32)
+
+        for key, buf, dtype in [
+            ("timestamp", self._buf_time, np.float64),
+            ("timestamp_ns", self._buf_time_ns, np.int64),
+            ("rel_time_s", self._buf_rel_time, np.float32),
+        ]:
+            ds = self.h5_datasets[key]
+            ds.resize(new_size, axis=0)
+            ds[old_size:new_size] = np.array(buf, dtype=dtype)
+
+        self._clear_buffers()
+        self.h5_file.flush()
 
     def _close_session_locked(self):
-        if self.file:
+        # Flush & close HDF5
+        if self.h5_file:
             try:
-                self.file.flush()
-                self.file.close()
-                print(f"[Record 100Hz] ⏹ Đã dừng Record và lưu file ({self.samples} mẫu): {self.file_path}")
+                self._flush_h5_buffer_locked()
+                self.h5_file.flush()
+                self.h5_file.close()
+                print(f"[Record 100Hz] ⏹ Đã dừng Record và lưu file HDF5 ({self.samples} mẫu): {self.file_path}")
             except Exception as e:
-                print(f"[Record Error]: {e}")
-            self.file = None
+                print(f"[Record HDF5 Error]: {e}")
+            self.h5_file = None
+
+        # Flush & close CSV
+        if self.csv_file:
+            try:
+                self.csv_file.flush()
+                self.csv_file.close()
+            except Exception as e:
+                print(f"[Record CSV Error]: {e}")
+            self.csv_file = None
+
+        self._clear_buffers()
         self.active = False
 
     def close_session(self):
@@ -92,12 +228,16 @@ class JointStateExporter100Hz:
             self._close_session_locked()
 
     def get_latest_file(self) -> Optional[str]:
-        """Return the filepath of the most recent recorded CSV export."""
+        """Return the filepath of the most recent recorded HDF5 (or CSV fallback)."""
         try:
-            files = [os.path.join(self.export_dir, f) for f in os.listdir(self.export_dir) if f.endswith('.csv')]
-            if files:
-                files.sort(key=os.path.getmtime, reverse=True)
-                return files[0]
+            h5_files = [os.path.join(self.export_dir, f) for f in os.listdir(self.export_dir) if f.endswith('.hdf5')]
+            if h5_files:
+                h5_files.sort(key=os.path.getmtime, reverse=True)
+                return h5_files[0]
+            csv_files = [os.path.join(self.export_dir, f) for f in os.listdir(self.export_dir) if f.endswith('.csv')]
+            if csv_files:
+                csv_files.sort(key=os.path.getmtime, reverse=True)
+                return csv_files[0]
         except Exception:
             pass
         return None
@@ -128,6 +268,7 @@ class JointStateExporter100Hz:
             "filepath": curr_name,
             "file_path": target_path or "",
             "file_size_kb": file_size_kb,
+            "format": "HDF5 (.hdf5)",
             "udp_port": self.udp_port
         }
 
@@ -153,7 +294,7 @@ class JointStateExporter100Hz:
                 inst_hz = 1.0 / dt
                 self.hz = self.hz * 0.95 + inst_hz * 0.05
 
-            if not self.active or not self.file:
+            if not self.active or (not self.h5_file and not self.csv_file):
                 continue
 
             cur_time = time.time()
@@ -163,6 +304,7 @@ class JointStateExporter100Hz:
             velocities = []
             efforts = []
             temps = []
+            actions = []
 
             with self.server.hw.lock:
                 for mid in range(1, 17):
@@ -172,36 +314,54 @@ class JointStateExporter100Hz:
                             raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
                             ratio = (1.0 - raw_ratio) if getattr(m, 'invert', False) else raw_ratio
                             pos = ratio * 0.043
+                            act = getattr(m, 'q_target', pos)
                         elif mid == 16:
                             raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
                             ratio = raw_ratio if getattr(m, 'invert', False) else (1.0 - raw_ratio)
                             pos = ratio * 0.043
+                            act = getattr(m, 'q_target', pos)
                         else:
                             pos = m.q
+                            act = getattr(m, 'q_cmd', m.q)
                         positions.append(pos)
                         velocities.append(m.dq)
                         efforts.append(m.tau)
                         temps.append(m.t_mos)
+                        actions.append(act)
                     else:
                         positions.append(0.0)
                         velocities.append(0.0)
                         efforts.append(0.0)
                         temps.append(0.0)
+                        actions.append(0.0)
 
-            # 1. Write CSV line
-            row = [f"{cur_time:.6f}", f"{rel_t:.3f}"]
-            row.extend(f"{v:.5f}" for v in positions)
-            row.extend(f"{v:.4f}" for v in velocities)
-            row.extend(f"{v:.3f}" for v in efforts)
-            row.extend(f"{v:.1f}" for v in temps)
+            # 1. Append to in-memory buffers for HDF5 batch write
             with self.lock:
-                if self.file:
-                    self.file.write(",".join(row) + "\n")
+                if self.active:
+                    self._buf_qpos.append(positions)
+                    self._buf_qvel.append(velocities)
+                    self._buf_effort.append(efforts)
+                    self._buf_temps.append(temps)
+                    self._buf_action.append(actions)
+                    self._buf_time.append(cur_time)
+                    self._buf_time_ns.append(int(cur_time * 1e9))
+                    self._buf_rel_time.append(float(rel_t))
                     self.samples += 1
 
-                    # Periodic disk flush every 1 second (100 samples)
-                    if cur_time - self.last_flush >= 1.0:
-                        self.file.flush()
+                    # Write CSV line
+                    if self.csv_file:
+                        row = [f"{cur_time:.6f}", f"{rel_t:.3f}"]
+                        row.extend(f"{v:.5f}" for v in positions)
+                        row.extend(f"{v:.4f}" for v in velocities)
+                        row.extend(f"{v:.3f}" for v in efforts)
+                        row.extend(f"{v:.1f}" for v in temps)
+                        self.csv_file.write(",".join(row) + "\n")
+
+                    # Batch flush to HDF5 & disk flush every 50 samples (0.5s)
+                    if len(self._buf_qpos) >= 50 or (cur_time - self.last_flush >= 1.0):
+                        self._flush_h5_buffer_locked()
+                        if self.csv_file:
+                            self.csv_file.flush()
                         self.last_flush = cur_time
 
             # 2. Real-time UDP stream (port 9871)
@@ -218,3 +378,4 @@ class JointStateExporter100Hz:
                 self.sock.sendto(udp_payload, ("127.0.0.1", self.udp_port))
             except Exception:
                 pass
+
