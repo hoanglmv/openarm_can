@@ -128,6 +128,8 @@ class OpenArmDashboardServer:
         export_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
         self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=UDP_EXPORT_PORT)
         self.loop = None
+        self.active_trajectory_id = 0
+        self.trajectory_lock = threading.Lock()
 
     def start(self):
         """Start all background services, threads, and WebSocket server."""
@@ -182,10 +184,40 @@ class OpenArmDashboardServer:
             print("[Camera] Driver disabled by --no-camera")
             return
 
+        if "--remote-camera" in sys.argv or os.environ.get("OPENARM_REMOTE_CAMERA") == "1":
+            print("[Camera] Remote camera mode active: skipping local RealSense USB driver, receiving topics over ROS 2 network.")
+            return
+
         ros2 = shutil.which("ros2")
         if not ros2:
             print("[Camera] ros2 CLI not found; skipping RealSense launch")
             return
+
+        # Check if running under WSL2 without local USB attached
+        is_wsl = False
+        try:
+            with open("/proc/version", "r") as f:
+                if "microsoft" in f.read().lower():
+                    is_wsl = True
+        except Exception:
+            pass
+
+        if is_wsl:
+            has_realsense_usb = False
+            for p in glob.glob("/sys/bus/usb/devices/*/idVendor"):
+                try:
+                    with open(p, "r") as vf:
+                        if vf.read().strip() == "8086":
+                            has_realsense_usb = True
+                            break
+                except Exception:
+                    pass
+            if not has_realsense_usb:
+                print("[Camera] WSL2 detected without local RealSense USB device attached.")
+                print("[Camera] -> If RealSense is connected to Windows host: run scripts/attach_camera.bat (Run as Administrator).")
+                print("[Camera] -> If RealSense is connected to Ubuntu machine on LAN: ensure matching ROS_DOMAIN_ID.")
+                print("[Camera] Skipping local RealSense driver to avoid USB error. ROS 2 image bridge will continue listening.")
+                return
 
         try:
             subprocess.run(
@@ -737,6 +769,132 @@ class OpenArmDashboardServer:
         finally:
             self.clients.discard(websocket)
 
+    def _send_gripper_command(self, m, pos_m: float):
+        """
+        Send robust gripper command to physical robot / sim.
+        Uses MIT Mode (primary, compatible with factory default DM4310)
+        and POS_FORCE mode (secondary dual-broadcast).
+        Handles sign differences between Left (+rad) and Right (-rad) grippers.
+        """
+        safe_pos = min(0.0415, max(0.0, pos_m))
+        invert = self.gripper_invert.get(m.id, False)
+        stroke_ratio = safe_pos / 0.0415
+        ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
+
+        # Left Arm Gripper (Motor 8): 0.0 to +1.50 rad
+        # Right Arm Gripper (Motor 16): 0.0 to -1.50 rad
+        is_right = (m.id == 16 or getattr(m, 'arm', '') == "right")
+        sign = -1.0 if is_right else 1.0
+        rad_target = sign * ratio * 1.50
+
+        if not m.enabled:
+            m.enabled = True
+            if self.mode == "real":
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+        elif m.error_code >= 8:
+            if self.mode == "real":
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                time.sleep(0.01)
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            m.error_code = 1
+
+        m.q_target = rad_target
+        m.q_cmd = rad_target
+
+        if self.mode == "real":
+            # 1. MIT mode frame on m.send_id (0x08 / 0x10)
+            q_uint = double_to_uint(rad_target, -m.pMax, m.pMax, 16)
+            dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+            kp_uint = double_to_uint(45.0, 0.0, 500.0, 12)
+            kd_uint = double_to_uint(1.5, 0.0, 5.0, 12)
+            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+            d0 = (q_uint >> 8) & 0xFF
+            d1 = q_uint & 0xFF
+            d2 = (dq_uint >> 4) & 0xFF
+            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+            d4 = kp_uint & 0xFF
+            d5 = (kd_uint >> 4) & 0xFF
+            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+            d7 = tau_uint & 0xFF
+            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+            self.hw.send_frame(m.can_if, m.send_id, mit_data)
+
+            # 2. Dual-broadcast POS_FORCE frame on m.send_id + 0x300
+            posforce_can_id = m.send_id + 0x300
+            vel_uint = 2500  # 25.0 rad/s
+            i_uint = 2500    # 25% safe torque limit
+            posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
+            self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+            refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+            self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+
+        can_name = getattr(m, 'can_if', 'vcan0')
+        print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {safe_pos*1000:.1f} mm ({rad_target:.3f} rad)")
+
+    def _set_single_joint_target(self, motor_id: int, val: float):
+        """Set target for a single motor (arm joint or gripper)."""
+        m = self.motors.get(motor_id)
+        if not m:
+            return
+        if motor_id in [8, 16]:
+            pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
+            self._send_gripper_command(m, pos_m)
+        else:
+            lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
+            q = max(lim[0], min(lim[1], val))
+            if not m.enabled:
+                m.enabled = True
+                m.q_cmd = m.q
+                if self.mode == "real":
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            m.q_target = q
+
+    def _execute_trajectory(self, traj_points: list, joint_names: list, traj_id: int):
+        """Smoothly interpolate and execute a JointTrajectory received from ROS 2."""
+        if not traj_points:
+            return
+
+        sorted_pts = sorted(traj_points, key=lambda p: p.get("time", 0.0))
+        start_time = time.perf_counter()
+        total_duration = sorted_pts[-1].get("time", 0.0)
+
+        joint_ids = []
+        for name in joint_names:
+            mid = JOINT_NAME_TO_ID.get(str(name).lower())
+            joint_ids.append(mid)
+
+        idx = 0
+        while self.running and (self.active_trajectory_id == traj_id):
+            now_rel = time.perf_counter() - start_time
+            if now_rel >= total_duration:
+                final_pt = sorted_pts[-1]
+                positions = final_pt.get("positions", [])
+                for mid, pos in zip(joint_ids, positions):
+                    if mid:
+                        self._set_single_joint_target(mid, pos)
+                break
+
+            while idx < len(sorted_pts) - 1 and sorted_pts[idx + 1].get("time", 0.0) < now_rel:
+                idx += 1
+
+            p0 = sorted_pts[idx]
+            p1 = sorted_pts[min(idx + 1, len(sorted_pts) - 1)]
+            t0 = p0.get("time", 0.0)
+            t1 = p1.get("time", 0.0)
+            pos0 = p0.get("positions", [])
+            pos1 = p1.get("positions", [])
+
+            alpha = 0.0
+            if t1 > t0:
+                alpha = min(1.0, max(0.0, (now_rel - t0) / (t1 - t0)))
+
+            for i, mid in enumerate(joint_ids):
+                if mid and i < len(pos0) and i < len(pos1):
+                    interp_pos = pos0[i] + alpha * (pos1[i] - pos0[i])
+                    self._set_single_joint_target(mid, interp_pos)
+
+            time.sleep(0.005)  # 200 Hz interpolation
+
     async def handle_action(self, action: str, payload: dict, ws):
         """Process incoming dashboard commands (enable/disable, zero calibration, MIT, Gripper, USB)."""
         if action == "connect_usb":
@@ -800,6 +958,7 @@ class OpenArmDashboardServer:
 
         elif action == "disable_all":
             print("[Command] Disarm / Disable All Motors")
+            self.active_preset = None
             with self.hw.lock:
                 for m in self.motors.values():
                     m.enabled = False
@@ -852,7 +1011,7 @@ class OpenArmDashboardServer:
                     self.hw._send_can(m.send_id, bytes([0xFF] * 7 + [0xFD]))
 
         elif action == "set_zero_all":
-            print("[Command] Set Zero All")
+            print("[Command] Set Zero All Motors")
             if self.mode == "real":
                 threading.Thread(target=self._exec_set_zero_all, daemon=True).start()
             else:
@@ -879,6 +1038,9 @@ class OpenArmDashboardServer:
             if self.mode == "real":
                 for m in self.motors.values():
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                    if m.joint_idx == 8:
+                        time.sleep(0.01)
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             else:
                 for m in self.hw.motors.values():
                     m.error_code = 0
@@ -888,38 +1050,12 @@ class OpenArmDashboardServer:
             motor_id = int(payload.get("id", 1))
             q_raw = float(payload.get("q", 0.0))
 
-            # If Joint 8 received via set_mit, route to set_gripper logic
+            # If Joint 8 or 16 received via set_mit, route to gripper logic
             if motor_id in [8, 16]:
                 m = self.motors.get(motor_id)
                 if m:
                     pos_m = q_raw / 1000.0 if (q_raw > 0.043 and q_raw <= 43.0) else q_raw
-                    safe_pos = min(0.0415, max(0.0, pos_m))
-                    invert = self.gripper_invert.get(m.id, False)
-                    stroke_ratio = safe_pos / 0.0415
-                    ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                    rad_target = ratio * 1.15
-
-                    if not m.enabled:
-                        m.enabled = True
-                        if self.mode == "real":
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    elif m.error_code >= 8:
-                        if self.mode == "real":
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                            time.sleep(0.01)
-                            self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                        m.error_code = 1
-
-                    m.q_target = rad_target
-                    m.q_cmd = rad_target
-                    if self.mode == "real":
-                        posforce_can_id = m.send_id + 0x300
-                        vel_uint = 2500  # 25.0 rad/s
-                        i_uint = 2200    # 22% safe current limit
-                        posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                        self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                        refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                        self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
+                    self._send_gripper_command(m, pos_m)
                 return
 
             kp = float(payload.get("kp", 18.0))
@@ -970,37 +1106,7 @@ class OpenArmDashboardServer:
                         target_motors.append(m)
 
             for m in target_motors:
-                safe_pos = min(0.0415, max(0.0, pos))
-                invert = self.gripper_invert.get(m.id, False)
-                stroke_ratio = safe_pos / 0.0415
-                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                rad_target = ratio * 1.15
-
-                if not m.enabled:
-                    m.enabled = True
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                elif m.error_code >= 8:
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        time.sleep(0.01)
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    m.error_code = 1
-
-                m.q_target = rad_target
-                m.q_cmd = rad_target
-
-                if self.mode == "real":
-                    posforce_can_id = m.send_id + 0x300
-                    vel_uint = 2500  # 25.0 rad/s
-                    i_uint = 2200    # 22% safe current limit
-                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
-
-                can_name = getattr(m, 'can_if', 'vcan0')
-                print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {pos*1000:.1f} mm ({rad_target:.3f} rad)")
+                self._send_gripper_command(m, pos)
 
         elif action == "toggle_gripper_invert":
             target_id = int(payload.get("id", 8))
@@ -1058,6 +1164,24 @@ class OpenArmDashboardServer:
         self.stream_stats["packets"] += 1
         self.stream_stats["source"] = source
 
+        # Trajectory execution mode
+        if "trajectory" in payload and isinstance(payload["trajectory"], list):
+            traj_points = payload["trajectory"]
+            joint_names = payload.get("joint_names", JOINT_NAMES)
+            with self.trajectory_lock:
+                self.active_trajectory_id += 1
+                current_id = self.active_trajectory_id
+            threading.Thread(
+                target=self._execute_trajectory,
+                args=(traj_points, joint_names, current_id),
+                daemon=True,
+            ).start()
+            return
+
+        # Direct teleop / joint command preempts any background trajectory playback
+        with self.trajectory_lock:
+            self.active_trajectory_id += 1
+
         joint_map = {}
 
         # Format 1: names + positions lists (standard sensor_msgs/JointState)
@@ -1111,51 +1235,7 @@ class OpenArmDashboardServer:
 
         # Apply to motors
         for motor_id, val in joint_map.items():
-            m = self.motors.get(motor_id)
-            if not m:
-                continue
-
-            if motor_id in [8, 16]:
-                # Gripper (Joint 8 / Joint 16)
-                pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
-                safe_pos = min(0.0415, max(0.0, pos_m))
-                invert = self.gripper_invert.get(motor_id, False)
-                stroke_ratio = safe_pos / 0.0415
-                ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-                rad_target = ratio * 1.15
-
-                if not m.enabled:
-                    m.enabled = True
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                elif m.error_code >= 8:
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-                        time.sleep(0.01)
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                    m.error_code = 1
-
-                m.q_target = rad_target
-                m.q_cmd = rad_target
-
-                if self.mode == "real":
-                    posforce_can_id = m.send_id + 0x300
-                    vel_uint = 2500
-                    i_uint = 2200
-                    posforce_data = struct.pack("<fHH", float(rad_target), vel_uint, i_uint)
-                    self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
-                    refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
-                    self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
-            else:
-                # Arm Joints (1..7, 9..15)
-                lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
-                q = max(lim[0], min(lim[1], val))
-                if not m.enabled:
-                    m.enabled = True
-                    m.q_cmd = m.q
-                    if self.mode == "real":
-                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
-                m.q_target = q
+            self._set_single_joint_target(motor_id, val)
 
     def _trajectory_loop(self):
         """400 Hz trajectory generator & control loop that smoothly moves motors at limited velocity."""
@@ -1186,13 +1266,31 @@ class OpenArmDashboardServer:
                     # If in real mode and motor is enabled, send CAN command
                     if self.mode == "real":
                         if m.joint_idx == 8:
-                            # End-Effector parallel gripper (DM4310 in POS_FORCE)
+                            # End-Effector parallel gripper: Dual MIT + POS_FORCE mode
                             now = time.time()
-                            if now - getattr(m, '_last_posforce_tx', 0) > 0.05:
+                            if now - getattr(m, '_last_posforce_tx', 0) > 0.04:
                                 m._last_posforce_tx = now
+                                # 1. MIT mode frame on m.send_id (0x08 / 0x10)
+                                q_uint = double_to_uint(m.q_target, -m.pMax, m.pMax, 16)
+                                dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+                                kp_uint = double_to_uint(45.0, 0.0, 500.0, 12)
+                                kd_uint = double_to_uint(1.5, 0.0, 5.0, 12)
+                                tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+                                d0 = (q_uint >> 8) & 0xFF
+                                d1 = q_uint & 0xFF
+                                d2 = (dq_uint >> 4) & 0xFF
+                                d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                                d4 = kp_uint & 0xFF
+                                d5 = (kd_uint >> 4) & 0xFF
+                                d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                                d7 = tau_uint & 0xFF
+                                mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                                self.hw.send_frame(m.can_if, m.send_id, mit_data)
+
+                                # 2. POS_FORCE mode frame on m.send_id + 0x300
                                 posforce_can_id = m.send_id + 0x300
                                 vel_uint = 2500  # 25.0 rad/s
-                                i_uint = 2200    # 0.22 pu safe torque limit
+                                i_uint = 2500    # 25% safe torque limit
                                 posforce_data = struct.pack("<fHH", float(m.q_target), vel_uint, i_uint)
                                 self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
                                 refresh_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])

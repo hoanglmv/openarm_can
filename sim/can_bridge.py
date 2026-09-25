@@ -111,10 +111,11 @@ class RealRobotHardwareBridge:
             except Exception as e:
                 print(f"[Hardware Bridge] Warning initializing gripper {gid}: {e}")
 
-    def init_gripper_motor(self, motor_id: int, save_flash: bool = True):
+    def init_gripper_motor(self, motor_id: int, save_flash: bool = False):
         """
-        Configure and enable gripper motor (Joint 8 / Joint 16) in POS_FORCE mode.
-        Ensures the motor reliably works across power-cycles and cable replugs.
+        Configure and enable gripper motor (Joint 8 / Joint 16).
+        Clears any hardware faults, enables output, and queries initial angle.
+        Supports both MIT Impedance Mode (default) and POS_FORCE Mode.
         """
         m = self.motors.get(motor_id)
         if not m or m.joint_idx != 8:
@@ -127,33 +128,18 @@ class RealRobotHardwareBridge:
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFB]))
         time.sleep(0.01)
 
-        # 2. Disable motor to safely update registers (0xFD)
-        self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFD]))
-        time.sleep(0.01)
-
-        # 3. Write Control Mode = 4 (POS_FORCE) into register RID 10
-        set_mode_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0x55, 10, 4, 0, 0, 0])
-        self.send_frame(iface, 0x7FF, set_mode_data)
-        time.sleep(0.02)
-
-        # 4. Burn into non-volatile Flash (0xAA) if requested so motor boots in POS_FORCE
-        if save_flash:
-            save_flash_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0xAA, 0, 0, 0, 0, 0])
-            self.send_frame(iface, 0x7FF, save_flash_data)
-            time.sleep(0.03)
-
-        # 5. Enable motor output (0xFC)
+        # 2. Enable motor output (0xFC)
         self.send_frame(iface, send_id, bytes([0xFF] * 7 + [0xFC]))
         time.sleep(0.01)
 
-        # 6. Request initial state (0xCC)
+        # 3. Request initial state (0xCC)
         query_data = bytes([send_id & 0xFF, (send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
         self.send_frame(iface, 0x7FF, query_data)
 
         m.enabled = True
         m.error_code = 1
         m.gripper_ready = True
-        print(f"[Hardware Bridge] Gripper Motor {motor_id} ({m.name}) armed in POS_FORCE mode on {iface}")
+        print(f"[Hardware Bridge] Gripper Motor {motor_id} ({m.name}) armed on {iface}")
 
     def stop(self):
         """Stop reader loops and close SocketCAN sockets."""
