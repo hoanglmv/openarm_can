@@ -107,7 +107,7 @@ class RGBDPreprocessor(Node):
                 and depth_msg.encoding.lower() == "16uc1"
             ):
                 # Fast path for the production profile: avoid two full image
-                # conversions and resizes for every 640x480 frame.
+                # conversions and resizes when the source already matches the target.
                 rgb_out = rgb_msg
                 depth_out = depth_msg
             else:
@@ -130,7 +130,7 @@ class RGBDPreprocessor(Node):
                 depth_out = self.bridge.cv2_to_imgmsg(depth_small, encoding="16UC1")
 
             # RealSense reports a hardware-clock timestamp while the backend
-            # uses the ROS/system clock. Stamp both images on the nearest 50 Hz
+            # uses the ROS/system clock. Stamp both images on the nearest output-rate
             # ROS-time slot so camera and robot messages can be synchronized.
             period_ns = round(self.period * 1_000_000_000)
             target_timestamp_ns = ((now_ns + period_ns // 2) // period_ns) * period_ns
@@ -178,9 +178,9 @@ def main():
     )
     parser.add_argument("--rgb-output", default="/camera/act/rgb")
     parser.add_argument("--depth-output", default="/camera/act/depth")
-    parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--rate", type=float, default=50.0)
+    parser.add_argument("--width", type=int, default=424)
+    parser.add_argument("--height", type=int, default=240)
+    parser.add_argument("--rate", type=float, default=25.0)
     args = parser.parse_args()
     if args.width <= 0 or args.height <= 0 or args.rate <= 0:
         parser.error("width, height, and rate must be positive")
