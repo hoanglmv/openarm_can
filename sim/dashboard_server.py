@@ -882,9 +882,105 @@ class OpenArmDashboardServer:
             m.q_target = q
 
     def _execute_trajectory(self, traj_points: list, joint_names: list, traj_id: int):
-        """Smoothly interpolate and execute a JointTrajectory received from ROS 2."""
+        """
+        Execute trajectory according to safe 3-phase sequence:
+        1. Read current robot state (Đọc trạng thái hiện tại từ robot)
+        2. Drive all joints smoothly to Zero Pose (Đưa tất cả trạng thái về 0)
+        3. Then execute trajectory waypoints (Rồi mới thực hiện trajectory)
+        """
         if not traj_points:
             return
+
+        print(f"[Trajectory #{traj_id}] === BẮT ĐẦU CHU KỲ QUỸ ĐẠO AN TOÀN (3 BƯỚC) ===")
+
+        # -------------------------------------------------------------
+        # BƯỚC 1: ĐỌC TRẠNG THÁI HIỆN TẠI TỪ ROBOT
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 1/3: Đang đọc trạng thái góc khớp thực tế từ robot...")
+        if self.mode == "real":
+            self.hw.query_all_physical()
+            time.sleep(0.06)
+
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.enabled = True
+                m.error_code = 1
+                m.q_cmd = m.q  # bám sát góc vật lý hiện tại
+                gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                m.kp = gains["kp"]
+                m.kd = gains["kd"]
+
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info", "Trajectory (1/3): Đã đọc trạng thái góc khớp hiện tại từ robot."),
+                self.loop
+            )
+
+        if not self.running or self.active_trajectory_id != traj_id:
+            return
+
+        # -------------------------------------------------------------
+        # BƯỚC 2: ĐƯA TẤT CẢ TRẠNG THÁI VỀ 0
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 2/3: Đang đưa tất cả các khớp về Zero Pose (0.0 rad / 0 mm)...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info", "Trajectory (2/3): Đang đưa tất cả các khớp về Zero Pose trước khi chạy quỹ đạo..."),
+                self.loop
+            )
+
+        # Kích hoạt đưa về 0
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.q_target = 0.0
+                m.tau_ff = 0.0
+
+        if self.mode == "real":
+            for gid in [8, 16]:
+                m = self.motors.get(gid)
+                if m:
+                    self._send_gripper_command(m, 0.0)
+
+        # Chờ các khớp về 0 an toàn (với timeout tối đa 8 giây)
+        t_zero_start = time.perf_counter()
+        zero_timeout = 8.0
+        while self.running and (self.active_trajectory_id == traj_id):
+            now_t = time.perf_counter()
+            if now_t - t_zero_start > zero_timeout:
+                print(f"[Trajectory #{traj_id}] Cảnh báo: Hết thời gian chờ về 0, chuyển sang thực thi quỹ đạo.")
+                break
+
+            # Kiểm tra xem toàn bộ các khớp tay đã về gần 0 chưa
+            all_near_zero = True
+            with self.hw.lock:
+                for mid in range(1, 17):
+                    m = self.motors.get(mid)
+                    if m and m.joint_idx != 8:
+                        if abs(m.q_cmd) > 0.02 or abs(m.q) > 0.05:
+                            all_near_zero = False
+                            break
+
+            if all_near_zero:
+                print(f"[Trajectory #{traj_id}] Đã về Zero Pose thành công! Ổn định góc...")
+                break
+
+            time.sleep(0.01)
+
+        # Dừng 0.25 giây ở Zero Pose để robot triệt tiêu hoàn toàn quán tính
+        time.sleep(0.25)
+
+        if not self.running or self.active_trajectory_id != traj_id:
+            return
+
+        # -------------------------------------------------------------
+        # BƯỚC 3: RỒI MỚI THỰC HIỆN TRAJECTORY
+        # -------------------------------------------------------------
+        print(f"[Trajectory #{traj_id}] Bước 3/3: Bắt đầu thực thi các điểm quỹ đạo Trajectory...")
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("success", "Trajectory (3/3): Đã về Zero Pose an toàn. Bắt đầu thực thi quỹ đạo!"),
+                self.loop
+            )
 
         sorted_pts = sorted(traj_points, key=lambda p: p.get("time", 0.0))
         start_time = time.perf_counter()
@@ -926,6 +1022,14 @@ class OpenArmDashboardServer:
                     self._set_single_joint_target(mid, interp_pos)
 
             time.sleep(0.005)  # 200 Hz interpolation
+
+        if self.running and (self.active_trajectory_id == traj_id):
+            print(f"[Trajectory #{traj_id}] Hoàn thành toàn bộ quỹ đạo trajectory.")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice("success", "Trajectory: Đã hoàn thành thực thi toàn bộ quỹ đạo."),
+                    self.loop
+                )
 
     async def handle_action(self, action: str, payload: dict, ws):
         """Process incoming dashboard commands (enable/disable, zero calibration, MIT, Gripper, USB)."""

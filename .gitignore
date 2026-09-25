@@ -42,4 +42,5 @@ stop_robot.py
 dataset/
 *.pth
 *.hdf5
-
+*.npz
+exports/

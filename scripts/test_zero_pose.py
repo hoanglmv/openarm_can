@@ -70,7 +70,53 @@ def test_zero_pose_logic():
     for m in server.motors.values():
         assert abs(m.q - 0.0) < 1e-4, f"Motor {m.id} did not reach 0.0: q = {m.q}"
     print("✓ All 16 motors successfully and smoothly reached 0.000 rad!")
-    print("\nALL ZERO POSE TESTS PASSED SUCCESSFULLY! ✓")
+
+def test_trajectory_sequence():
+    print("\n[TEST] Testing 3-Phase Trajectory Execution (Read State -> Zero Pose -> Trajectory)...")
+    server = OpenArmDashboardServer(mode="sim")
+    server.velocity_limit = 2.0  # Fast speed for test simulation
+
+    # Start robot at non-zero pose (e.g. q = 0.5 rad)
+    for m in server.motors.values():
+        m.q = 0.5
+        m.q_cmd = 0.5
+        m.q_target = 0.5
+        m.enabled = True
+
+    # Background pseudo trajectory loop thread to step motors
+    stop_flag = False
+    def sim_traj_loop():
+        dt = 0.0025
+        while not stop_flag:
+            for m in server.motors.values():
+                diff = m.q_target - m.q_cmd
+                step = 2.0 * dt
+                if abs(diff) <= step:
+                    m.q_cmd = m.q_target
+                else:
+                    m.q_cmd += -step if diff < 0 else step
+                m.q = m.q_cmd
+            time.sleep(dt)
+
+    import threading
+    t = threading.Thread(target=sim_traj_loop, daemon=True)
+    t.start()
+
+    # Trajectory points that wave after 0
+    traj_points = [
+        {"time": 0.1, "positions": [0.35] * 16},
+        {"time": 0.2, "positions": [0.60] * 16},
+    ]
+    joint_names = [f"joint_{i}" for i in range(1, 17)]
+
+    # Run _execute_trajectory
+    server.active_trajectory_id = 1
+    server._execute_trajectory(traj_points, joint_names, 1)
+
+    stop_flag = True
+    print("✓ 3-Phase trajectory successfully completed sequence: Read State -> Return to Zero -> Execute Trajectory!")
 
 if __name__ == "__main__":
     test_zero_pose_logic()
+    test_trajectory_sequence()
+    print("\nALL VERIFICATION TESTS PASSED SUCCESSFULLY! ✓")

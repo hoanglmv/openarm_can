@@ -323,7 +323,7 @@ function setupEventHandlers() {
         btnSyncState.addEventListener("click", () => {
             sendAction("sync_robot_state");
             syncUiFromRobot(currentTelemetry, true);
-            showToast("success", "✓ Đã đọc và đồng bộ trạng thái thực tế từ Robot vật lý!");
+            showToast("success", "Đã đọc và đồng bộ trạng thái thực tế từ Robot vật lý!");
         });
     }
 
@@ -372,7 +372,7 @@ function setupEventHandlers() {
         if (rightGDisp) rightGDisp.textContent = "0.0 mm (Đóng)";
 
         sendAction("go_to_zero_pose");
-        showToast("info", "🎯 Đang đưa toàn bộ cánh tay về Zero Pose (0.0 rad) với lực giữ vững chắc...");
+        showToast("info", "Đang đưa toàn bộ cánh tay về Zero Pose (0.0 rad) với lực giữ vững chắc...");
     }
 
     const btnGoZeroPose = document.getElementById("btn-go-zero-pose");
@@ -388,10 +388,10 @@ function setupEventHandlers() {
     const btnCalibrateHw = document.getElementById("btn-calibrate-hw-zero");
     if (btnCalibrateHw) {
         btnCalibrateHw.addEventListener("click", () => {
-            const ok = confirm("⚠️ CẢNH BÁO BẢO DƯỠNG CƠ KHÍ:\n\nThao tác này sẽ ghi đè vị trí hiện tại của các động cơ thành gốc 0 cơ khí (Lệnh 0xFE) trong bộ nhớ NVRAM.\n\nChỉ sử dụng khi bạn đã đặt robot lên đồ gá chuẩn căn chỉnh!\n\nBạn có chắc chắn muốn ghi đè gốc 0 cơ khí không?");
+            const ok = confirm("CẢNH BÁO BẢO DƯỠNG CƠ KHÍ:\n\nThao tác này sẽ ghi đè vị trí hiện tại của các động cơ thành gốc 0 cơ khí (Lệnh 0xFE) trong bộ nhớ NVRAM.\n\nChỉ sử dụng khi bạn đã đặt robot lên đồ gá chuẩn căn chỉnh!\n\nBạn có chắc chắn muốn ghi đè gốc 0 cơ khí không?");
             if (ok) {
                 sendAction("calibrate_mechanical_zero", { calibrate_hardware: true });
-                showToast("warning", "⚙️ Đã gửi lệnh căn chỉnh gốc 0 cơ khí 0xFE đến phần cứng!");
+                showToast("warning", "Đã gửi lệnh căn chỉnh gốc 0 cơ khí 0xFE đến phần cứng!");
             }
         });
     }
@@ -643,7 +643,7 @@ function setupEventHandlers() {
     if (btnExportNew) {
         btnExportNew.addEventListener("click", () => {
             sendAction("export_new_session");
-            showToast("info", "🔁 Đã khởi tạo file ghi CSV 100Hz mới!");
+            showToast("info", "Đã khởi tạo file ghi CSV 100Hz mới!");
         });
     }
 

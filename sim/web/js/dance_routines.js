@@ -179,5 +179,101 @@ const DANCE_ROUTINES = {
                 r_j1, r_j2, r_j3, r_j4, r_j5, r_j6, r_j7, grip_r
             ];
         }
+    },
+    changquan: {
+        name: "Changquan Strike (Trường Quyền)",
+        defaultBpm: 75,
+        desc: "Đấm xuất quyền, thu thủ thủ thế dứt khoát Wushu",
+        calcPose: function(t, bpm) {
+            const omega = (2 * Math.PI * bpm) / 60;
+            const strikePhase = Math.sin(omega * t);
+            // Right arm thrust punch forward, Left arm guard back
+            const r_j1 = 0.65 + 0.45 * strikePhase;
+            const l_j1 = 0.65 - 0.45 * strikePhase;
+            const r_j2 = 0.20 - 0.15 * Math.abs(strikePhase);
+            const l_j2 = -0.20 + 0.15 * Math.abs(strikePhase);
+            const r_j3 = 0.25 * strikePhase;
+            const l_j3 = -0.25 * strikePhase;
+            // Elbow extension during punch, bent in chamber/guard
+            const r_j4 = 0.85 - 0.60 * strikePhase;
+            const l_j4 = 0.85 + 0.60 * strikePhase;
+            const r_j5 = 0.15 * strikePhase;
+            const l_j5 = -0.15 * strikePhase;
+            const r_j6 = 0.10 * Math.cos(omega * t);
+            const l_j6 = -0.10 * Math.cos(omega * t);
+            const r_j7 = 0.30 * strikePhase;
+            const l_j7 = -0.30 * strikePhase;
+            // Solid martial fist (closed gripper)
+            const grip_l = 0.005;
+            const grip_r = 0.005;
+
+            return [
+                l_j1, l_j2, l_j3, l_j4, l_j5, l_j6, l_j7, grip_l,
+                r_j1, r_j2, r_j3, r_j4, r_j5, r_j6, r_j7, grip_r
+            ];
+        }
+    },
+    sword: {
+        name: "Cloud Sword (Kiếm Pháp Wushu)",
+        defaultBpm: 65,
+        desc: "Múa kiếm vạch mây, song thủ biến ảo uyển chuyển",
+        calcPose: function(t, bpm) {
+            const omega = (2 * Math.PI * bpm) / 60;
+            // Figure-8 sword waving pattern
+            const l_j1 = 0.50 + 0.35 * Math.sin(omega * t);
+            const r_j1 = 0.70 + 0.40 * Math.cos(omega * t);
+            const l_j2 = -0.40 + 0.25 * Math.cos(omega * t);
+            const r_j2 = 0.45 + 0.25 * Math.sin(omega * t);
+            const l_j3 = 0.30 * Math.sin(omega * t * 0.5);
+            const r_j3 = -0.30 * Math.sin(omega * t * 0.5);
+            const l_j4 = 1.10 + 0.40 * Math.cos(omega * t);
+            const r_j4 = 0.90 + 0.35 * Math.sin(omega * t);
+            const l_j5 = 0.20 * Math.sin(omega * t);
+            const r_j5 = -0.20 * Math.sin(omega * t);
+            const l_j6 = 0.25 * Math.cos(omega * t * 2);
+            const r_j6 = 0.30 * Math.sin(omega * t * 2);
+            const l_j7 = 0.50 * Math.sin(omega * t);
+            const r_j7 = -0.50 * Math.sin(omega * t);
+            // Holding sword hilt / sword finger
+            const grip_l = 0.015;
+            const grip_r = 0.012;
+
+            return [
+                l_j1, l_j2, l_j3, l_j4, l_j5, l_j6, l_j7, grip_l,
+                r_j1, r_j2, r_j3, r_j4, r_j5, r_j6, r_j7, grip_r
+            ];
+        }
+    },
+    staff: {
+        name: "Shaolin Staff (Thiếu Lâm Côn Pháp)",
+        defaultBpm: 80,
+        desc: "Loan hoa côn, quét ngang đỡ gạt dũng mãnh",
+        calcPose: function(t, bpm) {
+            const omega = (2 * Math.PI * bpm) / 60;
+            // Coordinated two-hand staff twirl
+            const twirl = Math.sin(omega * t);
+            const l_j1 = 0.60 + 0.30 * twirl;
+            const r_j1 = 0.60 - 0.30 * twirl;
+            const l_j2 = -0.35 + 0.15 * Math.cos(omega * t);
+            const r_j2 = 0.35 + 0.15 * Math.cos(omega * t);
+            const l_j3 = 0.15 * Math.cos(omega * t);
+            const r_j3 = -0.15 * Math.cos(omega * t);
+            const l_j4 = 1.30 - 0.40 * Math.abs(twirl);
+            const r_j4 = 1.30 - 0.40 * Math.abs(twirl);
+            const l_j5 = 0.10 * twirl;
+            const r_j5 = -0.10 * twirl;
+            const l_j6 = 0.20 * Math.sin(omega * t * 2);
+            const r_j6 = -0.20 * Math.sin(omega * t * 2);
+            const l_j7 = 0.35 * Math.cos(omega * t);
+            const r_j7 = -0.35 * Math.cos(omega * t);
+            // Firm staff grip
+            const grip_l = 0.010;
+            const grip_r = 0.010;
+
+            return [
+                l_j1, l_j2, l_j3, l_j4, l_j5, l_j6, l_j7, grip_l,
+                r_j1, r_j2, r_j3, r_j4, r_j5, r_j6, r_j7, grip_r
+            ];
+        }
     }
 };

@@ -109,7 +109,7 @@ function startDance() {
     if (danceTimer) clearInterval(danceTimer);
     danceTimer = setInterval(tickDance, 50);
 
-    showToast("success", `💃 Bắt đầu bài múa: ${routine.name}!`);
+    showToast("success", `Bắt đầu bài múa: ${routine.name}!`);
 }
 
 function pauseDance() {
@@ -127,11 +127,11 @@ function pauseDance() {
     const btnDancePause = document.getElementById("btn-dance-pause");
     if (btnDancePlay) {
         btnDancePlay.disabled = false;
-        btnDancePlay.textContent = "▶ Tiếp Tục Múa";
+        btnDancePlay.textContent = "Tiếp Tục Múa";
     }
     if (btnDancePause) btnDancePause.disabled = true;
 
-    showToast("info", "⏸ Đã tạm dừng điệu múa!");
+    showToast("info", "Đã tạm dừng điệu múa!");
 }
 
 function stopDance(returnHome = true) {
@@ -151,7 +151,7 @@ function stopDance(returnHome = true) {
     const btnDancePause = document.getElementById("btn-dance-pause");
     if (btnDancePlay) {
         btnDancePlay.disabled = false;
-        btnDancePlay.textContent = "▶ Bắt Đầu Múa";
+        btnDancePlay.textContent = "Bắt Đầu Múa";
     }
     if (btnDancePause) btnDancePause.disabled = true;
 
@@ -166,7 +166,7 @@ function stopDance(returnHome = true) {
         // Smoothly send robot to Home pose (0 rad)
         const homePose = new Array(16).fill(0.0);
         sendAction("set_joint_state", { positions: homePose });
-        showToast("info", "⏹ Đã dừng bài múa. Robot trở về vị trí nghỉ an toàn.");
+        showToast("info", "Đã dừng bài múa. Robot trở về vị trí nghỉ an toàn.");
     }
 }
 
@@ -184,7 +184,7 @@ function initDanceEngine() {
     if (danceLoopCheckbox) {
         danceLoopCheckbox.addEventListener("change", (e) => {
             isDanceLoop = e.target.checked;
-            showToast("info", isDanceLoop ? "🔁 Đã BẬT lặp lại bài múa liên tục" : "Đã TẮT lặp lại (múa 1 chu kỳ)");
+            showToast("info", isDanceLoop ? "Đã BẬT lặp lại bài múa liên tục" : "Đã TẮT lặp lại (múa 1 chu kỳ)");
         });
     }
 
@@ -205,7 +205,7 @@ function initDanceEngine() {
             });
             card.classList.add("active");
             const activeMarker = card.querySelector(".dance-select-marker");
-            if (activeMarker) activeMarker.textContent = "✓ Đang chọn";
+            if (activeMarker) activeMarker.textContent = "Đang chọn";
 
             const danceTitlePlaying = document.getElementById("dance-title-playing");
             if (danceTitlePlaying) {
@@ -214,7 +214,7 @@ function initDanceEngine() {
                     : `Đã chọn: ${routine.name} (${routine.desc})`;
             }
 
-            showToast("info", `🎵 Đã chọn: ${routine.name}`);
+            showToast("info", `Đã chọn: ${routine.name}`);
         });
     });
 
@@ -227,7 +227,7 @@ function initDanceEngine() {
             document.querySelectorAll(".btn-tempo-opt").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
 
-            showToast("info", `⏱️ Nhịp điệu: ${bpm} BPM`);
+            showToast("info", `Nhịp điệu: ${bpm} BPM`);
         });
     });
 
@@ -378,3 +378,28 @@ function triggerPreset(preset) {
         }, 50);
     }
 }
+
+// ==============================================================================
+// KUNGFU ATHLETE BOT TRAJECTORY DISPATCHER
+// ==============================================================================
+window.triggerKungfuRoutine = async function(routineId) {
+    stopDance(false);
+    stopPresets();
+    showToast("info", "Đang nạp quỹ đạo võ thuật: " + routineId + "...");
+    try {
+        const resp = await fetch("/api/kungfu/play", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: routineId })
+        });
+        const res = await resp.json();
+        if (res.status === "ok") {
+            showToast("success", `Đã phát lệnh võ thuật (${res.points} điểm)! Robot đang tự động đưa về 0 và thực hiện quỹ đạo.`);
+        } else {
+            showToast("error", "Lỗi: " + (res.message || "Không thể phát quỹ đạo"));
+        }
+    } catch (e) {
+        showToast("error", "Lỗi kết nối tới máy chủ: " + e.message);
+    }
+};
+

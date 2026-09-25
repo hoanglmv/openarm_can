@@ -31,7 +31,7 @@ function initWebSocket() {
                 if (isReal && !hasInitialRobotSync) {
                     hasInitialRobotSync = true;
                     syncUiFromRobot(msg.data.motors, true);
-                    showToast("success", "✓ Đã tự động đọc góc khớp thực từ Robot vật lý!");
+                    showToast("success", "Đã tự động đọc góc khớp thực từ Robot vật lý!");
                 }
                 if (typeof handleTelemetry === "function") {
                     handleTelemetry(msg.data);
@@ -153,7 +153,7 @@ function updateUsbUiState(isReal) {
         }
         if (btnMaster) {
             btnMaster.className = "btn btn-usb btn-usb-connected";
-            btnMaster.textContent = "🔌 Disconnect USB Robot (can0/can1)";
+            btnMaster.textContent = "Disconnect USB Robot (can0/can1)";
             btnMaster.style.gridColumn = "span 2";
         }
         if (ifaceBadge) ifaceBadge.textContent = "can0 / can1 (REAL)";
@@ -165,7 +165,7 @@ function updateUsbUiState(isReal) {
         }
         if (btnMaster) {
             btnMaster.className = "btn btn-usb btn-usb-disconnected";
-            btnMaster.textContent = "⚡ Connect USB Robot (Physical)";
+            btnMaster.textContent = "Connect USB Robot (Physical)";
             btnMaster.style.gridColumn = "span 2";
         }
         if (ifaceBadge) ifaceBadge.textContent = "vcan0 (SIM)";
@@ -226,8 +226,8 @@ function showToast(level, message) {
     if (!container) return;
     const toast = document.createElement("div");
     toast.className = `toast toast-${level}`;
-    const icon = level === "success" ? "✓" : level === "error" ? "✕" : level === "warning" ? "⚠" : "ℹ";
-    toast.innerHTML = `<span style="font-weight: 800; font-size: 13px;">${icon}</span> <span>${message}</span>`;
+    const levelLabel = level === "success" ? "OK" : level === "error" ? "ERR" : level === "warning" ? "WARN" : "INFO";
+    toast.innerHTML = `<span style="font-weight: 700; font-size: 11px; opacity: 0.85; margin-right: 4px;">[${levelLabel}]</span> <span>${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => {
         toast.style.opacity = "0";

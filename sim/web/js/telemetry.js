@@ -190,9 +190,9 @@ function handleTelemetry(data) {
         if (maxErr < 0.025) {
             activeMotionTracking = false;
             if (statusDot) statusDot.className = "status-indicator-dot dot-reached";
-            if (statusText) statusText.textContent = "✓ Đã chuyển động đến đúng vị trí mong muốn!";
+            if (statusText) statusText.textContent = "Đã chuyển động đến đúng vị trí mong muốn!";
             if (statusSub) statusSub.textContent = `Tất cả 16 khớp đã đến đích (Sai số < 0.025 rad)`;
-            showToast("success", "✓ Robot đã đến đúng vị trí góc khớp mong muốn!");
+            showToast("success", "Robot đã đến đúng vị trí góc khớp mong muốn!");
         } else {
             if (statusText) statusText.textContent = `Đang di chuyển: Sai số lớn nhất M${maxErrJoint} = ${maxErr.toFixed(3)} rad`;
             const pct = Math.max(0, Math.min(100, (1.0 - maxErr / 1.5) * 100));
@@ -231,7 +231,7 @@ function handleExportStats(stats) {
             samplesBadge.textContent = `${samples.toLocaleString()} mẫu (${elapsed}s)`;
         }
         if (toggleBtn) {
-            toggleBtn.textContent = "⏸ Tạm dừng";
+            toggleBtn.textContent = "Tạm dừng";
             toggleBtn.className = "btn-subtle-sm";
         }
     } else if (stats.active && !stats.recording) {
@@ -244,7 +244,7 @@ function handleExportStats(stats) {
             samplesBadge.textContent = `Tạm dừng • ${samples.toLocaleString()} mẫu`;
         }
         if (toggleBtn) {
-            toggleBtn.textContent = "▶ Tiếp tục";
+            toggleBtn.textContent = "Tiếp tục";
             toggleBtn.className = "btn-subtle-sm btn-subtle-primary";
         }
     } else {
@@ -257,7 +257,7 @@ function handleExportStats(stats) {
             samplesBadge.textContent = "Chờ kết nối";
         }
         if (toggleBtn) {
-            toggleBtn.textContent = "▶ Bắt đầu ghi";
+            toggleBtn.textContent = "Bắt đầu ghi";
             toggleBtn.className = "btn-subtle-sm";
         }
     }

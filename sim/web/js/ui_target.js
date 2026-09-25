@@ -145,12 +145,12 @@ function setupTargetJointUI() {
                 inp.value = minBound;
                 if (row) row.classList.remove("input-exceeded");
                 if (lbl) lbl.classList.remove("limit-warning");
-                showToast("warning", `⚠️ [Giới hạn Khớp] ${lim.name} không thể quay dưới ${minBound}${unitText}! Đã tự động giữ ở ngưỡng an toàn.`);
+                showToast("warning", `[Giới hạn Khớp] ${lim.name} không thể quay dưới ${minBound}${unitText}! Đã tự động giữ ở ngưỡng an toàn.`);
             } else if (val > maxBound) {
                 inp.value = maxBound;
                 if (row) row.classList.remove("input-exceeded");
                 if (lbl) lbl.classList.remove("limit-warning");
-                showToast("warning", `⚠️ [Giới hạn Khớp] ${lim.name} không thể quay quá ${maxBound}${unitText}! Đã tự động giữ ở ngưỡng an toàn.`);
+                showToast("warning", `[Giới hạn Khớp] ${lim.name} không thể quay quá ${maxBound}${unitText}! Đã tự động giữ ở ngưỡng an toàn.`);
             }
         });
     }
@@ -205,7 +205,7 @@ function setupTargetJointUI() {
                     if (lbl) lbl.classList.remove("limit-warning");
                 }
             });
-            showToast("info", "✓ Đã đọc toàn bộ góc hiện tại vào bảng nhập mục tiêu!");
+            showToast("info", "Đã đọc toàn bộ góc hiện tại vào bảng nhập mục tiêu!");
         });
     }
 
@@ -300,7 +300,7 @@ function setupTargetJointUI() {
                         if (Math.abs(clamped - rawVal) > 1e-4) {
                             jsonClampedCount++;
                             const unit = lim.isGripper ? "m" : "rad";
-                            showToast("warning", `⚠️ [An Toàn] ${lim.name} (${keyName}): Vượt giới hạn (${rawVal.toFixed(3)}${unit}), đã tự động kẹp về ${clamped.toFixed(3)}${unit}!`);
+                            showToast("warning", `[An Toàn] ${lim.name} (${keyName}): Vượt giới hạn (${rawVal.toFixed(3)}${unit}), đã tự động kẹp về ${clamped.toFixed(3)}${unit}!`);
                             return clamped;
                         }
                         return rawVal;
@@ -351,7 +351,7 @@ function setupTargetJointUI() {
                     if (statusDot) statusDot.className = "status-indicator-dot dot-moving";
                     if (statusText) statusText.textContent = "Đang gửi tín hiệu SDK & di chuyển robot...";
                     if (statusSub) statusSub.textContent = "Lệnh JSON an toàn đã gửi qua WebSocket / 400Hz MIT";
-                    showToast("success", "🚀 Đã gửi tín hiệu SDK! Robot đang chuyển động theo JSON...");
+                    showToast("success", "Đã gửi tín hiệu SDK! Robot đang chuyển động theo JSON...");
                 } catch (err) {
                     showToast("error", "Lỗi định dạng JSON: " + err.message);
                 }
@@ -389,7 +389,7 @@ function setupTargetJointUI() {
             }
 
             if (clampedCount > 0) {
-                showToast("warning", `⚠️ Đã tự động giới hạn ${clampedCount} khớp về ngưỡng cơ học an toàn để chống quay quá khớp!`);
+                showToast("warning", `Đã tự động giới hạn ${clampedCount} khớp về ngưỡng cơ học an toàn để chống quay quá khớp!`);
             }
 
             targetJointValues = targetPositions;
@@ -401,7 +401,7 @@ function setupTargetJointUI() {
             if (statusDot) statusDot.className = "status-indicator-dot dot-moving";
             if (statusText) statusText.textContent = "Đang chuyển động đến vị trí mong muốn...";
             if (statusSub) statusSub.textContent = `Tốc độ: 0.25 rad/s • Kiểm soát giới hạn khớp an toàn`;
-            showToast("success", "🚀 Đã gửi tín hiệu SDK! Robot đang chuyển động đến đúng vị trí...");
+            showToast("success", "Đã gửi tín hiệu SDK! Robot đang chuyển động đến đúng vị trí...");
         });
     }
 
@@ -417,7 +417,7 @@ function setupTargetJointUI() {
             if (statusDot) statusDot.className = "status-indicator-dot dot-idle";
             if (statusText) statusText.textContent = "Đã dừng chuyển động khẩn cấp.";
             if (statusSub) statusSub.textContent = "Điểm đặt đã đóng băng tại vị trí hiện tại.";
-            showToast("warning", "⏹ Đã dừng chuyển động của robot!");
+            showToast("warning", "Đã dừng chuyển động của robot!");
         });
     }
 

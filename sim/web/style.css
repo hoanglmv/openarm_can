@@ -620,6 +620,23 @@ body.theme-light .btn-preset-stop {
     color: #991b1b;
 }
 
+.btn-preset-kungfu {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(217, 119, 6, 0.08));
+    border-color: rgba(234, 88, 12, 0.35);
+    color: #fb923c;
+    font-weight: 500;
+}
+.btn-preset-kungfu:hover {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.22), rgba(217, 119, 6, 0.16));
+    border-color: #ea580c;
+    color: #fdba74;
+}
+body.theme-light .btn-preset-kungfu {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
 /* Velocity Control Section */
 .velocity-control-section {
     background-color: var(--bg-card);
