@@ -280,15 +280,14 @@ function triggerPreset(preset) {
     sendAction("enable_all");
 
     if (preset === "home") {
-        // Natural resting pose: arms hang down vertically beside pillar (0 rad)
-        for (let id = 1; id <= 16; id++) {
-            const isGripper = (id === 8 || id === 16);
-            if (isGripper) {
-                sendAction("set_gripper", { id, pos: 0.0 });
-            } else {
-                sendAction("set_mit", { id, q: 0.0, kp: 35.0, kd: 1.2, tau: 0.0 });
+        // Natural resting pose: all 14 arm joints to 0.0 rad, grippers closed (0 mm) with strong holding torque
+        sendAction("go_to_zero_pose");
+        document.querySelectorAll(".joint-slider-input").forEach(s => s.value = 0.0);
+        document.querySelectorAll(".joint-val").forEach(disp => {
+            if (disp.id.startsWith("val-disp-")) {
+                disp.textContent = disp.id.includes("-7") ? "0.0 mm (Đóng)" : "0.00 rad (0°)";
             }
-        }
+        });
     } else if (preset === "ready") {
         // Ready stance: Both arms raised forward at chest height
         [1, 9].forEach(baseId => {

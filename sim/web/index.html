@@ -71,6 +71,9 @@
                 <button class="btn btn-danger" id="btn-disable-all" title="Ngắt lực cho tất cả động cơ (Torque OFF)">
                     🛑 Ngắt Lực
                 </button>
+                <button class="btn btn-warning" id="btn-go-zero-pose" title="Đưa toàn bộ 14 khớp và 2 kẹp về vị trí 0 an toàn (0.0 rad, 0 mm) với lực giữ vững chắc">
+                    🎯 Zero Pose
+                </button>
                 <button class="btn btn-primary" id="btn-sync-state" title="Đọc trạng thái góc khớp thực tế từ robot vật lý và cập nhật vào thanh trượt">
                     🔄 Sync Pose
                 </button>
@@ -586,11 +589,14 @@
                 </summary>
                 <div class="more-actions-content">
                     <div class="more-actions-buttons">
-                        <button class="btn btn-secondary" id="btn-zero-all" title="Gán vị trí hiện tại thành điểm 0 (Set Zero All)">
-                            🎯 Đặt Lại Điểm Zero (Set Zero All)
+                        <button class="btn btn-warning" id="btn-zero-all" title="Đưa toàn bộ 14 khớp và 2 kẹp về vị trí 0 (0.0 rad, 0 mm) với lực giữ vững chắc">
+                            🎯 Đưa Về Zero Pose (0 rad)
                         </button>
                         <button class="btn btn-secondary" id="btn-clear-err" title="Gửi lệnh 0xFB xóa cờ lỗi driver động cơ">
                             🧹 Xóa Lỗi Động Cơ (Clear Errors)
+                        </button>
+                        <button class="btn btn-secondary" id="btn-calibrate-hw-zero" title="LƯU Ý BẢO DƯỠNG: Căn chỉnh lại điểm 0 cơ khí thực tế (Lệnh 0xFE ghi vào NVRAM motor)" style="grid-column: span 2; font-size: 0.78rem; opacity: 0.85; margin-top: 4px;">
+                            ⚙️ Căn Chỉnh Gốc 0 Cơ Khí (0xFE Hardware Calibration)
                         </button>
                     </div>
                     <!-- Hidden compatibility button for JS references -->

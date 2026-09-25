@@ -170,8 +170,6 @@ window.resetSingleJoint = function(id, key, group, idx) {
     if (isGripper) {
         if (disp) disp.textContent = "0.0 mm (Đóng)";
         if (group === 'sync') {
-            sendAction("set_zero_single", { id: 8 });
-            sendAction("set_zero_single", { id: 16 });
             sendAction("set_gripper", { id: 8, arm: "left", pos: 0.0 });
             sendAction("set_gripper", { id: 16, arm: "right", pos: 0.0 });
             const topL = document.getElementById("slider-gripper-left");
@@ -184,7 +182,6 @@ window.resetSingleJoint = function(id, key, group, idx) {
             if (dR) dR.textContent = "0.0 mm (Đóng)";
         } else {
             const arm = (id === 8) ? "left" : "right";
-            sendAction("set_zero_single", { id });
             sendAction("set_gripper", { id, arm, pos: 0.0 });
             const topSlider = document.getElementById(arm === 'left' ? "slider-gripper-left" : "slider-gripper-right");
             if (topSlider) topSlider.value = 0.0;
@@ -196,13 +193,10 @@ window.resetSingleJoint = function(id, key, group, idx) {
         if (group === 'sync') {
             const leftId = LEFT_JOINTS[idx].id;
             const rightId = RIGHT_JOINTS[idx].id;
-            sendAction("set_zero_single", { id: leftId });
-            sendAction("set_zero_single", { id: rightId });
-            sendAction("set_mit", { id: leftId, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
-            sendAction("set_mit", { id: rightId, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
+            sendAction("set_mit", { id: leftId, q: 0.0, tau: 0.0 });
+            sendAction("set_mit", { id: rightId, q: 0.0, tau: 0.0 });
         } else {
-            sendAction("set_zero_single", { id });
-            sendAction("set_mit", { id, q: 0.0, kp: 30.0, kd: 1.2, tau: 0.0 });
+            sendAction("set_mit", { id, q: 0.0, tau: 0.0 });
         }
     }
 };
@@ -353,47 +347,52 @@ function setupEventHandlers() {
         });
     }
 
+    function triggerZeroPose() {
+        if (typeof stopPresets === "function") stopPresets();
+        document.querySelectorAll(".joint-slider-input").forEach(slider => {
+            slider.value = 0.0;
+        });
+        document.querySelectorAll(".joint-val").forEach(disp => {
+            if (disp.id.startsWith("val-disp-")) {
+                if (disp.id.includes("-7")) {
+                    disp.textContent = "0.0 mm (Đóng)";
+                } else {
+                    disp.textContent = "0.00 rad (0°)";
+                }
+            }
+        });
+
+        const leftG = document.getElementById("slider-gripper-left");
+        const rightG = document.getElementById("slider-gripper-right");
+        if (leftG) leftG.value = 0.0;
+        if (rightG) rightG.value = 0.0;
+        const leftGDisp = document.getElementById("left-gripper-val-display");
+        const rightGDisp = document.getElementById("right-gripper-val-display");
+        if (leftGDisp) leftGDisp.textContent = "0.0 mm (Đóng)";
+        if (rightGDisp) rightGDisp.textContent = "0.0 mm (Đóng)";
+
+        sendAction("go_to_zero_pose");
+        showToast("info", "🎯 Đang đưa toàn bộ cánh tay về Zero Pose (0.0 rad) với lực giữ vững chắc...");
+    }
+
+    const btnGoZeroPose = document.getElementById("btn-go-zero-pose");
+    if (btnGoZeroPose) {
+        btnGoZeroPose.addEventListener("click", triggerZeroPose);
+    }
+
     const btnZeroAll = document.getElementById("btn-zero-all");
     if (btnZeroAll) {
-        btnZeroAll.addEventListener("click", () => {
-            document.querySelectorAll(".joint-slider-input").forEach(slider => {
-                slider.value = 0.0;
-            });
-            document.querySelectorAll(".joint-val").forEach(disp => {
-                if (disp.id.startsWith("val-disp-")) {
-                    if (disp.id.includes("-7")) {
-                        disp.textContent = "0.0 mm (Đóng)";
-                    } else {
-                        disp.textContent = "0.00 rad (0°)";
-                    }
-                }
-            });
+        btnZeroAll.addEventListener("click", triggerZeroPose);
+    }
 
-            const leftG = document.getElementById("slider-gripper-left");
-            const rightG = document.getElementById("slider-gripper-right");
-            if (leftG) leftG.value = 0.0;
-            if (rightG) rightG.value = 0.0;
-            const leftGDisp = document.getElementById("left-gripper-val-display");
-            const rightGDisp = document.getElementById("right-gripper-val-display");
-            if (leftGDisp) leftGDisp.textContent = "0.0 mm (Đóng)";
-            if (rightGDisp) rightGDisp.textContent = "0.0 mm (Đóng)";
-
-            leftArmJoints.forEach(j => {
-                if (j && j.group) j.group.rotation.set(0, 0, 0);
-            });
-            rightArmJoints.forEach(j => {
-                if (j && j.group) j.group.rotation.set(0, 0, 0);
-            });
-            if (leftGripperFingers.left && leftGripperFingers.right) {
-                leftGripperFingers.left.position.x = -0.010;
-                leftGripperFingers.right.position.x = 0.010;
+    const btnCalibrateHw = document.getElementById("btn-calibrate-hw-zero");
+    if (btnCalibrateHw) {
+        btnCalibrateHw.addEventListener("click", () => {
+            const ok = confirm("⚠️ CẢNH BÁO BẢO DƯỠNG CƠ KHÍ:\n\nThao tác này sẽ ghi đè vị trí hiện tại của các động cơ thành gốc 0 cơ khí (Lệnh 0xFE) trong bộ nhớ NVRAM.\n\nChỉ sử dụng khi bạn đã đặt robot lên đồ gá chuẩn căn chỉnh!\n\nBạn có chắc chắn muốn ghi đè gốc 0 cơ khí không?");
+            if (ok) {
+                sendAction("calibrate_mechanical_zero", { calibrate_hardware: true });
+                showToast("warning", "⚙️ Đã gửi lệnh căn chỉnh gốc 0 cơ khí 0xFE đến phần cứng!");
             }
-            if (rightGripperFingers.left && rightGripperFingers.right) {
-                rightGripperFingers.left.position.x = -0.010;
-                rightGripperFingers.right.position.x = 0.010;
-            }
-
-            sendAction("set_zero_all");
         });
     }
 

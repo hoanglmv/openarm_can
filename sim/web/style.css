@@ -365,12 +365,12 @@ body.theme-light .badge-success {
     padding: 10px;
 }
 
-/* Quick Action Bar (3 Primary Safety Buttons) */
+/* Quick Action Bar (4 Primary Safety Buttons) */
 .quick-action-bar {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 6px;
-    margin-bottom: 2px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-bottom: 3px;
 }
 
 /* Control Mode Selector Tabs */
@@ -548,6 +548,14 @@ body.theme-light .badge-success {
 }
 .btn-primary:hover {
     background-color: var(--accent-blue-hover);
+}
+
+.btn-warning {
+    background-color: #d97706;
+    color: #ffffff;
+}
+.btn-warning:hover {
+    background-color: #b45309;
 }
 
 .btn-secondary {

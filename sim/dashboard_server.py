@@ -81,6 +81,33 @@ except ImportError:
     from .motor_simulator import DamiaoArmSimulator
 
 
+# Default high-stiffness / well-damped gains tailored to each actuator's torque capability:
+# DM8009 (J1, J2): 54 Nm rated, needs firm Kp=75.0, Kd=2.8 to prevent gravity sag on heavy shoulder
+# DM4340 (J3, J4): 28 Nm rated, arm twist and elbow pitch Kp=50.0, Kd=2.0
+# DM4310 (J5, J6, J7): 10 Nm rated, wrist motors Kp=30.0, Kd=1.0
+# DM4310 (J8, J16): Gripper actuators Kp=45.0, Kd=1.5
+DEFAULT_GAINS: Dict[int, Dict[str, float]] = {
+    # Left Arm
+    1: {"kp": 75.0, "kd": 2.8},
+    2: {"kp": 75.0, "kd": 2.8},
+    3: {"kp": 50.0, "kd": 2.0},
+    4: {"kp": 50.0, "kd": 2.0},
+    5: {"kp": 30.0, "kd": 1.0},
+    6: {"kp": 30.0, "kd": 1.0},
+    7: {"kp": 30.0, "kd": 1.0},
+    8: {"kp": 45.0, "kd": 1.5},
+    # Right Arm
+    9:  {"kp": 75.0, "kd": 2.8},
+    10: {"kp": 75.0, "kd": 2.8},
+    11: {"kp": 50.0, "kd": 2.0},
+    12: {"kp": 50.0, "kd": 2.0},
+    13: {"kp": 30.0, "kd": 1.0},
+    14: {"kp": 30.0, "kd": 1.0},
+    15: {"kp": 30.0, "kd": 1.0},
+    16: {"kp": 45.0, "kd": 1.5},
+}
+
+
 class OpenArmDashboardServer:
     """Core server orchestrating hardware/simulator, web server, and realtime comms."""
 
@@ -102,12 +129,14 @@ class OpenArmDashboardServer:
             self.hw = DamiaoArmSimulator("vcan0")
             self.motors = self.hw.motors
 
-        # Initialize smooth command states
+        # Initialize smooth command states and optimal motor gains
         for m in self.motors.values():
             m.q_target = 0.0
             m.q_cmd = 0.0
-            m.kp = 18.0
-            m.kd = 2.0
+            gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+            m.kp = gains["kp"]
+            m.kd = gains["kd"]
+            m.tau_ff = 0.0
 
         # Camera & ACT ROS 2 Bridge processes
         self.camera_process = None
@@ -842,6 +871,9 @@ class OpenArmDashboardServer:
         else:
             lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
             q = max(lim[0], min(lim[1], val))
+            gains = DEFAULT_GAINS.get(motor_id, {"kp": 35.0, "kd": 1.5})
+            m.kp = gains["kp"]
+            m.kd = gains["kd"]
             if not m.enabled:
                 m.enabled = True
                 m.q_cmd = m.q
@@ -942,6 +974,9 @@ class OpenArmDashboardServer:
                     m.q_cmd = m.q
                     m.q_target = m.q
                     m.q_des = m.q
+                    gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                    m.kp = gains["kp"]
+                    m.kd = gains["kd"]
             if self.mode == "real":
                 def _bg_enable():
                     for m in self.motors.values():
@@ -984,6 +1019,9 @@ class OpenArmDashboardServer:
                     m.q_cmd = m.q
                     m.q_target = m.q
                     m.q_des = m.q
+                    gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                    m.kp = gains["kp"]
+                    m.kd = gains["kd"]
                 if self.mode == "real":
                     if m.joint_idx == 8:
                         self.hw.init_gripper_motor(m.id, save_flash=False)
@@ -1010,8 +1048,24 @@ class OpenArmDashboardServer:
                     m.error_code = 0
                     self.hw._send_can(m.send_id, bytes([0xFF] * 7 + [0xFD]))
 
-        elif action == "set_zero_all":
-            print("[Command] Set Zero All Motors")
+        elif action in ["go_to_zero_pose", "set_zero_all"]:
+            calibrate_hw = payload.get("calibrate_hardware", False)
+            if calibrate_hw:
+                print("[Command] Hardware 0xFE calibration explicitly requested!")
+                if self.mode == "real":
+                    threading.Thread(target=self._exec_set_zero_all, daemon=True).start()
+                else:
+                    for m in self.hw.motors.values():
+                        m.q = 0.0
+                        m.dq = 0.0
+                        m.q_des = 0.0
+                        self.hw._send_can(m.send_id, bytes([0xFF] * 7 + [0xFE]))
+            else:
+                print("[Command] Go To Zero Pose (0.0 rad, holding torque active)")
+                threading.Thread(target=self._exec_go_to_zero_pose, daemon=True).start()
+
+        elif action in ["calibrate_mechanical_zero", "calibrate_hardware_zero"]:
+            print("[Command] Mechanical 0xFE calibration explicitly requested")
             if self.mode == "real":
                 threading.Thread(target=self._exec_set_zero_all, daemon=True).start()
             else:
@@ -1023,15 +1077,20 @@ class OpenArmDashboardServer:
 
         elif action == "set_zero_single":
             motor_id = int(payload.get("id", 1))
+            calibrate_hw = payload.get("calibrate_hardware", False)
             m = self.motors.get(motor_id)
             if m:
-                print(f"[Command] Set Zero Single Motor {motor_id}")
-                if self.mode == "real":
-                    threading.Thread(target=self._exec_set_zero_single, args=(m,), daemon=True).start()
+                if calibrate_hw:
+                    print(f"[Hardware] 0xFE calibration for Single Motor {motor_id}")
+                    if self.mode == "real":
+                        threading.Thread(target=self._exec_set_zero_single, args=(m,), daemon=True).start()
+                    else:
+                        m.q = 0.0
+                        m.dq = 0.0
+                        m.q_des = 0.0
                 else:
-                    m.q = 0.0
-                    m.dq = 0.0
-                    m.q_des = 0.0
+                    print(f"[Command] Drive Single Motor {motor_id} to 0.0 rad")
+                    self._set_single_joint_target(motor_id, 0.0)
 
         elif action == "clear_error_all":
             print("[Command] Clear Errors")
@@ -1058,8 +1117,9 @@ class OpenArmDashboardServer:
                     self._send_gripper_command(m, pos_m)
                 return
 
-            kp = float(payload.get("kp", 18.0))
-            kd = float(payload.get("kd", 2.0))
+            default_g = DEFAULT_GAINS.get(motor_id, {"kp": 35.0, "kd": 1.5})
+            kp = float(payload.get("kp", default_g["kp"]))
+            kd = float(payload.get("kd", default_g["kd"]))
             tau = float(payload.get("tau", 0.0))
 
             motor = self.motors.get(motor_id)
@@ -1301,7 +1361,7 @@ class OpenArmDashboardServer:
                             dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
                             kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
                             kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+                            tau_uint = double_to_uint(getattr(m, 'tau_ff', 0.0), -m.tMax, m.tMax, 12)
 
                             d0 = (q_uint >> 8) & 0xFF
                             d1 = q_uint & 0xFF
@@ -1325,6 +1385,55 @@ class OpenArmDashboardServer:
                 time.sleep(sleep_time)
             elif sleep_time < -0.05:
                 next_tick = time.perf_counter()
+
+    def _exec_go_to_zero_pose(self):
+        """
+        Actively and smoothly drive all 14 arm joints and 2 grippers to 0.0 rad (0 mm for grippers).
+        Maintains full holding torque, enables motors if disabled, clears errors,
+        and uses velocity-limited 400Hz trajectory generation to avoid sudden jerks.
+        """
+        print("[Motion Control] Driving all joints to True Zero Pose (0.0 rad / 0 mm)...")
+        self.active_preset = None
+        with self.trajectory_lock:
+            self.active_trajectory_id += 1
+
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.enabled = True
+                m.error_code = 1
+                # Smooth transition: command interpolates starting from current actual position m.q
+                m.q_cmd = m.q
+                m.q_target = 0.0
+                m.tau_ff = 0.0
+                gains = DEFAULT_GAINS.get(m.id, {"kp": 35.0, "kd": 1.5})
+                m.kp = gains["kp"]
+                m.kd = gains["kd"]
+
+        if self.mode == "real":
+            # 1. Clear error flags on physical motors
+            for m in self.motors.values():
+                self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+            time.sleep(0.015)
+
+            # 2. Enable all physical arm motors
+            for m in self.motors.values():
+                if m.joint_idx == 8:
+                    self.hw.init_gripper_motor(m.id, save_flash=False)
+                else:
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            time.sleep(0.015)
+
+            # 3. Drive both grippers to 0 mm (closed)
+            for gid in [8, 16]:
+                m = self.motors.get(gid)
+                if m:
+                    self._send_gripper_command(m, 0.0)
+
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("success", "Đang đưa toàn bộ 14 khớp và 2 kẹp về vị trí Zero Pose (0 rad, 0 mm) an toàn..."),
+                self.loop
+            )
 
     def _exec_set_zero_all(self):
         """Execute true DaMiao Zero Calibration sequence: Disable -> Set Zero -> Disable, then reset state."""
