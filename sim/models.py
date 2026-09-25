@@ -13,7 +13,7 @@ class RealDamiaoMotorState:
 
     def __init__(self, motor_id: int, name: str, arm: str, joint_idx: int,
                  motor_type: str, send_id: int, recv_id: int, can_if: str,
-                 pMax: float, vMax: float, tMax: float):
+                 pMax: float, vMax: float, tMax: float, direction: float = 1.0):
         self.id = motor_id
         self.name = name
         self.arm = arm               # "left" or "right"
@@ -25,6 +25,7 @@ class RealDamiaoMotorState:
         self.pMax = pMax
         self.vMax = vMax
         self.tMax = tMax
+        self.direction = direction   # Physical mounting direction (+1.0 normal, -1.0 inverted)
 
         # Operational state
         self.enabled = False
@@ -86,5 +87,6 @@ class RealDamiaoMotorState:
             "q_des": round(self.q_des, 4),
             "kp": round(self.kp, 1),
             "kd": round(self.kd, 2),
+            "direction": getattr(self, "direction", 1.0),
             "has_sync": self.has_physical_sync
         }

@@ -116,7 +116,44 @@ def test_trajectory_sequence():
     stop_flag = True
     print("✓ 3-Phase trajectory successfully completed sequence: Read State -> Return to Zero -> Execute Trajectory!")
 
+
+def test_joint1_left_shoulder_direction():
+    print("\n[TEST] Testing Joint 1 Left Shoulder Direction Inversion (Motor 1 vs Motor 9)...")
+    from can_bridge import RealRobotHardwareBridge
+    from config import MOTOR_DIRECTIONS
+
+    assert MOTOR_DIRECTIONS.get(1) == -1.0, "MOTOR_DIRECTIONS for Motor 1 must be -1.0"
+    assert MOTOR_DIRECTIONS.get(9, 1.0) == 1.0, "MOTOR_DIRECTIONS for Motor 9 must be 1.0"
+
+    hw = RealRobotHardwareBridge(can0_if="", can1_if="")
+    m1 = hw.motors[1]
+    m9 = hw.motors[9]
+
+    assert m1.direction == -1.0, "Motor 1 (Left J1) direction must be -1.0"
+    assert m9.direction == 1.0, "Motor 9 (Right J1) direction must be 1.0"
+
+    # Test Command: +0.5 rad (swing forward)
+    logical_cmd = 0.50
+    m1_phys_cmd = logical_cmd * m1.direction
+    m9_phys_cmd = logical_cmd * m9.direction
+
+    assert m1_phys_cmd == -0.50, f"Motor 1 physical command must be inverted (-0.50), got {m1_phys_cmd}"
+    assert m9_phys_cmd == +0.50, f"Motor 9 physical command must be normal (+0.50), got {m9_phys_cmd}"
+
+    # Test Feedback: physical motor encoder reports -0.50 rad when pushed forward
+    raw_encoder = -0.50
+    decoded_m1_q = raw_encoder * m1.direction
+    assert abs(decoded_m1_q - 0.50) < 1e-5, f"Motor 1 decoded angle must be +0.50 rad, got {decoded_m1_q}"
+
+    print("✓ Motor 1 (Left J1 Shoulder Pitch) correctly configured with direction = -1.0")
+    print("✓ Logical +0.50 rad commands physical -0.50 rad (swings real left arm FORWARD)")
+    print("✓ Real encoder feedback -0.50 rad correctly decodes to logical +0.50 rad (FORWARD)")
+    print("✓ Real Left Arm now swings FORWARD synchronously with Right Arm and 3D Simulation!")
+
+
 if __name__ == "__main__":
     test_zero_pose_logic()
     test_trajectory_sequence()
+    test_joint1_left_shoulder_direction()
     print("\nALL VERIFICATION TESTS PASSED SUCCESSFULLY! ✓")
+

@@ -98,6 +98,13 @@ JOINT_LIMITS = {
     16: (0.000, 0.043),     # Right Gripper: Stroke: 0.0 - 0.043 m (0 - 43 mm)
 }
 
+# Motor physical mounting direction multiplier (+1.0: normal, -1.0: inverted physical mounting)
+# On OpenArm, Left Shoulder Pitch (Motor 1) is mechanically mirrored relative to Right Shoulder Pitch (Motor 9).
+# Setting -1.0 ensures that a positive angle (+q) moves both left and right arms forward.
+MOTOR_DIRECTIONS = {
+    1: -1.0,  # Left J1 (Shoulder Pitch): Inverted physical mounting so +q pushes forward
+}
+
 # Standard ROS 2 (MoveIt / sensor_msgs.JointState) naming mapping to OpenArm Motor IDs
 JOINT_NAME_TO_ID = {
     # Left Arm Joints (1..7)

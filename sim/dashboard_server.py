@@ -1280,6 +1280,14 @@ class OpenArmDashboardServer:
                 m.invert = self.gripper_invert[target_id]
             print(f"[Gripper] Motor {target_id} invert set to: {self.gripper_invert[target_id]}")
 
+        elif action == "set_motor_direction":
+            target_id = int(payload.get("id", 1))
+            dir_val = float(payload.get("direction", -1.0 if target_id == 1 else 1.0))
+            m = self.motors.get(target_id)
+            if m:
+                m.direction = dir_val
+                print(f"[Direction] Motor {target_id} ({m.name}) physical direction set to {dir_val}")
+
         elif action == "run_cli":
             cmd = payload.get("cmd", "")
             target_iface = self.can0_if if self.mode == "real" else "vcan0"
@@ -1461,11 +1469,15 @@ class OpenArmDashboardServer:
                                 self.hw.send_frame(m.can_if, 0x7FF, refresh_data)
                         else:
                             # 7-DOF Arm motors (MIT Mode)
-                            q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                            motor_dir = getattr(m, 'direction', 1.0)
+                            physical_q_cmd = m.q_cmd * motor_dir
+                            physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
+
+                            q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
                             dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
                             kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
                             kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                            tau_uint = double_to_uint(getattr(m, 'tau_ff', 0.0), -m.tMax, m.tMax, 12)
+                            tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
 
                             d0 = (q_uint >> 8) & 0xFF
                             d1 = q_uint & 0xFF
