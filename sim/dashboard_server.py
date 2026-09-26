@@ -1086,14 +1086,23 @@ class OpenArmDashboardServer:
             if self.mode == "real":
                 self.hw.query_all_physical()
                 time.sleep(0.08)
+                now = time.time()
+                synced_count = 0
                 with self.hw.lock:
                     for m in self.motors.values():
-                        m.q_cmd = m.q
-                        m.q_target = m.q
-                        m.q_des = m.q
-                        m.has_physical_sync = True
+                        feedback_fresh = m.last_update > 0.0 and (now - m.last_update) < 0.5
+                        m.has_physical_sync = feedback_fresh
+                        if feedback_fresh:
+                            m.q_cmd = m.q
+                            m.q_target = m.q
+                            m.q_des = m.q
+                            synced_count += 1
                 if hasattr(self, 'loop') and self.loop:
-                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", "Đã đọc và đồng bộ góc khớp thực tế từ Robot!"), self.loop)
+                    if synced_count == len(self.motors):
+                        notice = ("success", "Đã đọc và đồng bộ đủ 16 góc khớp thực tế từ Robot!")
+                    else:
+                        notice = ("warning", f"Mới nhận feedback {synced_count}/16 motor; chưa cho phép điều khiển.")
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice(*notice), self.loop)
 
         elif action == "set_velocity_limit":
             val = float(payload.get("v_limit", 0.25))

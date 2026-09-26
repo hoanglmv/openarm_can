@@ -144,6 +144,10 @@ function handleTelemetry(data) {
         }
     });
 
+    if (!isRealMode && motors.length > 0 && typeof setOpenArmModelVisibility === "function") {
+        setOpenArmModelVisibility(true);
+    }
+
     // Check target tracking convergence
     if (activeMotionTracking && targetJointValues && motors.length >= 16) {
         let maxErr = 0.0;

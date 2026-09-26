@@ -9,7 +9,13 @@ const OPENARM_V1_PACKAGE_ROOT = "assets/openarm_v1/openarm_description";
 
 let openArmUrdfRobot = null;
 let openArmModelMode = "loading";
+let openArmModelVisibleRequested = false;
 const pendingUrdfJointValues = new Map();
+
+function setOpenArmModelVisibility(visible) {
+    openArmModelVisibleRequested = Boolean(visible);
+    if (openArmUrdfRobot) openArmUrdfRobot.visible = openArmModelVisibleRequested;
+}
 
 const motorToUrdfJoint = {
     1: "openarm_left_joint1",
@@ -113,6 +119,7 @@ function buildBimanualOpenArm() {
             // ROS URDF is Z-up; the dashboard Three.js scene is Y-up.
             robot.rotation.x = -Math.PI / 2;
             robot.position.set(0, 0, 0);
+            robot.visible = openArmModelVisibleRequested;
             scene.add(robot);
 
             pendingUrdfJointValues.forEach((value, name) => {

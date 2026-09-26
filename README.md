@@ -21,6 +21,7 @@ Hệ thống bao gồm:
    - [Cách 2: Điều khiển tay kẹp Gripper bằng Script](#cách-2-điều-khiển-tay-kẹp-gripper-bằng-script)
    - [Cách 3: Sử dụng CLI chẩn đoán (`openarm-can-cli`)](#cách-3-sử-dụng-cli-chẩn-đoán-openarm-can-cli)
    - [Cách 4: Lập trình điều khiển bằng C++ & Python](#cách-4-lập-trình-điều-khiển-bằng-c--python)
+   - [Cách 5: Ghi dữ liệu ROS 2 thành HDF5](#cách-5-ghi-dữ-liệu-ros-2-thành-hdf5)
 6. [Bảng ánh xạ Khớp & CAN ID](#6-bảng-ánh-xạ-khớp--can-id)
 7. [Xử lý sự cố thường gặp (Troubleshooting)](#7-xử-lý-sự-cố-thường-gặp-troubleshooting)
 
@@ -352,6 +353,56 @@ int main() {
     return 0;
 }
 ```
+
+---
+
+### Cách 5: Ghi dữ liệu ROS 2 thành HDF5
+
+Data Recorder chỉ nhận dữ liệu từ các ROS 2 topic sau:
+
+- `/openarm/joint_states`: trạng thái 16 khớp.
+- `/camera/act/rgb`: ảnh RGB.
+- `/camera/act/depth`: depth map đã căn chỉnh với ảnh RGB.
+
+Recorder lấy mẫu và ghi file ở tần số cố định **50 Hz**. Camera có thể publish ở
+25 Hz; frame camera mới nhất sẽ được sử dụng lại cho timestep kế tiếp.
+
+Trước tiên, bảo đảm Dashboard/backend, ROS 2 joint bridge và camera driver đang
+chạy và các topic trên đã xuất hiện. Sau đó mở một terminal mới và chạy:
+
+```bash
+cd /home/tuyen/openarm/openarm_can
+/usr/bin/python3 sim/data_recorder.py --episode episode_0
+```
+
+Mặc định một episode ghi tối đa 25 giây. Có thể nhấn `Ctrl+C` để kết thúc sớm và
+đóng file an toàn. File kết quả được lưu tại:
+
+```text
+/home/tuyen/openarm/openarm_can/data_set/episode_0.hdf5
+```
+
+Trong lúc đang ghi, recorder sử dụng file tạm
+`data_set/episode_0.partial.hdf5`. File này chỉ được đổi thành
+`episode_0.hdf5` sau khi episode có ít nhất một sample hợp lệ và được đóng đúng
+cách. Không dùng lại cùng tên episode nếu file đã tồn tại; ví dụ lần tiếp theo:
+
+```bash
+/usr/bin/python3 sim/data_recorder.py --episode episode_1
+```
+
+Có thể thay đổi thời lượng và thư mục lưu:
+
+```bash
+/usr/bin/python3 sim/data_recorder.py \
+  --episode episode_2 \
+  --max-duration 60 \
+  --output-dir data_set
+```
+
+File HDF5 chứa `observations/qpos`, `observations/qvel`,
+`observations/effort`, `observations/images/chest_rgb`,
+`observations/images/chest_depth`, `action` và `timestamp_ns`.
 
 ---
 

@@ -84,6 +84,11 @@ function applyInitialPhysicalState(motors) {
         motors.forEach(motor => updateOpenArmJointVisual(motor));
     }
     hasInitialRobotSync = true;
+    if (typeof setOpenArmModelVisibility === "function") {
+        setOpenArmModelVisibility(true);
+    }
+    const badge = document.getElementById("ws-status-badge");
+    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCED</strong>";
 }
 
 // Initialize WebSocket Connection (Port 8889)
@@ -95,10 +100,18 @@ function initWebSocket() {
     const badge = document.getElementById("ws-status-badge");
 
     ws.onopen = () => {
+        // Every page load/reconnect starts with a fresh hardware handshake. Never
+        // reuse a target or a pose left over from the previous browser session.
+        hasInitialRobotSync = false;
+        releaseOpenArmVisualCommandTargets();
+        if (typeof setOpenArmModelVisibility === "function") {
+            setOpenArmModelVisibility(false);
+        }
         if (badge) {
             badge.className = "badge badge-success";
-            badge.innerHTML = "WebSocket: <strong>CONNECTED</strong>";
+            badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCING</strong>";
         }
+        ws.send(JSON.stringify({ action: "sync_robot_state" }));
     };
 
     ws.onmessage = (event) => {
@@ -114,7 +127,15 @@ function initWebSocket() {
                 } else if (isReal && hasInitialRobotSync && !completePhysicalState) {
                     hasInitialRobotSync = false;
                     releaseOpenArmVisualCommandTargets();
+                    if (typeof setOpenArmModelVisibility === "function") {
+                        setOpenArmModelVisibility(false);
+                    }
+                    const badge = document.getElementById("ws-status-badge");
+                    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCING</strong>";
                     showToast("warning", "Mất feedback từ phần cứng. Đã khóa lệnh chuyển động để chờ đồng bộ lại.");
+                } else if (!isReal) {
+                    const badge = document.getElementById("ws-status-badge");
+                    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SIM</strong>";
                 }
                 if (typeof handleTelemetry === "function") {
                     handleTelemetry(msg.data);
