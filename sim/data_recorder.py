@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record synchronized OpenArm RGB-D demonstrations in ACT HDF5 format."""
+"""Record OpenArm ROS 2 topics at a fixed 50 Hz in ACT HDF5 format."""
 
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 import h5py
-import message_filters
+import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
@@ -171,7 +171,18 @@ class ACTDataRecorder(Node):
         self.writer = writer
         self.bridge = CvBridge()
         self.rejected_samples = 0
-        self.last_timestamp_ns = -1
+        self.recording_timestamp_ns = None
+
+        # Every input comes exclusively from three ROS 2 subscriptions. Callbacks
+        # cache a complete RGB-D pair and the latest joint state; the 50 Hz timer
+        # samples those values. A 25 Hz camera frame is therefore intentionally
+        # used for two dataset timesteps while the 100 Hz joint state is downsampled.
+        self.latest_rgb = None
+        self.latest_rgb_stamp_ns = None
+        self.latest_depth = None
+        self.latest_depth_stamp_ns = None
+        self.latest_camera_pair = None
+        self.latest_state = None
 
         camera_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -183,29 +194,27 @@ class ACTDataRecorder(Node):
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
-        subscribers = [
-            message_filters.Subscriber(
-                self, Image, args.rgb_topic, qos_profile=camera_qos
-            ),
-            message_filters.Subscriber(
-                self, Image, args.depth_topic, qos_profile=camera_qos
-            ),
-            message_filters.Subscriber(
-                self, JointState, args.state_topic, qos_profile=joint_qos
-            ),
-            message_filters.Subscriber(
-                self, JointState, args.command_topic, qos_profile=joint_qos
-            ),
-        ]
-        self.sync = message_filters.ApproximateTimeSynchronizer(
-            subscribers,
-            queue_size=25,
-            slop=args.sync_tolerance_ms / 1000.0,
+        self.rgb_sub = self.create_subscription(
+            Image, args.rgb_topic, self._on_rgb, camera_qos
         )
-        self.sync.registerCallback(self._on_sample)
+        self.depth_sub = self.create_subscription(
+            Image, args.depth_topic, self._on_depth, camera_qos
+        )
+        self.state_sub = self.create_subscription(
+            JointState, args.state_topic, self._on_state, joint_qos
+        )
+        self.record_timer = self.create_timer(1.0 / FREQUENCY_HZ, self._record_latest)
         self.get_logger().info(
-            "Recording synchronized RGB, depth, qpos, qvel, effort, and action. "
+            "Subscribed to RGB, depth, and joint state ROS 2 topics; recording "
+            "their latest complete samples at 50 Hz. "
             "Press Ctrl+C to finish the episode."
+        )
+
+    @staticmethod
+    def _timestamp_ns(message):
+        return (
+            message.header.stamp.sec * 1_000_000_000
+            + message.header.stamp.nanosec
         )
 
     @staticmethod
@@ -233,52 +242,91 @@ class ACTDataRecorder(Node):
         self.rejected_samples += 1
         self.get_logger().warning(reason, throttle_duration_sec=5.0)
 
-    def _on_sample(self, rgb_msg, depth_msg, state_msg, command_msg):
+    def _on_rgb(self, message):
         try:
-            timestamp_ns = rgb_msg.header.stamp.sec * 1_000_000_000
-            timestamp_ns += rgb_msg.header.stamp.nanosec
-            if timestamp_ns <= self.last_timestamp_ns:
-                self._reject("Rejected duplicate or non-monotonic camera timestamp")
-                return
+            rgb = self.bridge.imgmsg_to_cv2(message, desired_encoding="rgb8")
+            if rgb.ndim != 3 or rgb.shape[2] != 3:
+                raise ValueError(f"RGB image must have three channels, got {rgb.shape}")
+            if rgb.shape[:2] != (IMAGE_HEIGHT, IMAGE_WIDTH):
+                rgb = cv2.resize(
+                    rgb,
+                    (IMAGE_WIDTH, IMAGE_HEIGHT),
+                    interpolation=cv2.INTER_AREA,
+                )
+            self.latest_rgb = np.asarray(rgb, dtype=np.uint8).copy()
+            self.latest_rgb_stamp_ns = self._timestamp_ns(message)
+            self._update_camera_pair()
+        except Exception as error:
+            self._reject(f"Rejected RGB topic sample: {error}")
 
-            rgb = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
-            depth = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
-            expected_rgb_shape = (IMAGE_HEIGHT, IMAGE_WIDTH, 3)
-            expected_depth_shape = (IMAGE_HEIGHT, IMAGE_WIDTH)
-            if rgb.shape != expected_rgb_shape:
-                raise ValueError(
-                    f"RGB shape must be {expected_rgb_shape}, got {rgb.shape}"
-                )
-            if depth.shape != expected_depth_shape:
-                raise ValueError(
-                    f"depth shape must be {expected_depth_shape}, got {depth.shape}"
-                )
+    def _on_depth(self, message):
+        try:
+            depth = self.bridge.imgmsg_to_cv2(message, desired_encoding="passthrough")
+            if depth.ndim != 2:
+                raise ValueError(f"depth image must be single-channel, got {depth.shape}")
             if depth.dtype != np.uint16:
                 raise ValueError(f"depth dtype must be uint16, got {depth.dtype}")
-
-            qpos = self._ordered_values(state_msg, "position")
-            qvel = self._ordered_values(state_msg, "velocity")
-            effort = self._ordered_values(state_msg, "effort")
-            action = self._ordered_values(command_msg, "position")
-
-            # Preserve missing depth as zero. Valid measurements are clipped to
-            # the chest-camera working range defined by the dataset contract.
-            depth = np.where(
-                depth == 0,
-                0,
-                np.clip(depth, DEPTH_MIN_MM, DEPTH_MAX_MM),
+            if depth.shape != (IMAGE_HEIGHT, IMAGE_WIDTH):
+                depth = cv2.resize(
+                    depth,
+                    (IMAGE_WIDTH, IMAGE_HEIGHT),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+            self.latest_depth = np.where(
+                depth == 0, 0, np.clip(depth, DEPTH_MIN_MM, DEPTH_MAX_MM)
             ).astype(np.uint16, copy=False)
+            self.latest_depth_stamp_ns = self._timestamp_ns(message)
+            self._update_camera_pair()
+        except Exception as error:
+            self._reject(f"Rejected depth topic sample: {error}")
+
+    def _update_camera_pair(self):
+        if (
+            self.latest_rgb_stamp_ns is not None
+            and self.latest_rgb_stamp_ns == self.latest_depth_stamp_ns
+        ):
+            self.latest_camera_pair = (self.latest_rgb, self.latest_depth)
+
+    def _on_state(self, message):
+        try:
+            self.latest_state = (
+                self._ordered_values(message, "position"),
+                self._ordered_values(message, "velocity"),
+                self._ordered_values(message, "effort"),
+            )
+        except Exception as error:
+            self._reject(f"Rejected joint state topic sample: {error}")
+
+    def _record_latest(self):
+        if self.latest_camera_pair is None or self.latest_state is None:
+            self.get_logger().warning(
+                "Waiting for complete RGB-D and joint state topic samples",
+                throttle_duration_sec=5.0,
+            )
+            return
+
+        try:
+            rgb, depth = self.latest_camera_pair
+            qpos, qvel, effort = self.latest_state
+            # This recorder intentionally has no command-topic input. Preserve the
+            # ACT schema by using the observed absolute joint position as action.
+            action = qpos.copy()
+            period_ns = round(1_000_000_000 / FREQUENCY_HZ)
+            if self.recording_timestamp_ns is None:
+                now_ns = self.get_clock().now().nanoseconds
+                self.recording_timestamp_ns = (now_ns // period_ns) * period_ns
+            else:
+                self.recording_timestamp_ns += period_ns
 
             self.writer.append(
-                np.asarray(rgb, dtype=np.uint8),
+                rgb,
                 depth,
                 qpos,
                 qvel,
                 effort,
                 action,
-                timestamp_ns,
+                self.recording_timestamp_ns,
             )
-            self.last_timestamp_ns = timestamp_ns
             if self.writer.sample_count % 250 == 0:
                 seconds = self.writer.sample_count / FREQUENCY_HZ
                 self.get_logger().info(
@@ -290,7 +338,7 @@ class ACTDataRecorder(Node):
                     self.get_logger().info("Maximum duration reached; stopping episode")
                     rclpy.shutdown()
         except Exception as error:
-            self._reject(f"Rejected synchronized sample: {error}")
+            self._reject(f"Could not record latest ROS 2 topic samples: {error}")
 
 
 def main():
@@ -300,8 +348,6 @@ def main():
     parser.add_argument("--rgb-topic", default="/camera/act/rgb")
     parser.add_argument("--depth-topic", default="/camera/act/depth")
     parser.add_argument("--state-topic", default="/openarm/joint_states")
-    parser.add_argument("--command-topic", default="/openarm/joint_commands")
-    parser.add_argument("--sync-tolerance-ms", type=float, default=12.0)
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -315,8 +361,8 @@ def main():
         help="mark the episode as simulation data",
     )
     args = parser.parse_args()
-    if args.sync_tolerance_ms <= 0 or args.batch_size <= 0 or args.max_duration < 0:
-        parser.error("invalid tolerance, batch size, or maximum duration")
+    if args.batch_size <= 0 or args.max_duration < 0:
+        parser.error("invalid batch size or maximum duration")
 
     episode_name = args.episode or datetime.now().strftime("episode_%Y%m%d_%H%M%S")
     if not episode_name.replace("-", "").replace("_", "").isalnum():

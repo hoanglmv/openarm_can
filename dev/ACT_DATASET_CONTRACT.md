@@ -33,22 +33,25 @@ episode_XX.hdf5
 
 `effort` is recorded when CAN telemetry supplies motor torque. Depth is aligned
 to color before recording. Zero remains the invalid-depth sentinel; other depth
-values are clipped to 200-1200 mm. `action[t]` is the absolute target available
-at sample `t`, which is the controller command for the next motion step.
+values are clipped to 200-1200 mm. The recorder has no command-topic input, so
+`action[t]` contains the observed absolute joint position `qpos[t]`.
 
 ## Runtime topics
 
 ```text
 /camera/act/rgb             sensor_msgs/Image, rgb8, 424x240 @ 25 Hz
 /camera/act/depth           sensor_msgs/Image, 16UC1, 424x240 @ 25 Hz
-/openarm/joint_states       sensor_msgs/JointState (position, velocity, effort)
-/openarm/joint_commands     sensor_msgs/JointState (absolute target position)
+/openarm/joint_states       sensor_msgs/JointState (position, velocity, effort) @ 100 Hz
 ```
 
 The RealSense wrapper publishes synchronized color and aligned depth. The RGB-D
 preprocessor samples the source at 25 Hz. The backend publishes robot telemetry
-and command targets at 50 Hz; the recorder accepts synchronized messages within
-12 ms.
+at 100 Hz. The recorder only subscribes to the RGB, depth, and joint-state ROS 2
+topics and samples their latest complete values at 50 Hz. Consequently each 25 Hz
+RGB-D frame is normally repeated across two adjacent dataset timesteps, while the
+joint state is downsampled from 100 Hz to 50 Hz. Since there is deliberately no
+command subscription, `action[t]` stores the observed `qpos[t]`. The recorder
+resizes the 424x240 RGB-D topic images to the dataset's 640x480 shape.
 
 The default RealSense source profile is `424x240x30`; the preprocessor emits
 bandwidth-limited `424x240` RGB-D at 25 Hz. Override the source profile for a camera
@@ -59,8 +62,7 @@ export OPENARM_CAMERA_COLOR_PROFILE=640x480x30
 export OPENARM_CAMERA_DEPTH_PROFILE=640x480x30
 ```
 
-Do not use a source slower than 50 FPS if every dataset timestep must contain a
-new camera exposure.
+The 50 Hz dataset does not require a new camera exposure at every timestep.
 
 ## Recording
 

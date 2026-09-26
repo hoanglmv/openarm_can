@@ -175,7 +175,7 @@ class OpenArmDashboardServer:
         self.traj_thread = threading.Thread(target=self._trajectory_loop, daemon=True)
         self.traj_thread.start()
 
-        # 4. Start 50Hz UDP joint stream for ACT data recorder & ROS bridge
+        # 4. Start 100Hz UDP joint stream for the ROS 2 joint bridge
         self.joint_stream_thread = threading.Thread(
             target=self._joint_stream_loop,
             daemon=True,
@@ -384,7 +384,7 @@ class OpenArmDashboardServer:
             print(f"[ROS] Could not start OpenArm joint bridge: {error}")
 
     def _joint_stream_loop(self):
-        """Stream joint states and commands over UDP to the ROS 2 joint bridge at 50 Hz."""
+        """Stream joint states and commands to the ROS 2 joint bridge at 100 Hz."""
         period = 1.0 / DATA_FREQUENCY_HZ
         next_tick = time.perf_counter()
         while self.running:
