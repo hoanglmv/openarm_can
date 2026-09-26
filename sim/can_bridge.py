@@ -288,6 +288,11 @@ class RealRobotHardwareBridge:
                     motor.enabled = False
                 elif error_code == 1:
                     motor.enabled = True
+                elif error_code == 0:
+                    # Motor electronics still report position, but torque output
+                    # is disabled. Keep publishing q so the digital twin follows
+                    # a gravity-driven/manual movement of the physical arm.
+                    motor.enabled = False
 
             q_uint = (d1 << 8) | d2
             dq_uint = (d3 << 4) | (d4 >> 4)

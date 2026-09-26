@@ -65,6 +65,8 @@ function handleTelemetry(data) {
     updateUsbUiState(isRealMode);
 
     motors.forEach(m => {
+        const motorHasUsableState = !isRealMode
+            || (hasInitialRobotSync && m.has_sync === true && isOpenArmFeedbackFresh(m));
         // Update DOM Telemetry Card
         const chip = document.getElementById(`chip-${m.id}`);
         const qEl = document.getElementById(`tel-q-${m.id}`);
@@ -73,7 +75,10 @@ function handleTelemetry(data) {
         const tmosEl = document.getElementById(`tel-tmos-${m.id}`);
 
         if (chip) {
-            if (m.error_code > 1) {
+            if (isRealMode && !isOpenArmFeedbackFresh(m)) {
+                chip.className = "tel-chip chip-error";
+                chip.textContent = "NO DATA";
+            } else if (m.error_code > 1) {
                 chip.className = "tel-chip chip-error";
                 chip.textContent = `ERR ${m.error_code}`;
             } else if (m.enabled) {
@@ -96,48 +101,19 @@ function handleTelemetry(data) {
         if (tauEl) tauEl.textContent = `${m.tau.toFixed(2)} Nm`;
         if (tmosEl) tmosEl.textContent = `${m.t_mos.toFixed(1)}°C`;
 
-        // Update 3D Robot Kinematics
-        const isLeft = m.id <= 8;
-        const armJoints = isLeft ? leftArmJoints : rightArmJoints;
-        const gripperFingers = isLeft ? leftGripperFingers : rightGripperFingers;
-        const jointIndex = (m.id <= 8 ? m.id : m.id - 8) - 1;
-
-        if (jointIndex < 7) {
-            const jEntry = armJoints[jointIndex];
-            if (jEntry && jEntry.group) {
-                const angle = m.q;
-                if (jointIndex === 0) {
-                    // J1: Shoulder Pitch (swings arm forward/backward around X)
-                    jEntry.group.rotation.x = -angle;
-                } else if (jointIndex === 1) {
-                    // J2: Shoulder Roll / Abduction
-                    jEntry.group.rotation.z = angle;
-                } else if (jointIndex === 2) {
-                    // J3: Arm Twist (humeral twist around Y axis)
-                    jEntry.group.rotation.y = isLeft ? angle : -angle;
-                } else if (jointIndex === 3) {
-                    // J4: Elbow Pitch (flexion forward around X)
-                    jEntry.group.rotation.x = -angle;
-                } else if (jointIndex === 4) {
-                    // J5: Forearm Twist (pronation/supination around Y)
-                    jEntry.group.rotation.y = isLeft ? angle : -angle;
-                } else if (jointIndex === 5) {
-                    // J6: Wrist Pitch (tilts up/down around X)
-                    jEntry.group.rotation.x = -angle;
-                } else if (jointIndex === 6) {
-                    // J7: Wrist Roll (gripper rotation around tool axis Y)
-                    jEntry.group.rotation.y = isLeft ? angle : -angle;
-                }
-            }
-        } else if (jointIndex === 7) {
-            // Horizontal parallel linear gripper (stroke: 0.0m closed to 0.043m open)
-            const strokeRatio = Math.max(0.0, Math.min(1.0, Math.abs(m.q) / 0.043));
-            const fingerOffset = 0.010 + strokeRatio * 0.028;
-            if (gripperFingers.left && gripperFingers.right) {
-                gripperFingers.left.position.x = -fingerOffset;
-                gripperFingers.right.position.x = fingerOffset;
-            }
+        // Keep showing the commanded target after the slider is released. Live
+        // feedback takes ownership again only after the real joint reaches it or
+        // the user explicitly requests robot-state synchronization.
+        const applyTelemetry = motorHasUsableState && (
+            typeof shouldApplyOpenArmTelemetry !== "function"
+            || shouldApplyOpenArmTelemetry(m)
+        );
+        if (applyTelemetry && typeof updateOpenArmJointVisual === "function") {
+            updateOpenArmJointVisual(m);
         }
+
+        const isLeft = m.id <= 8;
+        const jointIndex = (m.id <= 8 ? m.id : m.id - 8) - 1;
 
         // Bi-directional Synchronization: Update UI Sliders to match live robot state
         const armGroup = isLeft ? 'left' : 'right';
@@ -145,7 +121,7 @@ function handleTelemetry(data) {
         const sliderEl = document.getElementById(`slider-${sliderKey}`);
         const dispEl = document.getElementById(`val-disp-${sliderKey}`);
 
-        if (sliderEl && document.activeElement !== sliderEl) {
+        if (applyTelemetry && sliderEl && document.activeElement !== sliderEl) {
             sliderEl.value = m.q;
             if (dispEl) {
                 if (jointIndex === 7) {
@@ -161,7 +137,7 @@ function handleTelemetry(data) {
         if (jointIndex === 7) {
             const topSlider = document.getElementById(isLeft ? "slider-gripper-left" : "slider-gripper-right");
             const topDisp = document.getElementById(isLeft ? "left-gripper-val-display" : "right-gripper-val-display");
-            if (topSlider && document.activeElement !== topSlider) {
+            if (applyTelemetry && topSlider && document.activeElement !== topSlider) {
                 topSlider.value = m.q;
                 if (topDisp) topDisp.textContent = formatGripperText(m.q);
             }

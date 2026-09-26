@@ -804,6 +804,10 @@ class OpenArmDashboardServer:
         Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
         and MIT mode fallback.
         """
+        if self.mode == "real" and not m.has_physical_sync:
+            print(f"[Safety] Ignored gripper command for motor {m.id}: physical position is not synchronized yet")
+            return False
+
         safe_pos = min(0.043, max(0.0, pos_m))
         stroke_ratio = safe_pos / 0.043
         invert = self.gripper_invert.get(m.id, False)
@@ -863,15 +867,19 @@ class OpenArmDashboardServer:
 
         can_name = getattr(m, 'can_if', 'vcan0')
         print(f"[Gripper] Motor {m.id} ({m.name}) on {can_name} target -> stroke {safe_pos*1000:.1f} mm ({rad_target:.3f} rad)")
+        return True
 
     def _set_single_joint_target(self, motor_id: int, val: float):
         """Set target for a single motor (arm joint or gripper)."""
         m = self.motors.get(motor_id)
         if not m:
-            return
+            return False
+        if self.mode == "real" and not m.has_physical_sync:
+            print(f"[Safety] Ignored target for motor {motor_id}: physical position is not synchronized yet")
+            return False
         if motor_id in [8, 16]:
             pos_m = val / 1000.0 if (val > 0.043 and val <= 43.0) else val
-            self._send_gripper_command(m, pos_m)
+            return self._send_gripper_command(m, pos_m)
         else:
             lim = JOINT_LIMITS.get(motor_id, (-3.1415, 3.1415))
             q = max(lim[0], min(lim[1], val))
@@ -884,6 +892,7 @@ class OpenArmDashboardServer:
                 if self.mode == "real":
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             m.q_target = q
+            return True
 
     def _execute_trajectory(self, traj_points: list, joint_names: list, traj_id: int):
         """
@@ -1250,6 +1259,9 @@ class OpenArmDashboardServer:
 
             motor = self.motors.get(motor_id)
             if motor:
+                if self.mode == "real" and not motor.has_physical_sync:
+                    print(f"[Safety] Ignored MIT command for motor {motor_id}: physical position is not synchronized yet")
+                    return
                 lim = JOINT_LIMITS.get(motor_id, (-12.5, 12.5))
                 q = max(lim[0], min(lim[1], q_raw))
                 if not motor.enabled:
@@ -1439,6 +1451,11 @@ class OpenArmDashboardServer:
         while self.running:
             try:
                 for motor_id, m in self.motors.items():
+                    # Never transmit a position command based on the default 0.0
+                    # state before the first physical feedback frame has arrived.
+                    if self.mode == "real" and not m.has_physical_sync:
+                        continue
+
                     if not m.enabled:
                         m.q_cmd = m.q
                         m.q_target = m.q
@@ -1528,6 +1545,15 @@ class OpenArmDashboardServer:
         Maintains full holding torque, enables motors if disabled, clears errors,
         and uses velocity-limited 400Hz trajectory generation to avoid sudden jerks.
         """
+        if self.mode == "real" and not all(m.has_physical_sync for m in self.motors.values()):
+            print("[Safety] Ignored Zero Pose: waiting for physical position feedback from all 16 motors")
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice("warning", "Chưa thể di chuyển: đang chờ đồng bộ đủ trạng thái 16 motor."),
+                    self.loop,
+                )
+            return
+
         print("[Motion Control] Driving all joints to True Zero Pose (0.0 rad / 0 mm)...")
         self.active_preset = None
         with self.trajectory_lock:

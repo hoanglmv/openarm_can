@@ -3,7 +3,7 @@
 // Procedural high-definition CAD geometry for Dual 7-DOF Arms & Parallel Grippers
 // ==============================================================================
 
-function buildBimanualOpenArm() {
+function buildProceduralBimanualOpenArm() {
     // High-definition Materials (Matte Black, Machined Silver Aluminum, Motor Casings)
     const matteBlackMat = new THREE.MeshStandardMaterial({
         color: 0x1d1f25,

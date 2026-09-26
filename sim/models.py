@@ -5,6 +5,7 @@ Data models for real and virtual Damiao actuator states.
 """
 
 import math
+import time
 from typing import Dict, Any, Optional
 
 
@@ -53,6 +54,8 @@ class RealDamiaoMotorState:
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize motor state into JSON-compatible dictionary for WebSocket/REST API."""
+        feedback_age_s = time.time() - self.last_update if self.last_update > 0.0 else None
+        feedback_fresh = feedback_age_s is not None and feedback_age_s < 0.5
         # For Gripper (Joint 8): output linear stroke in meters (0.0 .. 0.043) and mm
         if self.joint_idx == 8:
             is_left = (self.id == 8 or getattr(self, 'arm', '') == "left")
@@ -93,5 +96,7 @@ class RealDamiaoMotorState:
             "kp": round(self.kp, 1),
             "kd": round(self.kd, 2),
             "direction": getattr(self, "direction", 1.0),
-            "has_sync": self.has_physical_sync
+            "has_sync": self.has_physical_sync,
+            "feedback_fresh": feedback_fresh,
+            "feedback_age_s": round(feedback_age_s, 3) if feedback_age_s is not None else None,
         }
