@@ -343,7 +343,7 @@ class ACTDataRecorder(Node):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", default="dataset")
+    parser.add_argument("--output-dir", default="data_set")
     parser.add_argument("--episode", default=None)
     parser.add_argument("--rgb-topic", default="/camera/act/rgb")
     parser.add_argument("--depth-topic", default="/camera/act/depth")

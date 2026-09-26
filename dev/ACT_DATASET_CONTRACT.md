@@ -84,13 +84,13 @@ source /opt/ros/jazzy/setup.bash
 ```
 
 For simulation, add `--sim`. A valid finalized episode is written to
-`dataset/episode_0.hdf5`. Until finalization, it remains
+`data_set/episode_0.hdf5`. Until finalization, it remains
 `episode_0.partial.hdf5`.
 
 Validate the result:
 
 ```bash
-/usr/bin/python3 sim/validate_dataset.py dataset/episode_0.hdf5
+/usr/bin/python3 sim/validate_dataset.py data_set/episode_0.hdf5
 ```
 
 Use `--allow-short` only for smoke-test recordings shorter than 15 seconds.

@@ -16,6 +16,8 @@
 /.vscode
 /build
 /dataset/
+/data_set/*
+!/data_set/.gitkeep
 /openarm-can-*.tar.gz
 /packages/apt/build.sh
 /packages/apt/build/
