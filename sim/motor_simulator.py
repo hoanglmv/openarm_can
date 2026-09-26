@@ -260,9 +260,9 @@ class DamiaoArmSimulator:
         self.running = True
         if self.interface.startswith("vcan"):
             try:
-                subprocess.run(["sudo", "modprobe", "vcan"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(["sudo", "ip", "link", "add", "dev", self.interface, "type", "vcan"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(["sudo", "ip", "link", "set", self.interface, "up"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["sudo", "-n", "modprobe", "vcan"], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["sudo", "-n", "ip", "link", "add", "dev", self.interface, "type", "vcan"], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["sudo", "-n", "ip", "link", "set", self.interface, "up"], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
         self.sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)

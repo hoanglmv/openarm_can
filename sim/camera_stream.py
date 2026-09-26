@@ -12,11 +12,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import cv2
 import numpy as np
-import rclpy
-from cv_bridge import CvBridge
-from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import Image
+try:
+    import rclpy
+    from cv_bridge import CvBridge
+    from rclpy.node import Node
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import Image
+    HAS_ROS2 = True
+except ImportError:
+    HAS_ROS2 = False
+    class Node:
+        pass
+    class Image:
+        pass
 
 
 class CameraFrameStore:
@@ -403,6 +411,87 @@ def make_handler(frames: CameraFrameStore, topic: str):
     return CameraHTTPHandler
 
 
+def find_realsense_v4l2_device():
+    """Find the best V4L2 device index for RealSense RGB camera."""
+    for dev_path in sorted(glob.glob("/sys/class/video4linux/video*")):
+        try:
+            name_file = os.path.join(dev_path, "name")
+            if os.path.exists(name_file):
+                with open(name_file, "r") as f:
+                    name = f.read().strip()
+                if "realsense" in name.lower():
+                    idx = int(os.path.basename(dev_path).replace("video", ""))
+                    cap = cv2.VideoCapture(idx)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        cap.release()
+                        if ret and frame is not None and frame.size > 0:
+                            return idx
+        except Exception:
+            pass
+    for idx in [4, 6, 2, 0]:
+        try:
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+                if ret and frame is not None and frame.size > 0:
+                    return idx
+        except Exception:
+            pass
+    return None
+
+
+def start_v4l2_worker(frames: CameraFrameStore, max_width: int, quality: int, rate: float):
+    """Background worker capturing directly from V4L2 RealSense device when ROS 2 is not active."""
+    def _worker():
+        dev_idx = find_realsense_v4l2_device()
+        if dev_idx is None:
+            print("[Camera Stream] Notice: No V4L2 RealSense video device found for direct capture.", flush=True)
+            return
+        print(f"[Camera Stream] Direct V4L2 RealSense capture active on /dev/video{dev_idx} ({rate:g} FPS)", flush=True)
+        cap = cv2.VideoCapture(dev_idx)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, rate)
+        interval = 1.0 / max(1.0, rate)
+
+        try:
+            while True:
+                now = time.monotonic()
+                if frames.last_primary_at > 0.0 and (now - frames.last_primary_at < 2.0):
+                    time.sleep(0.2)
+                    continue
+
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    time.sleep(0.05)
+                    continue
+
+                height, width = frame.shape[:2]
+                if max_width > 0 and width > max_width:
+                    scale = max_width / float(width)
+                    frame = cv2.resize(
+                        frame,
+                        (max_width, max(1, int(height * scale))),
+                        interpolation=cv2.INTER_AREA,
+                    )
+
+                ok, encoded = cv2.imencode(
+                    ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+                )
+                if ok:
+                    frames.update(encoded.tobytes(), is_primary=False)
+                time.sleep(interval)
+        except Exception as e:
+            print(f"[Camera Stream] V4L2 capture worker exception: {e}", flush=True)
+        finally:
+            cap.release()
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--topic", default="/camera/act/rgb")
@@ -430,23 +519,42 @@ def main():
         flush=True,
     )
 
-    rclpy.init()
-    node = RosImageSubscriber(
-        args.topic,
+    start_v4l2_worker(
         frames,
         max_width=max(0, args.max_width),
         quality=max(30, min(95, args.jpeg_quality)),
+        rate=args.rate,
     )
-    try:
-        rclpy.spin(node)
-    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
-        pass
-    finally:
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
-        httpd.shutdown()
-        httpd.server_close()
+
+    if HAS_ROS2:
+        try:
+            rclpy.init()
+            node = RosImageSubscriber(
+                args.topic,
+                frames,
+                max_width=max(0, args.max_width),
+                quality=max(30, min(95, args.jpeg_quality)),
+            )
+            try:
+                rclpy.spin(node)
+            except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+                pass
+            finally:
+                node.destroy_node()
+                if rclpy.ok():
+                    rclpy.shutdown()
+        except Exception as error:
+            print(f"[Camera Stream] ROS 2 error: {error}", flush=True)
+    else:
+        print("[Camera Stream] ROS 2 not installed: running with direct V4L2 capture.", flush=True)
+        try:
+            while True:
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            pass
+
+    httpd.shutdown()
+    httpd.server_close()
 
 
 if __name__ == "__main__":

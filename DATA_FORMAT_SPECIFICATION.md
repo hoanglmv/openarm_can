@@ -80,11 +80,11 @@ root (HDF5 File: episode_XX.hdf5)
    - Các điểm ngoài dải này (nền nhà, tường phòng) sẽ được thuật toán kẹp (clip) về biên.
 3. **Môi trường & Ánh sáng**:
    - **Tránh ánh nắng mặt trời trực tiếp**: Ánh sáng mặt trời chứa phổ hồng ngoại mạnh sẽ làm "chói mù" cảm biến Depth cấu trúc ánh sáng (Structured Light / Active Stereo).
-   - **Mặt bàn làm việc**: Sử dụng mặt bàn hoặc khăn trải bàn có bề mặt nhám/mờ (matte), **tuyệt đối không dùng mặt kính bóng loáng hoặc kim loại phản xạ gương** gây lỗ thủng độ sâu (Hole Depth = 0).
+   - **Mặt bàn / Mặt bếp nấu**: Sử dụng mặt bàn bếp hoặc chảo có bề mặt nhám/mờ (matte), **tuyệt đối không dùng mặt kính bóng loáng hoặc kim loại phản xạ gương** gây lỗ thủng độ sâu (Hole Depth = 0).
 4. **Quy tắc bắt đầu và kết thúc Episode (Implicit Termination)**:
    - **Bắt đầu**: Hai cánh tay robot đứng ở vị trí Home ($q_{\text{home}} = \mathbf{0}$) trong 1-2 giây.
-   - **Thao tác**: Thực hiện gấp vải mượt mà.
-   - **Kết thúc**: Mở kẹp nhíp, nâng tay lên cao, **thu 2 tay trở về vị trí Home $q_{\text{home}} = \mathbf{0}$** và giữ yên bất động tại đó 1-2 giây (khoảng 50-100 timesteps với $\Delta q = 0$). Điều này giúp mô hình tự học dấu hiệu dừng tự nhiên.
+   - **Thao tác**: Thực hiện xào nấu, đảo lật thức ăn trong chảo mượt mà (Bimanual Cooking & Stir-Frying).
+   - **Kết thúc**: Nhấc vá xào, nâng tay lên cao, **thu 2 tay trở về vị trí Home $q_{\text{home}} = \mathbf{0}$** và giữ yên bất động tại đó 1-2 giây (khoảng 50-100 timesteps với $\Delta q = 0$). Điều này giúp mô hình tự học dấu hiệu dừng tự nhiên.
 
 ---
 

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Production Training Pipeline for ACT (Action Chunking with Transformers)
-Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera
+Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera for Autonomous Cooking & Stir-Frying
 
 Tính năng chính:
 - Tự động dò và tính toán Thống kê chuẩn hóa (Mean & Std) cho 16 khớp
@@ -477,7 +477,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện mô hình ACT Bimanual OpenArm RGB-D")
     
     # Dữ liệu & Đường dẫn
-    parser.add_argument("--dataset_dir", type=str, default="dataset/real_towel_folding", help="Đường dẫn thư mục chứa các file .hdf5")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/real_cooking_stir_fry", help="Đường dẫn thư mục chứa các file .hdf5")
     parser.add_argument("--output_dir", type=str, default="checkpoints/act_openarm", help="Thư mục lưu trữ checkpoints và log files")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint để khôi phục hoặc 'auto' để tìm checkpoint mới nhất")
     

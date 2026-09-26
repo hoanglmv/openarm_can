@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Production Evaluation Pipeline for ACT (Action Chunking with Transformers)
-Evaluates trained ACT checkpoints on Bimanual OpenArm (16-DOF) RGB-D dataset:
+Evaluates trained ACT checkpoints on Bimanual OpenArm (16-DOF) RGB-D dataset for Autonomous Cooking & Stir-Frying:
 1. Reconstruction Accuracy: L1, MSE, Per-Joint MAE for 16 Damiao motors
 2. Gripper Error Analysis: Left and Right Grippers
 3. Real-Time Temporal Ensembling Simulation: Compares raw chunk vs exponential ensemble
@@ -343,7 +343,7 @@ def eval_pipeline(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Đánh giá mô hình ACT Bimanual OpenArm")
     parser.add_argument("--checkpoint_path", type=str, default="checkpoints/act_openarm/best_checkpoint.pth", help="Đường dẫn file checkpoint .pth")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/real_towel_folding", help="Thư mục chứa các file .hdf5 kiểm thử")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/real_cooking_stir_fry", help="Thư mục chứa các file .hdf5 kiểm thử")
     parser.add_argument("--output_dir", type=str, default="evaluation_results", help="Thư mục xuất báo cáo đánh giá")
     parser.add_argument("--batch_size", type=int, default=16, help="Kích thước batch đánh giá")
     parser.add_argument("--num_workers", type=int, default=2, help="Số worker nạp dữ liệu")

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Production Hardware Inference Script for Bimanual OpenArm (16-DOF) + Chest RGB-D
+Tác vụ: Xào Nấu / Chế Biến Thực Phẩm Tự Động Hai Tay (Autonomous Bimanual Cooking & Stir-Frying).
 Nối trực tiếp từ Camera RGB-D -> Model ACT -> Temporal Ensembling -> SocketCAN 16 Động cơ Damiao.
 Hỗ trợ 3 tầng ngắt dừng an toàn:
 1. Dừng tự nhiên khi về Home (|Δq| < 0.008 rad liên tục 1 giây)
@@ -393,7 +394,7 @@ def main():
                 stable_stop_steps += 1
                 if stable_stop_steps >= 50: # Đã đứng yên 1.0 giây (50 chu kỳ) tại Home
                     print("\n" + "=" * 80)
-                    print(f"🎉 [DỪNG TỰ NHIÊN THÀNH CÔNG] Robot đã hoàn thành nhiệm vụ gấp vải và trở về Home!")
+                    print(f"🎉 [DỪNG TỰ NHIÊN THÀNH CÔNG] Robot đã hoàn thành nhiệm vụ xào nấu và trở về Home!")
                     print(f"   + Tổng số bước thực hiện : {t} timesteps ({t/50.0:.2f}s)")
                     print(f"   + Khoảng cách tới Home   : {dist_home:.4f} rad")
                     print("=" * 80)

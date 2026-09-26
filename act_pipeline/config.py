@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Configuration parameters for ACT (Action Chunking with Transformers)
-Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera
+Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera for Autonomous Cooking & Stir-Frying
 """
 
 from dataclasses import dataclass, field
@@ -42,7 +42,7 @@ class ModelConfig:
 @dataclass
 class TrainConfig:
     # Paths
-    dataset_dir: str = "dataset/real_towel_folding"
+    dataset_dir: str = "dataset/real_cooking_stir_fry"
     output_dir: str = "checkpoints/act_openarm"
     stats_file: Optional[str] = None
     resume_checkpoint: Optional[str] = None
@@ -81,7 +81,7 @@ class TrainConfig:
 @dataclass
 class EvalConfig:
     checkpoint_path: str = "checkpoints/act_openarm/best_checkpoint.pth"
-    dataset_dir: str = "dataset/real_towel_folding"
+    dataset_dir: str = "dataset/real_cooking_stir_fry"
     output_dir: str = "evaluation_results"
     batch_size: int = 16
     num_workers: int = 2

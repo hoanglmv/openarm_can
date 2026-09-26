@@ -557,7 +557,7 @@ class OpenArmDashboardServer:
 
                 # Load required kernel modules
                 for mod in ["vhci-hcd", "can", "can-raw", "can-dev", "peak_usb"]:
-                    subprocess.run(["sudo", "modprobe", mod], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "-n", "modprobe", mod], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
                 # Wait for can0 to appear in /sys/class/net
                 for _ in range(12):
@@ -569,18 +569,18 @@ class OpenArmDashboardServer:
             configured_any = False
             for iface in ["can0", "can1"]:
                 if os.path.exists(f"/sys/class/net/{iface}"):
-                    subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False)
+                    subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "down"], check=False, stdin=subprocess.DEVNULL)
                     cmd = [
-                        "sudo", "ip", "link", "set", iface, "type", "can",
+                        "sudo", "-n", "ip", "link", "set", iface, "type", "can",
                         "bitrate", "1000000", "sample-point", "0.75",
                         "dbitrate", "5000000", "dsample-point", "0.75",
                         "dsjw", "2", "fd", "on"
                     ]
-                    r = subprocess.run(cmd, check=False)
+                    r = subprocess.run(cmd, check=False, stdin=subprocess.DEVNULL)
                     if r.returncode != 0:
-                        subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can", "bitrate", "1000000"], check=False)
-                    subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
-                    subprocess.run(["sudo", "ip", "link", "set", iface, "txqueuelen", "1000"], check=False)
+                        subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "type", "can", "bitrate", "1000000"], check=False, stdin=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "up"], check=False, stdin=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "txqueuelen", "1000"], check=False, stdin=subprocess.DEVNULL)
                     configured_any = True
 
             if configured_any:
@@ -637,7 +637,7 @@ class OpenArmDashboardServer:
             # 2. Down CAN interfaces
             for iface in ["can0", "can1"]:
                 if os.path.exists(f"/sys/class/net/{iface}"):
-                    subprocess.run(["sudo", "ip", "link", "set", iface, "down"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "down"], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             # 3. Detach via usbipd
             busid, _ = self._find_can_usb()
@@ -690,7 +690,7 @@ class OpenArmDashboardServer:
                         print(f"[Hotplug] Phát hiện USB PCAN trên Windows host ({busid}). Đang tự động gắn vào WSL2...")
                         subprocess.run(["usbipd", "attach", "--wsl", "--busid", busid], capture_output=True, text=True, timeout=8)
                         for mod in ["vhci-hcd", "can", "can-raw", "can-dev", "peak_usb"]:
-                            subprocess.run(["sudo", "modprobe", mod], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            subprocess.run(["sudo", "-n", "modprobe", mod], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         time.sleep(0.5)
                         can0_present = os.path.exists("/sys/class/net/can0")
                     except Exception:
@@ -701,12 +701,12 @@ class OpenArmDashboardServer:
                 try:
                     for iface in ["can0", "can1"]:
                         if os.path.exists(f"/sys/class/net/{iface}"):
-                            subprocess.run(["sudo", "ip", "link", "set", iface, "type", "can",
+                            subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "type", "can",
                                             "bitrate", "1000000", "sample-point", "0.75",
                                             "dbitrate", "5000000", "dsample-point", "0.75",
-                                            "dsjw", "2", "fd", "on"], check=False)
-                            subprocess.run(["sudo", "ip", "link", "set", iface, "up"], check=False)
-                            subprocess.run(["sudo", "ip", "link", "set", iface, "txqueuelen", "1000"], check=False)
+                                            "dsjw", "2", "fd", "on"], check=False, stdin=subprocess.DEVNULL)
+                            subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "up"], check=False, stdin=subprocess.DEVNULL)
+                            subprocess.run(["sudo", "-n", "ip", "link", "set", iface, "txqueuelen", "1000"], check=False, stdin=subprocess.DEVNULL)
                     new_hw = RealRobotHardwareBridge(self.can0_if, self.can1_if)
                     new_hw.start()
                     self.hw.stop()
