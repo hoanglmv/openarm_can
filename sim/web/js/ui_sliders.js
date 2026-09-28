@@ -269,6 +269,49 @@ window.toggleGripperInvert = function(arm) {
 
 // Setup Master Event Handlers
 function setupEventHandlers() {
+    // 0. Global Execution Mode Buttons (Chỉ Mô Phỏng / Chỉ Robot Thật / Chạy Cả 2)
+    const btnModeSim = document.getElementById("btn-global-mode-sim");
+    const btnModeReal = document.getElementById("btn-global-mode-real");
+    const btnModeDual = document.getElementById("btn-global-mode-dual");
+
+    if (btnModeSim) {
+        btnModeSim.addEventListener("click", () => {
+            if (typeof setGlobalExecutionMode === "function") {
+                setGlobalExecutionMode("sim");
+            }
+        });
+    }
+    if (btnModeReal) {
+        btnModeReal.addEventListener("click", () => {
+            if (typeof setGlobalExecutionMode === "function") {
+                const confirmed = confirm(
+                    "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
+                    "Bạn đang chọn chế độ 'CHỈ ROBOT THẬT (CAN BUS)'.\n" +
+                    "Các thao tác điều khiển sẽ gửi trực tiếp xuống 16 động cơ!\n" +
+                    "Hãy chắc chắn không có người đứng trong tầm với của robot. Tiếp tục?"
+                );
+                if (confirmed) {
+                    setGlobalExecutionMode("real");
+                }
+            }
+        });
+    }
+    if (btnModeDual) {
+        btnModeDual.addEventListener("click", () => {
+            if (typeof setGlobalExecutionMode === "function") {
+                const confirmed = confirm(
+                    "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
+                    "Bạn đang chọn chế độ 'CHẠY CẢ 2 (MÔ PHỎNG & ROBOT THẬT)'.\n" +
+                    "Hệ thống sẽ đồng thời mô phỏng 3D và bơm xung điều khiển xuống 16 động cơ CAN bus!\n" +
+                    "Hãy chắc chắn không gian xung quanh robot an toàn. Tiếp tục?"
+                );
+                if (confirmed) {
+                    setGlobalExecutionMode("dual");
+                }
+            }
+        });
+    }
+
     // Theme toggle
     const btnTheme = document.getElementById("btn-theme-toggle");
     if (btnTheme) {

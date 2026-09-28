@@ -51,6 +51,12 @@ function setupActModelUI() {
             document.querySelectorAll(".act-mode-option").forEach((opt) => opt.classList.remove("active"));
             const parentLabel = radio.closest(".act-mode-option");
             if (parentLabel) parentLabel.classList.add("active");
+
+            // Sync with global execution mode button in left control panel
+            const globalMode = radio.value === "preview" ? "sim" : (radio.value === "hardware_only" ? "real" : "dual");
+            if (typeof setGlobalExecutionMode === "function") {
+                setGlobalExecutionMode(globalMode, false);
+            }
         });
     });
 

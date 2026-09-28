@@ -8,6 +8,7 @@ let hasInitialRobotSync = false;
 let usbActionPending = false;
 let usbPendingTimer = null;
 let lastHardwareSyncWarningAt = 0;
+let globalExecutionMode = "sim"; // "sim" | "real" | "dual"
 const visualCommandTargets = new Map();
 const HARDWARE_MOTION_ACTIONS = new Set([
     "set_mit",
@@ -15,6 +16,79 @@ const HARDWARE_MOTION_ACTIONS = new Set([
     "go_to_zero_pose",
     "set_zero_all",
 ]);
+
+function setGlobalExecutionMode(mode, triggerToast = true) {
+    if (mode !== "sim" && mode !== "real" && mode !== "dual") return;
+    globalExecutionMode = mode;
+
+    // 1. Update button states in left panel
+    const btnSim = document.getElementById("btn-global-mode-sim");
+    const btnReal = document.getElementById("btn-global-mode-real");
+    const btnDual = document.getElementById("btn-global-mode-dual");
+    if (btnSim) btnSim.classList.toggle("active", mode === "sim");
+    if (btnReal) btnReal.classList.toggle("active", mode === "real");
+    if (btnDual) btnDual.classList.toggle("active", mode === "dual");
+
+    // 2. Update panel badge
+    const badge = document.getElementById("global-mode-status-badge");
+    if (badge) {
+        if (mode === "sim") {
+            badge.className = "badge badge-accent";
+            badge.textContent = "Chỉ Mô Phỏng (3D Sim)";
+        } else if (mode === "real") {
+            badge.className = "badge badge-warning";
+            badge.textContent = "Chỉ Robot Thật (CAN)";
+        } else {
+            badge.className = "badge badge-success";
+            badge.textContent = "Chạy Cả 2 (3D + Robot)";
+        }
+    }
+
+    // 3. Update top header badge pill
+    const headerPill = document.getElementById("header-exec-mode-pill");
+    const headerText = document.getElementById("header-exec-mode-text");
+    if (headerPill && headerText) {
+        if (mode === "sim") {
+            headerPill.className = "badge badge-accent";
+            headerText.textContent = "Chỉ Mô Phỏng";
+        } else if (mode === "real") {
+            headerPill.className = "badge badge-warning";
+            headerText.textContent = "Chỉ Robot Thật";
+        } else {
+            headerPill.className = "badge badge-success";
+            headerText.textContent = "Chạy Cả 2";
+        }
+    }
+
+    // 4. Synchronize with ACT Model tab radios
+    const radioPreview = document.getElementById("radio-act-preview");
+    const radioHardware = document.getElementById("radio-act-hardware");
+    const radioDual = document.getElementById("radio-act-dual");
+    if (radioPreview && radioHardware && radioDual) {
+        if (mode === "sim") radioPreview.checked = true;
+        else if (mode === "real") radioHardware.checked = true;
+        else if (mode === "dual") radioDual.checked = true;
+
+        document.querySelectorAll(".act-mode-option").forEach(opt => opt.classList.remove("active"));
+        const activeRadio = mode === "sim" ? radioPreview : (mode === "real" ? radioHardware : radioDual);
+        const parentLabel = activeRadio.closest(".act-mode-option");
+        if (parentLabel) parentLabel.classList.add("active");
+    }
+
+    if (triggerToast) {
+        if (mode === "sim") {
+            showToast("info", "Chế độ: CHỈ MÔ PHỎNG (An toàn 100%, không gửi xung CAN)");
+        } else if (mode === "real") {
+            showToast("warning", "Chế độ: CHỈ ROBOT THẬT (Lệnh điều khiển trực tiếp 16 động cơ CAN bus)");
+        } else {
+            showToast("success", "Chế độ: CHẠY CẢ 2 (Đồng thời mô phỏng 3D và điều khiển robot thật)");
+        }
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: "set_execution_mode", mode }));
+    }
+}
 
 function setOpenArmVisualCommandTarget(motorId, position) {
     const id = Number(motorId);
@@ -187,7 +261,14 @@ function sendAction(action, payload = {}) {
         releaseOpenArmVisualCommandTarget(payload.id);
     }
 
-    if (currentUsbState && !hasInitialRobotSync && HARDWARE_MOTION_ACTIONS.has(action)) {
+    // Attach global execution mode flags
+    payload.execution_mode = globalExecutionMode;
+    if (globalExecutionMode === "sim") {
+        payload.sim_only = true;
+    }
+
+    // Only enforce hardware sync check if actually sending to real hardware
+    if (globalExecutionMode !== "sim" && currentUsbState && !hasInitialRobotSync && HARDWARE_MOTION_ACTIONS.has(action)) {
         const now = Date.now();
         if (now - lastHardwareSyncWarningAt > 1500) {
             lastHardwareSyncWarningAt = now;
@@ -196,10 +277,10 @@ function sendAction(action, payload = {}) {
         return false;
     }
 
-    // In real mode, Three.js 3D model reflects live physical telemetry at 40 Hz without desync.
-    // In simulation mode, preview commanded joint targets immediately.
+    // Three.js 3D Visual update based on execution mode:
+    // In 'sim' or 'dual' mode, preview commanded joint targets immediately in 3D
     if (typeof updateOpenArmJointVisual === "function") {
-        if (!currentUsbState) {
+        if (globalExecutionMode === "sim" || globalExecutionMode === "dual" || !currentUsbState) {
             if (action === "set_mit") {
                 setOpenArmVisualCommandTarget(payload.id, payload.q);
                 updateOpenArmJointVisual({ id: payload.id, q: payload.q });
@@ -210,6 +291,11 @@ function sendAction(action, payload = {}) {
         }
         if (action === "go_to_zero_pose") {
             releaseOpenArmVisualCommandTargets();
+            if (globalExecutionMode === "sim") {
+                for (let i = 1; i <= 16; i++) {
+                    updateOpenArmJointVisual({ id: i, q: 0.0 });
+                }
+            }
         }
     }
 

@@ -121,6 +121,7 @@ class OpenArmDashboardServer:
         self.running = True
         self.velocity_limit = 0.25  # rad/s (~14°/s) gentle & safe velocity limit
         self.gripper_invert = {8: False, 16: False}  # Direction invert flag (default False: 0mm=closed/0.0rad, 41.5mm=open/1.15rad)
+        self.execution_mode = "sim"  # Global Execution Mode: "sim" (Sim only), "real" (Physical robot only), "dual" (Both)
 
         if self.mode == "real":
             print(f"[Dashboard] Initializing in REAL ROBOT HARDWARE MODE on {can0_if} / {can1_if}")
@@ -784,6 +785,7 @@ class OpenArmDashboardServer:
                     "frames_rx": rx_count,
                     "frames_tx": tx_count,
                     "mode": self.mode,
+                    "execution_mode": getattr(self, "execution_mode", "sim"),
                     "velocity_limit": self.velocity_limit,
                     "initial": True,
                     "stream_stats": stream_info
@@ -841,7 +843,7 @@ class OpenArmDashboardServer:
         m.q_target = rad_target
         m.q_cmd = rad_target
 
-        if self.mode == "real":
+        if self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"]:
             # 1. Primary: POS_FORCE mode frame on m.send_id + 0x300 (0x308)
             # Speed limit: 10.0 rad/s (vel_uint = 1000)
             # Safe torque current limit: 15% (i_uint = 1500 ~ 1.5 Nm)
@@ -1060,6 +1062,23 @@ class OpenArmDashboardServer:
         elif action == "disconnect_usb":
             print("[Command] Disconnect USB Robot requested from Web UI")
             threading.Thread(target=self._exec_disconnect_usb, daemon=True).start()
+
+        elif action == "set_execution_mode":
+            new_mode = payload.get("mode", "sim")
+            if new_mode in ["sim", "real", "dual"]:
+                self.execution_mode = new_mode
+                print(f"[Execution Mode] Chế độ thực thi chuyển sang: {new_mode.upper()}")
+                mode_titles = {
+                    "sim": "Chỉ Mô Phỏng (3D Sim)",
+                    "real": "Chỉ Robot Thật (CAN Bus)",
+                    "dual": "Chạy Cả 2 (Mô Phỏng & Robot Thật)"
+                }
+                notice_types = {"sim": "info", "real": "warning", "dual": "success"}
+                if hasattr(self, 'loop') and self.loop:
+                    asyncio.run_coroutine_threadsafe(
+                        self.broadcast_notice(notice_types.get(new_mode, "info"), f"Chế độ thực thi: {mode_titles.get(new_mode, new_mode)}"),
+                        self.loop
+                    )
 
         elif action in ["record_start", "export_start"]:
             self.exporter.start_session("record")
@@ -1578,8 +1597,10 @@ class OpenArmDashboardServer:
 
                     m.q_des = m.q_cmd
 
-                    # If in real mode and motor is enabled, send CAN command
-                    if self.mode == "real":
+                    # If in real mode AND execution_mode allows hardware, send CAN command.
+                    # In "sim" mode, hardware transmission is blocked to guarantee safety.
+                    should_send_hw = (self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"])
+                    if should_send_hw:
                         if m.joint_idx == 8:
                             # End-Effector parallel gripper: POS_FORCE mode + MIT fallback
                             now = time.time()
