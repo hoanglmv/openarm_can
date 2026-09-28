@@ -106,18 +106,35 @@ function buildJointSliders() {
                 const deg = (val * 180 / Math.PI).toFixed(0);
                 document.getElementById(`val-disp-${uniqueKey}`).textContent = `${val.toFixed(2)} rad (${deg}°)`;
 
-                if (isLeft) {
-                    sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-                } else if (isRight) {
-                    sendAction("set_mit", { id: j.id, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-                } else { // sync
+                const now = Date.now();
+                if (!slider._lastSent || (now - slider._lastSent >= 25)) {
+                    slider._lastSent = now;
+                    if (isLeft || isRight) {
+                        sendAction("set_mit", { id: j.id, q: val });
+                    } else { // sync
+                        const leftMotorId = LEFT_JOINTS[j.idx].id;
+                        const rightMotorId = RIGHT_JOINTS[j.idx].id;
+                        const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                        sendAction("set_mit", { id: leftMotorId, q: val });
+                        sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign });
+                    }
+                }
+            }
+        });
+
+        // Guarantee final exact value when releasing slider
+        slider.addEventListener("change", (e) => {
+            if (jointLockStates[j.id] === false) return;
+            const val = parseFloat(e.target.value);
+            if (!isGripper) {
+                if (isLeft || isRight) {
+                    sendAction("set_mit", { id: j.id, q: val });
+                } else {
                     const leftMotorId = LEFT_JOINTS[j.idx].id;
                     const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                    // Mirrored roll/yaw/abduction for symmetrical bimanual gestures (J2, J3, J5, J7)
                     const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
-
-                    sendAction("set_mit", { id: leftMotorId, q: val, kp: 30.0, kd: 1.2, tau: 0.0 });
-                    sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign, kp: 30.0, kd: 1.2, tau: 0.0 });
+                    sendAction("set_mit", { id: leftMotorId, q: val });
+                    sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign });
                 }
             }
         });
@@ -340,14 +357,30 @@ function setupEventHandlers() {
     const btnDisableAll = document.getElementById("btn-disable-all");
     if (btnDisableAll) {
         btnDisableAll.addEventListener("click", () => {
+            btnDisableAll.classList.add("btn-active-click");
+            setTimeout(() => btnDisableAll.classList.remove("btn-active-click"), 200);
             if (typeof stopPresets === "function") stopPresets();
             for (let i = 1; i <= 16; i++) jointLockStates[i] = false;
             sendAction("disable_all");
-            buildJointSliders();
+            // Instant in-place UI update without destroying DOM elements
+            document.querySelectorAll(".btn-joint-power").forEach(btn => {
+                btn.className = "btn-joint-power power-off";
+                btn.textContent = "OFF";
+            });
+            document.querySelectorAll(".joint-slider-card").forEach(card => {
+                card.classList.remove("joint-active");
+                card.classList.add("joint-locked");
+            });
+            showToast("warning", "Đã ngắt lực toàn bộ 16 động cơ và kẹp (Torque OFF)!");
         });
     }
 
     function triggerZeroPose() {
+        const btnGoZeroPose = document.getElementById("btn-go-zero-pose");
+        if (btnGoZeroPose) {
+            btnGoZeroPose.classList.add("btn-active-click");
+            setTimeout(() => btnGoZeroPose.classList.remove("btn-active-click"), 200);
+        }
         if (typeof stopPresets === "function") stopPresets();
         document.querySelectorAll(".joint-slider-input").forEach(slider => {
             slider.value = 0.0;
@@ -372,7 +405,7 @@ function setupEventHandlers() {
         if (rightGDisp) rightGDisp.textContent = "0.0 mm (Đóng)";
 
         sendAction("go_to_zero_pose");
-        showToast("info", "Đang đưa toàn bộ cánh tay về Zero Pose (0.0 rad) với lực giữ vững chắc...");
+        showToast("info", "Đang đưa toàn bộ 14 khớp và 2 kẹp về Zero Pose (0.0 rad, 0 mm)...");
     }
 
     const btnGoZeroPose = document.getElementById("btn-go-zero-pose");
@@ -403,33 +436,93 @@ function setupEventHandlers() {
         });
     }
 
-    // Motion Speed / Velocity Limit Controls
-    const speedSlider = document.getElementById("slider-max-velocity");
-    const speedDisp = document.getElementById("disp-speed-mode");
-    const speedBtns = document.querySelectorAll(".btn-speed-preset");
+    // Motion Speed / Velocity Limit Controls (Global Control Bar & Sub-Pane)
+    const speedSliderGlobal = document.getElementById("slider-speed-global");
+    const speedDispGlobal = document.getElementById("disp-speed-global");
+    const speedChipsGlobal = document.querySelectorAll(".btn-speed-chip");
 
-    function applyVelocityLimit(val, activeBtn = null) {
-        speedBtns.forEach(b => b.classList.remove("active"));
-        if (activeBtn) activeBtn.classList.add("active");
-        if (speedSlider) speedSlider.value = val;
+    const speedSliderSub = document.getElementById("slider-max-velocity");
+    const speedDispSub = document.getElementById("disp-speed-mode");
+    const speedBtnsSub = document.querySelectorAll(".btn-speed-preset");
+
+    function applyVelocityLimit(val, syncBackend = true) {
+        val = Math.max(0.02, Math.min(2.0, parseFloat(val) || 0.25));
         const degS = (val * 180 / Math.PI).toFixed(0);
-        if (speedDisp) speedDisp.textContent = `${val.toFixed(2)} rad/s (${degS}°/s)`;
-        sendAction("set_velocity_limit", { v_limit: val });
+        const textDisplay = `${val.toFixed(2)} rad/s (${degS}°/s)`;
+
+        // 1. Update text badges
+        if (speedDispGlobal) speedDispGlobal.textContent = textDisplay;
+        if (speedDispSub) speedDispSub.textContent = textDisplay;
+
+        // 2. Update sliders if not already matching
+        if (speedSliderGlobal && Math.abs(parseFloat(speedSliderGlobal.value) - val) > 0.001) {
+            speedSliderGlobal.value = val;
+        }
+        if (speedSliderSub && Math.abs(parseFloat(speedSliderSub.value) - val) > 0.001) {
+            speedSliderSub.value = val;
+        }
+
+        // 3. Update active states on preset chip buttons
+        speedChipsGlobal.forEach(chip => {
+            const spd = parseFloat(chip.dataset.speed);
+            if (Math.abs(spd - val) < 0.03) {
+                chip.classList.add("active");
+            } else {
+                chip.classList.remove("active");
+            }
+        });
+
+        speedBtnsSub.forEach(btn => {
+            const spd = parseFloat(btn.dataset.speed);
+            if (Math.abs(spd - val) < 0.03) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+
+        // 4. Send action to backend if requested
+        if (syncBackend) {
+            sendAction("set_velocity_limit", { v_limit: val });
+        }
     }
 
-    speedBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-            const spd = parseFloat(btn.dataset.speed);
-            applyVelocityLimit(spd, btn);
+    // Expose global synchronizer for telemetry
+    window.syncSpeedControls = function(val, syncBackend = false) {
+        applyVelocityLimit(val, syncBackend);
+    };
+
+    // Global slider listener
+    if (speedSliderGlobal) {
+        speedSliderGlobal.addEventListener("input", (e) => {
+            const spd = parseFloat(e.target.value);
+            applyVelocityLimit(spd, true);
+        });
+    }
+
+    // Global chip buttons listener
+    speedChipsGlobal.forEach(chip => {
+        chip.addEventListener("click", () => {
+            const spd = parseFloat(chip.dataset.speed);
+            applyVelocityLimit(spd, true);
         });
     });
 
-    if (speedSlider) {
-        speedSlider.addEventListener("input", (e) => {
+    // Sub-pane slider listener
+    if (speedSliderSub) {
+        speedSliderSub.addEventListener("input", (e) => {
             const spd = parseFloat(e.target.value);
-            applyVelocityLimit(spd);
+            applyVelocityLimit(spd, true);
         });
     }
+
+    // Sub-pane preset buttons listener
+    speedBtnsSub.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const spd = parseFloat(btn.dataset.speed);
+            applyVelocityLimit(spd, true);
+        });
+    });
 
     // Grippers
     const syncCheck = document.getElementById("sync-grippers-check");

@@ -7,6 +7,93 @@ let currentUsbState = false;
 let hasInitialRobotSync = false;
 let usbActionPending = false;
 let usbPendingTimer = null;
+let lastHardwareSyncWarningAt = 0;
+const visualCommandTargets = new Map();
+const HARDWARE_MOTION_ACTIONS = new Set([
+    "set_mit",
+    "set_gripper",
+    "go_to_zero_pose",
+    "set_zero_all",
+]);
+
+function setOpenArmVisualCommandTarget(motorId, position) {
+    const id = Number(motorId);
+    const q = Number(position);
+    if (!Number.isInteger(id) || id < 1 || id > 16 || !Number.isFinite(q)) return;
+    visualCommandTargets.set(id, { position: q, issuedAt: Date.now() });
+}
+
+function shouldApplyOpenArmTelemetry(motor) {
+    if (currentUsbState) return true; // Always apply live telemetry in real hardware mode
+    const id = Number(motor && motor.id);
+    if (!visualCommandTargets.has(id)) return true;
+
+    const command = visualCommandTargets.get(id);
+    // Timeout safeguard: after 2.0s, release visual lock so live telemetry is never permanently blocked
+    if (Date.now() - command.issuedAt > 2000) {
+        visualCommandTargets.delete(id);
+        return true;
+    }
+
+    const target = command.position;
+    const measured = Number(motor.q);
+    const tolerance = (id === 8 || id === 16) ? 0.003 : 0.035;
+
+    // A fresh OFF/fault response means torque is no longer holding the target.
+    if (isOpenArmFeedbackFresh(motor) && motor.enabled === false) {
+        visualCommandTargets.delete(id);
+        return true;
+    }
+
+    if (Number(motor.error_code) > 1) {
+        visualCommandTargets.delete(id);
+        return isOpenArmFeedbackFresh(motor);
+    }
+
+    // Once the measured robot reaches the commanded target, telemetry takes ownership again
+    if (Number.isFinite(measured) && Math.abs(measured - target) <= tolerance) {
+        visualCommandTargets.delete(id);
+        return true;
+    }
+    return false;
+}
+
+function releaseOpenArmVisualCommandTargets() {
+    visualCommandTargets.clear();
+}
+
+function releaseOpenArmVisualCommandTarget(motorId) {
+    visualCommandTargets.delete(Number(motorId));
+}
+
+function isOpenArmFeedbackFresh(motor) {
+    // Older running backends do not include feedback_fresh yet. Treat an absent
+    // field as usable for compatibility; after restart the explicit freshness
+    // flag provides disconnect/stale detection.
+    return Boolean(motor) && motor.feedback_fresh !== false;
+}
+
+function hasCompletePhysicalState(motors) {
+    return Array.isArray(motors)
+        && motors.length === 16
+        && motors.every(motor => motor
+            && motor.has_sync === true
+            && isOpenArmFeedbackFresh(motor));
+}
+
+function applyInitialPhysicalState(motors) {
+    releaseOpenArmVisualCommandTargets();
+    syncUiFromRobot(motors, true);
+    if (typeof updateOpenArmJointVisual === "function") {
+        motors.forEach(motor => updateOpenArmJointVisual(motor));
+    }
+    hasInitialRobotSync = true;
+    if (typeof setOpenArmModelVisibility === "function") {
+        setOpenArmModelVisibility(true);
+    }
+    const badge = document.getElementById("ws-status-badge");
+    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCED</strong>";
+}
 
 // Initialize WebSocket Connection (Port 8889)
 function initWebSocket() {
@@ -17,10 +104,18 @@ function initWebSocket() {
     const badge = document.getElementById("ws-status-badge");
 
     ws.onopen = () => {
+        // Every page load/reconnect starts with a fresh hardware handshake. Never
+        // reuse a target or a pose left over from the previous browser session.
+        hasInitialRobotSync = false;
+        releaseOpenArmVisualCommandTargets();
+        if (typeof setOpenArmModelVisibility === "function") {
+            setOpenArmModelVisibility(false);
+        }
         if (badge) {
             badge.className = "badge badge-success";
-            badge.innerHTML = "WebSocket: <strong>CONNECTED</strong>";
+            badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCING</strong>";
         }
+        ws.send(JSON.stringify({ action: "sync_robot_state" }));
     };
 
     ws.onmessage = (event) => {
@@ -28,10 +123,23 @@ function initWebSocket() {
             const msg = JSON.parse(event.data);
             if (msg.type === "telemetry") {
                 const isReal = (msg.data.mode === "real");
-                if (isReal && !hasInitialRobotSync) {
-                    hasInitialRobotSync = true;
-                    syncUiFromRobot(msg.data.motors, true);
+                const motors = msg.data.motors || [];
+                const completePhysicalState = isReal && hasCompletePhysicalState(motors);
+                if (completePhysicalState && !hasInitialRobotSync) {
+                    applyInitialPhysicalState(motors);
                     showToast("success", "Đã tự động đọc góc khớp thực từ Robot vật lý!");
+                } else if (isReal && hasInitialRobotSync && !completePhysicalState) {
+                    hasInitialRobotSync = false;
+                    releaseOpenArmVisualCommandTargets();
+                    if (typeof setOpenArmModelVisibility === "function") {
+                        setOpenArmModelVisibility(false);
+                    }
+                    const badge = document.getElementById("ws-status-badge");
+                    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCING</strong>";
+                    showToast("warning", "Mất feedback từ phần cứng. Đã khóa lệnh chuyển động để chờ đồng bộ lại.");
+                } else if (!isReal) {
+                    const badge = document.getElementById("ws-status-badge");
+                    if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SIM</strong>";
                 }
                 if (typeof handleTelemetry === "function") {
                     handleTelemetry(msg.data);
@@ -71,9 +179,45 @@ function initWebSocket() {
 
 // Send JSON action packet to server via WebSocket
 function sendAction(action, payload = {}) {
+    if (action === "sync_robot_state") {
+        releaseOpenArmVisualCommandTargets();
+    } else if (action === "disable_all") {
+        releaseOpenArmVisualCommandTargets();
+    } else if (action === "disable_motor") {
+        releaseOpenArmVisualCommandTarget(payload.id);
+    }
+
+    if (currentUsbState && !hasInitialRobotSync && HARDWARE_MOTION_ACTIONS.has(action)) {
+        const now = Date.now();
+        if (now - lastHardwareSyncWarningAt > 1500) {
+            lastHardwareSyncWarningAt = now;
+            showToast("warning", "Đang đọc tư thế phần cứng. Chờ đủ trạng thái 16 motor trước khi điều khiển.");
+        }
+        return false;
+    }
+
+    // In real mode, Three.js 3D model reflects live physical telemetry at 40 Hz without desync.
+    // In simulation mode, preview commanded joint targets immediately.
+    if (typeof updateOpenArmJointVisual === "function") {
+        if (!currentUsbState) {
+            if (action === "set_mit") {
+                setOpenArmVisualCommandTarget(payload.id, payload.q);
+                updateOpenArmJointVisual({ id: payload.id, q: payload.q });
+            } else if (action === "set_gripper") {
+                setOpenArmVisualCommandTarget(payload.id, payload.pos);
+                updateOpenArmJointVisual({ id: payload.id, q: payload.pos });
+            }
+        }
+        if (action === "go_to_zero_pose") {
+            releaseOpenArmVisualCommandTargets();
+        }
+    }
+
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ action, ...payload }));
+        return true;
     }
+    return false;
 }
 
 // Run CAN CLI Command
@@ -156,7 +300,11 @@ function updateUsbUiState(isReal) {
             btnMaster.textContent = "Disconnect USB Robot (can0/can1)";
             btnMaster.style.gridColumn = "span 2";
         }
-        if (ifaceBadge) ifaceBadge.textContent = "can0 / can1 (REAL)";
+        if (ifaceBadge) {
+            ifaceBadge.textContent = hasInitialRobotSync
+                ? "can0 / can1 (REAL • SYNCED)"
+                : "can0 / can1 (REAL • SYNCING)";
+        }
     } else {
         if (btnHeader) {
             btnHeader.className = "btn-usb-toggle btn-usb-disconnected";

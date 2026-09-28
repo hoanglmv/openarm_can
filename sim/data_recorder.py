@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 import h5py
+import cv2
 import numpy as np
 
 # Reconfigure stdout for Windows unicode support
@@ -324,6 +325,16 @@ class ACTDataRecorder(Node):
         self.rejected_samples += 1
         self.get_logger().warning(reason, throttle_duration_sec=5.0)
 
+    def _on_rgb(self, message):
+        try:
+            rgb = self.bridge.imgmsg_to_cv2(message, desired_encoding="rgb8")
+            if rgb.ndim != 3 or rgb.shape[2] != 3:
+                raise ValueError(f"RGB image must have three channels, got {rgb.shape}")
+            if rgb.shape[:2] != (IMAGE_HEIGHT, IMAGE_WIDTH):
+                rgb = cv2.resize(
+                    rgb,
+                    (IMAGE_WIDTH, IMAGE_HEIGHT),
+                    interpolation=cv2.INTER_AREA,
     def _process_and_record(self, rgb_msg, depth_msg, state_msg, command_msg, timestamp_ns):
         try:
             if timestamp_ns <= self.last_timestamp_ns:
@@ -343,8 +354,27 @@ class ACTDataRecorder(Node):
                 raise ValueError(
                     f"depth shape must be {expected_depth_shape}, got {depth.shape}"
                 )
+            self.latest_rgb = np.asarray(rgb, dtype=np.uint8).copy()
+            self.latest_rgb_stamp_ns = self._timestamp_ns(message)
+            self._update_camera_pair()
+        except Exception as error:
+            self._reject(f"Rejected RGB topic sample: {error}")
+
+    def _on_depth(self, message):
+        try:
+            depth = self.bridge.imgmsg_to_cv2(message, desired_encoding="passthrough")
+            if depth.ndim != 2:
+                raise ValueError(f"depth image must be single-channel, got {depth.shape}")
             if depth.dtype != np.uint16:
                 raise ValueError(f"depth dtype must be uint16, got {depth.dtype}")
+            if depth.shape != (IMAGE_HEIGHT, IMAGE_WIDTH):
+                depth = cv2.resize(
+                    depth,
+                    (IMAGE_WIDTH, IMAGE_HEIGHT),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+            self.latest_depth = np.where(
+                depth == 0, 0, np.clip(depth, DEPTH_MIN_MM, DEPTH_MAX_MM)
 
             qpos = self._ordered_values(state_msg, "position")
             qvel = self._ordered_values(state_msg, "velocity")
@@ -357,15 +387,57 @@ class ACTDataRecorder(Node):
                 0,
                 np.clip(depth, self.writer.depth_min_mm, self.writer.depth_max_mm),
             ).astype(np.uint16, copy=False)
+            self.latest_depth_stamp_ns = self._timestamp_ns(message)
+            self._update_camera_pair()
+        except Exception as error:
+            self._reject(f"Rejected depth topic sample: {error}")
+
+    def _update_camera_pair(self):
+        if (
+            self.latest_rgb_stamp_ns is not None
+            and self.latest_rgb_stamp_ns == self.latest_depth_stamp_ns
+        ):
+            self.latest_camera_pair = (self.latest_rgb, self.latest_depth)
+
+    def _on_state(self, message):
+        try:
+            self.latest_state = (
+                self._ordered_values(message, "position"),
+                self._ordered_values(message, "velocity"),
+                self._ordered_values(message, "effort"),
+            )
+        except Exception as error:
+            self._reject(f"Rejected joint state topic sample: {error}")
+
+    def _record_latest(self):
+        if self.latest_camera_pair is None or self.latest_state is None:
+            self.get_logger().warning(
+                "Waiting for complete RGB-D and joint state topic samples",
+                throttle_duration_sec=5.0,
+            )
+            return
+
+        try:
+            rgb, depth = self.latest_camera_pair
+            qpos, qvel, effort = self.latest_state
+            # This recorder intentionally has no command-topic input. Preserve the
+            # ACT schema by using the observed absolute joint position as action.
+            action = qpos.copy()
+            period_ns = round(1_000_000_000 / FREQUENCY_HZ)
+            if self.recording_timestamp_ns is None:
+                now_ns = self.get_clock().now().nanoseconds
+                self.recording_timestamp_ns = (now_ns // period_ns) * period_ns
+            else:
+                self.recording_timestamp_ns += period_ns
 
             self.writer.append(
-                np.asarray(rgb, dtype=np.uint8),
+                rgb,
                 depth,
                 qpos,
                 qvel,
                 effort,
                 action,
-                timestamp_ns,
+                self.recording_timestamp_ns,
             )
             self.last_timestamp_ns = timestamp_ns
 
@@ -380,7 +452,7 @@ class ACTDataRecorder(Node):
                     self.get_logger().info("Maximum duration reached; stopping episode")
                     rclpy.shutdown()
         except Exception as error:
-            self._reject(f"Rejected synchronized sample: {error}")
+            self._reject(f"Could not record latest ROS 2 topic samples: {error}")
 
     def _on_periodic_timer(self):
         """Callback định kỳ kích hoạt chính xác theo chu kỳ frequency_hz (50Hz = 20ms)."""

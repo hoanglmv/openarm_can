@@ -19,8 +19,8 @@ UDP_EXPORT_PORT = 9871   # Outbound 100Hz telemetry stream broadcast
 # Loop frequencies
 CONTROL_FREQ = 400.0     # Hz for smooth trajectory generator & interpolation loop
 TELEMETRY_FREQ = 40.0    # Hz for WebSocket state broadcasting
-POLL_FREQ = 50.0         # Hz for hardware state query frames (matched to ACT dataset frequency)
-DATA_FREQUENCY_HZ = 50.0 # Hz for ACT dataset and ROS 2 bridges
+POLL_FREQ = 50.0          # Hz for hardware state query frames
+DATA_FREQUENCY_HZ = 100.0 # Hz for /openarm/joint_states and joint_commands
 
 # RealSense Camera & ROS 2 ACT Pipeline Bridge configuration
 CAMERA_STREAM_PORT = int(os.environ.get("OPENARM_CAMERA_STREAM_PORT", "8890"))
