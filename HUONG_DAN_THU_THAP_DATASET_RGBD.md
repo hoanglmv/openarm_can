@@ -104,6 +104,36 @@ flowchart LR
 
 ---
 
+## 4.1. BÍ KÍP THU THẬP TỪ BÀI BÁO GỐC STANFORD (ACT / ALOHA PAPER)
+> *Các kinh nghiệm thực chiến từ nhóm tác giả Tony Z. Zhao, Sergey Levine, Chelsea Finn để đạt tỷ lệ thành công 85% - 95% chỉ với 50 demonstrations:*
+
+1. **Mục tiêu số lượng**: **$\mathbf{50}$ Episodes** là "con số vàng":
+   * Bài báo chứng minh: Với $50$ lần dắt tay mẫu, ACT đã học thành thạo các tác vụ vi mô 2 tay cực khó (đút pin, mở hộp, luồn dây rút nhựa) với độ chính xác đạt $84\% - 96\%$.
+   * Mỗi episode chỉ mất khoảng $15\text{s}$, do đó cả buổi thu $50$ episodes chỉ tốn khoảng **$15 - 20\text{ phút}$** teleoperation thực tế.
+   * *Mức tối thiểu để test ban đầu*: $25 - 30$ episodes.
+
+2. **Tính nhất quán về chiến lược (Strategic Consistency)**:
+   * Mặc dù CVAE có thể biểu diễn tính đa mốt (multimodal), nhưng với tập dữ liệu nhỏ $50$ mẫu, người thao tác **phải giữ một thói quen/chiến lược thống nhất**:
+     * *ĐÚNG*: Luôn dùng tay trái giữ mép trước, tay phải gập mép trên đè lên sau xuyên suốt 50 lần.
+     * *SAI*: Đổi hứng thất thường, lúc thì tay phải gắp trước, lúc thì tay trái gắp trước. Mạng sẽ bị phân vân và sinh ra quỹ đạo trung bình bị rung giật.
+
+3. **Biến thiên vị trí không gian (In-Region Spatial Variations)**:
+   * **Tuyệt đối không đặt khăn/áo ở 1 tọa độ cố định duy nhất suốt 50 lần!** Nếu làm vậy mô hình sẽ bị học vẹt (overfitting).
+   * Hãy chủ động rải vị trí khăn trong vùng làm việc:
+     * Dịch chuyển khăn sang trái, sang phải, lên trên, xuống dưới khoảng $\pm 5 - 10\text{ cm}$.
+     * Xoay góc khăn lệch nhẹ khoảng $\pm 15^\circ - 30^\circ$.
+     * Đổi $2 - 3$ màu khăn khác nhau để ResNet học đặc trưng hình học chứ không phụ thuộc màu sắc.
+
+4. **Tự sửa sai ngay khi đang biểu diễn (Demonstrating Recovery)**:
+   * Khi đang dắt tay, **nếu lỡ kẹp trượt mép vải thì đừng hủy bỏ episode!**
+   * Hãy bình tĩnh mở kẹp ra, điều chỉnh góc và kẹp lại thành công.
+   * Mô hình CVAE sẽ học được chính phản xạ **"tự sửa sai khi gặp sự cố"**. Khi robot infer ngoài đời thực, nếu có bị trượt tay nó sẽ tự động biết nhả kẹp ra gắp lại thay vì bị đơ hay crash.
+
+5. **Tốc độ di chuyển dứt khoát, mượt mà**:
+   * Người dắt tay không run tay, không dừng khựng ngập ngừng giữa chừng để suy nghĩ. Quỹ đạo nâng tay, hạ tay nên đi theo đường cong đều đặn.
+
+---
+
 ## 5. CODE PYTHON MẪU THU THẬP & ĐÓNG GÓI DỮ LIỆU
 
 Teammate có thể dùng đoạn mã mẫu chuẩn này để đóng gói dữ liệu sau mỗi lượt teleoperation:

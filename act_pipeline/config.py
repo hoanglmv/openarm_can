@@ -25,11 +25,11 @@ class ModelConfig:
     dropout: float = 0.1
     
     # CVAE
-    cvae_layers: int = 2            # Số layer TransformerEncoder của CVAE
+    cvae_layers: int = 4            # Số layer TransformerEncoder của CVAE (Chuẩn Stanford ACT paper: enc_layers = 4)
     latent_dim: int = 32            # Kích thước latent vector z
     
     # Policy Decoder
-    decoder_layers: int = 4         # Số layer TransformerDecoder của Policy
+    decoder_layers: int = 7         # Số layer TransformerDecoder của Policy (Chuẩn Stanford ACT paper: dec_layers = 7)
     chunk_size: int = 50            # Action chunk size k=50 (1 giây tại 50Hz)
     action_dim: int = 16            # 16 khớp (8 tay trái: J1..J7 + gripper; 8 tay phải: J1..J7 + gripper)
     qpos_dim: int = 16              # 16 góc khớp hiện tại

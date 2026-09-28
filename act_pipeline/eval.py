@@ -243,17 +243,28 @@ def eval_pipeline(args):
         nheads=saved_cfg.get("nheads", 8),
         dim_feedforward=saved_cfg.get("dim_feedforward", 2048),
         dropout=0.0,
-        cvae_layers=saved_cfg.get("cvae_layers", 2),
+        cvae_layers=saved_cfg.get("cvae_layers", 4),
         latent_dim=saved_cfg.get("latent_dim", 32),
-        decoder_layers=saved_cfg.get("decoder_layers", 4),
+        decoder_layers=saved_cfg.get("decoder_layers", 7),
         chunk_size=saved_cfg.get("chunk_size", 50),
         action_dim=saved_cfg.get("action_dim", 16),
         qpos_dim=saved_cfg.get("qpos_dim", 16),
     )
+
+    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
+
+    # Tự động dò số tầng từ state_dict để tương thích cả checkpoint cũ (2/4) lẫn chuẩn paper (4/7)
+    dec_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and ("policy_decoder" in k or "decoder" in k)]
+    if len(dec_indices) > 0:
+        model_cfg.decoder_layers = max(dec_indices) + 1
+
+    cvae_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and "cvae" in k]
+    if len(cvae_indices) > 0:
+        model_cfg.cvae_layers = max(cvae_indices) + 1
+
     model = ACTPolicy(config=model_cfg).to(device)
 
     # Nạp trọng số
-    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
     model.load_state_dict(state_dict, strict=True)
     model.eval()
     print("[✓] Đã nạp thành công 100% trọng số mô hình.")
