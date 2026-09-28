@@ -36,6 +36,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+# Đảm bảo import act_pipeline hoạt động độc lập bất kể CWD
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from act_pipeline.config import ModelConfig, TrainConfig
 from act_pipeline.models.act_model import ACTPolicy
@@ -78,7 +81,7 @@ def evaluate(
     total_valid_steps = 0
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc="[Val] Đánh giá", leave=False, dynamic_ncols=True):
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
             actions = batch["actions"].to(device, non_blocking=True)
@@ -323,7 +326,14 @@ def train_pipeline(args):
         train_kl_accum = 0.0
         batch_count = 0
 
-        for step_idx, batch in enumerate(train_loader):
+        pbar = tqdm(
+            train_loader,
+            desc=f"Epoch [{epoch:3d}/{args.epochs}]",
+            unit="batch",
+            leave=False,
+            dynamic_ncols=True,
+        )
+        for step_idx, batch in enumerate(pbar):
             global_step += 1
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
@@ -362,6 +372,12 @@ def train_pipeline(args):
             train_recon_accum += loss_dict["recon_loss"].item()
             train_kl_accum += loss_dict["kl_loss"].item()
             batch_count += 1
+
+            pbar.set_postfix({
+                "loss": f"{loss.item():.4f}",
+                "recon": f"{loss_dict['recon_loss'].item():.4f}",
+                "kl": f"{loss_dict['kl_loss'].item():.4f}",
+            })
 
             # Ghi nhận step metrics định kỳ
             if global_step % args.log_every_steps == 0:
@@ -516,7 +532,7 @@ def parse_args():
     parser.add_argument("--step_stride", type=int, default=1, help="Bước nhảy lấy mẫu start_t trong episode")
 
     # Đánh giá & Lưu trữ
-    parser.add_argument("--val_split", type=float, default=0.15, help="Tỷ lệ tập validation (ví dụ 0.15 = 15%)")
+    parser.add_argument("--val_split", type=float, default=0.15, help="Tỷ lệ tập validation (ví dụ 0.15 = 15%%)")
     parser.add_argument("--eval_every", type=int, default=10, help="Đánh giá validation mỗi N epochs")
     parser.add_argument("--save_every", type=int, default=50, help="Lưu checkpoint định kỳ mỗi N epochs")
     parser.add_argument("--log_every_steps", type=int, default=10, help="Ghi nhận metric mỗi N bước batch")

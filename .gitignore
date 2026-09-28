@@ -46,3 +46,6 @@ dataset/
 *.hdf5
 *.npz
 exports/
+checkpoints/
+evaluation_results/
+.venv-dashboard/
