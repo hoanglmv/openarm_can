@@ -125,6 +125,7 @@ def simulate_episode_rollout(
     device: torch.device,
     ensemble_m: float = 0.01,
     chunk_size: int = 50,
+    target_size: Optional[Tuple[int, int]] = None,
 ) -> Dict[str, Any]:
     """
     Giả lập Rollout liên tục theo thời gian thực (50Hz) trên 1 file Episode:
@@ -157,7 +158,7 @@ def simulate_episode_rollout(
             rgb_t = raw_rgb[t] if raw_rgb.ndim == 4 else raw_rgb[t][..., :3]
             depth_t = raw_depth[t] if raw_depth is not None else None
             
-            rgbd_tensor = preprocess_rgbd(rgb_t, depth_t).unsqueeze(0).to(device) # [1, 4, H, W]
+            rgbd_tensor = preprocess_rgbd(rgb_t, depth_t, target_size=target_size).unsqueeze(0).to(device) # [1, 4, H, W]
 
             # 2. Tiền xử lý qpos
             norm_qpos = normalize_data(qpos_seq[t], stats["qpos_mean"], stats["qpos_std"])
@@ -243,18 +244,43 @@ def eval_pipeline(args):
         nheads=saved_cfg.get("nheads", 8),
         dim_feedforward=saved_cfg.get("dim_feedforward", 2048),
         dropout=0.0,
-        cvae_layers=saved_cfg.get("cvae_layers", 2),
+        cvae_layers=saved_cfg.get("cvae_layers", 4),
         latent_dim=saved_cfg.get("latent_dim", 32),
-        decoder_layers=saved_cfg.get("decoder_layers", 4),
+        decoder_layers=saved_cfg.get("decoder_layers", 7),
         chunk_size=saved_cfg.get("chunk_size", 50),
         action_dim=saved_cfg.get("action_dim", 16),
         qpos_dim=saved_cfg.get("qpos_dim", 16),
     )
+
+    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
+
+    # Tự động dò số tầng từ state_dict để tương thích cả checkpoint cũ (2/4) lẫn chuẩn paper (4/7)
+    dec_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and ("policy_decoder" in k or "decoder" in k)]
+    if len(dec_indices) > 0:
+        model_cfg.decoder_layers = max(dec_indices) + 1
+
+    cvae_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and "cvae" in k]
+    if len(cvae_indices) > 0:
+        model_cfg.cvae_layers = max(cvae_indices) + 1
+
     model = ACTPolicy(config=model_cfg).to(device)
 
+    # Tự động đồng bộ tên key (đặc biệt là 50 trainable action queries và module prefix)
+    cleaned_state_dict = {}
+    for k, v in state_dict.items():
+        new_k = k
+        if new_k.startswith("module."):
+            new_k = new_k[7:]
+        if new_k == "action_queries" and "policy_decoder.action_queries" not in state_dict:
+            new_k = "policy_decoder.action_queries"
+        cleaned_state_dict[new_k] = v
+
     # Nạp trọng số
-    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
-    model.load_state_dict(state_dict, strict=True)
+    try:
+        model.load_state_dict(cleaned_state_dict, strict=True)
+    except Exception as e:
+        print(f"[!] Thử nạp linh hoạt (strict=False) do tên prefix: {e}")
+        model.load_state_dict(cleaned_state_dict, strict=False)
     model.eval()
     print("[✓] Đã nạp thành công 100% trọng số mô hình.")
 
@@ -291,6 +317,7 @@ def eval_pipeline(args):
         device=device,
         ensemble_m=args.ensemble_m,
         chunk_size=model_cfg.chunk_size,
+        target_size=(model_cfg.img_height, model_cfg.img_width),
     )
 
     # 6. Hiển thị Bảng Báo Cáo Chi Tiết

@@ -1,0 +1,41 @@
+# ==============================================================================
+# OpenArm ACT Pipeline & Simulation Requirements
+# System: Windows / WSL 2 (Ubuntu 22.04 / 24.04 LTS)
+# Python: >= 3.8, < 3.12 (Khuyến nghị Python 3.10)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Deep Learning Framework (ACT Policy & CVAE Architecture)
+# ------------------------------------------------------------------------------
+# Khuyến nghị cài đặt PyTorch với CUDA:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0
+torchvision>=0.15.0
+
+# ------------------------------------------------------------------------------
+# 2. Xử lý Dữ liệu & Tính toán Ma trận (Data & Math)
+# ------------------------------------------------------------------------------
+numpy>=1.22.0,<2.0.0
+scipy>=1.10.0
+h5py>=3.7.0
+
+# ------------------------------------------------------------------------------
+# 3. Thị giác Máy tính & Camera Cảm biến Độ sâu (Computer Vision & Sensors)
+# ------------------------------------------------------------------------------
+opencv-python>=4.7.0
+# pyrealsense2: Dùng cho Camera Intel RealSense D435/D435i/D455 thu thập RGB-D
+# (Nếu trên kiến trúc ARM/Jetson cần build từ source, trên x86_64 cài qua pip)
+pyrealsense2>=2.54.0
+
+# ------------------------------------------------------------------------------
+# 4. Mô phỏng Song sinh số & Dashboard Web 3D (Simulation & WebSockets)
+# ------------------------------------------------------------------------------
+websockets>=10.0
+
+# ------------------------------------------------------------------------------
+# 5. Theo dõi Huấn luyện & Đánh giá Định lượng (Logging & Metrics)
+# ------------------------------------------------------------------------------
+tensorboard>=2.12.0
+matplotlib>=3.7.0
+tqdm>=4.65.0
+wandb>=0.15.0

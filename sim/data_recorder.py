@@ -1,43 +1,80 @@
 #!/usr/bin/env python3
-"""Record OpenArm ROS 2 topics at a fixed 50 Hz in ACT HDF5 format."""
+# -*- coding: utf-8 -*-
+"""
+Record synchronized OpenArm RGB-D demonstrations in ACT HDF5 format.
+
+Supports two synchronization architectures:
+1. 50Hz Periodic Timer with Zero-Order Hold (ZOH) Frame Buffer (Default, Recommended):
+   - Samples CAN bus motor joints (50Hz) and the latest RGB-D frame at exact 20ms intervals (dt=0.02s).
+   - Eliminates camera FPS bottlenecks and guarantees strict 50Hz HDF5 compliance with DATA_FORMAT_SPECIFICATION.md.
+2. Approximate Time Synchronizer (Legacy / High-FPS Camera):
+   - 1:1 camera-triggered callback via message_filters.ApproximateTimeSynchronizer.
+"""
 
 import argparse
 import json
 import os
-from pathlib import Path
+import sys
+import threading
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
 
 import h5py
 import cv2
 import numpy as np
-import rclpy
-from cv_bridge import CvBridge
-from rclpy.executors import ExternalShutdownException
-from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import Image, JointState
+
+# Reconfigure stdout for Windows unicode support
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+# Optional ROS 2 imports for cross-platform portability
+try:
+    import rclpy
+    from rclpy.executors import ExternalShutdownException
+    from rclpy.node import Node
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    import message_filters
+    from cv_bridge import CvBridge
+    from sensor_msgs.msg import Image, JointState
+    HAS_ROS2 = True
+except ImportError:
+    HAS_ROS2 = False
+    Node = object
+    ExternalShutdownException = Exception
+    CvBridge = None
+    Image = None
+    JointState = None
 
 
-JOINT_NAMES = [
+DEFAULT_JOINT_NAMES = [
     "left_j1", "left_j2", "left_j3", "left_j4",
     "left_j5", "left_j6", "left_j7", "left_gripper",
     "right_j1", "right_j2", "right_j3", "right_j4",
     "right_j5", "right_j6", "right_j7", "right_gripper",
 ]
-IMAGE_HEIGHT = 480
-IMAGE_WIDTH = 640
-FREQUENCY_HZ = 50
-DEPTH_SCALE = 0.001
-DEPTH_MIN_MM = 200
-DEPTH_MAX_MM = 1200
 
 
 class EpisodeWriter:
+    """
+    Quản lý việc ghi dữ liệu HDF5 chuẩn ACT cho 1 Episode theo DATA_FORMAT_SPECIFICATION.md.
+    """
     def __init__(
         self,
         output_dir: Path,
         episode_name: str,
-        batch_size: int,
+        batch_size: int = 10,
+        frequency_hz: float = 50.0,
+        img_height: int = 480,
+        img_width: int = 640,
+        depth_scale: float = 0.001,
+        depth_min_mm: int = 200,
+        depth_max_mm: int = 1200,
+        joint_names: Optional[List[str]] = None,
         is_sim: bool = False,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -46,74 +83,87 @@ class EpisodeWriter:
         if self.partial_path.exists() or self.final_path.exists():
             raise FileExistsError(f"Episode already exists: {episode_name}")
 
+        self.joint_names = joint_names or DEFAULT_JOINT_NAMES
+        self.num_joints = len(self.joint_names)
+        self.frequency_hz = float(frequency_hz)
+        self.img_height = int(img_height)
+        self.img_width = int(img_width)
+        self.depth_scale = float(depth_scale)
+        self.depth_min_mm = int(depth_min_mm)
+        self.depth_max_mm = int(depth_max_mm)
+        self.batch_size = int(batch_size)
+
         self.file = h5py.File(self.partial_path, "x", libver="latest")
         observations = self.file.create_group("observations")
         images = observations.create_group("images")
+
         self.datasets = {
             "chest_rgb": images.create_dataset(
                 "chest_rgb",
-                shape=(0, IMAGE_HEIGHT, IMAGE_WIDTH, 3),
-                maxshape=(None, IMAGE_HEIGHT, IMAGE_WIDTH, 3),
-                chunks=(1, IMAGE_HEIGHT, IMAGE_WIDTH, 3),
+                shape=(0, self.img_height, self.img_width, 3),
+                maxshape=(None, self.img_height, self.img_width, 3),
+                chunks=(1, self.img_height, self.img_width, 3),
                 dtype=np.uint8,
                 compression="lzf",
             ),
             "chest_depth": images.create_dataset(
                 "chest_depth",
-                shape=(0, IMAGE_HEIGHT, IMAGE_WIDTH),
-                maxshape=(None, IMAGE_HEIGHT, IMAGE_WIDTH),
-                chunks=(1, IMAGE_HEIGHT, IMAGE_WIDTH),
+                shape=(0, self.img_height, self.img_width),
+                maxshape=(None, self.img_height, self.img_width),
+                chunks=(1, self.img_height, self.img_width),
                 dtype=np.uint16,
                 compression="lzf",
             ),
             "qpos": observations.create_dataset(
                 "qpos",
-                shape=(0, 16),
-                maxshape=(None, 16),
-                chunks=(batch_size, 16),
+                shape=(0, self.num_joints),
+                maxshape=(None, self.num_joints),
+                chunks=(self.batch_size, self.num_joints),
                 dtype=np.float32,
             ),
             "qvel": observations.create_dataset(
                 "qvel",
-                shape=(0, 16),
-                maxshape=(None, 16),
-                chunks=(batch_size, 16),
+                shape=(0, self.num_joints),
+                maxshape=(None, self.num_joints),
+                chunks=(self.batch_size, self.num_joints),
                 dtype=np.float32,
             ),
             "effort": observations.create_dataset(
                 "effort",
-                shape=(0, 16),
-                maxshape=(None, 16),
-                chunks=(batch_size, 16),
+                shape=(0, self.num_joints),
+                maxshape=(None, self.num_joints),
+                chunks=(self.batch_size, self.num_joints),
                 dtype=np.float32,
             ),
             "action": self.file.create_dataset(
                 "action",
-                shape=(0, 16),
-                maxshape=(None, 16),
-                chunks=(batch_size, 16),
+                shape=(0, self.num_joints),
+                maxshape=(None, self.num_joints),
+                chunks=(self.batch_size, self.num_joints),
                 dtype=np.float32,
             ),
             "timestamp_ns": self.file.create_dataset(
                 "timestamp_ns",
                 shape=(0,),
                 maxshape=(None,),
-                chunks=(batch_size,),
+                chunks=(self.batch_size,),
                 dtype=np.int64,
             ),
         }
+
+        # Metadata attributes chuẩn hóa theo DATA_FORMAT_SPECIFICATION.md
         self.file.attrs["sim"] = bool(is_sim)
-        self.file.attrs["frequency_hz"] = FREQUENCY_HZ
+        self.file.attrs["frequency_hz"] = self.frequency_hz
+        self.file.attrs["control_dt"] = float(1.0 / self.frequency_hz)
         self.file.attrs["robot_type"] = "OpenArm_Bimanual_16DOF"
-        self.file.attrs["num_joints"] = 16
-        self.file.attrs["depth_scale"] = DEPTH_SCALE
-        self.file.attrs["depth_range_m"] = np.asarray([0.2, 1.2], dtype=np.float32)
+        self.file.attrs["num_joints"] = self.num_joints
+        self.file.attrs["depth_scale"] = self.depth_scale
+        self.file.attrs["depth_range_m"] = np.asarray([self.depth_min_mm / 1000.0, self.depth_max_mm / 1000.0], dtype=np.float32)
         self.file.attrs["action_representation"] = "absolute_joint_position"
-        self.file.attrs["joint_names_json"] = json.dumps(JOINT_NAMES)
+        self.file.attrs["joint_names_json"] = json.dumps(self.joint_names)
         self.file.attrs["complete"] = False
         self.file.attrs["created_at"] = datetime.now().astimezone().isoformat()
 
-        self.batch_size = batch_size
         self.buffers = {name: [] for name in self.datasets}
         self.sample_count = 0
         self.first_timestamp_ns = None
@@ -165,24 +215,30 @@ class EpisodeWriter:
 
 
 class ACTDataRecorder(Node):
+    """
+    ROS 2 Node thu thập dữ liệu OpenArm đồng bộ.
+    Hỗ trợ 2 chế độ:
+    - periodic_zoh (mặc định): Timer cố định 50Hz, đọc góc CAN bus tức thì và frame ảnh mới nhất từ bộ đệm (ZOH).
+    - approximate: ApproximateTimeSynchronizer truyền thống chờ khung hình camera.
+    """
     def __init__(self, args, writer: EpisodeWriter):
+        if not HAS_ROS2:
+            raise RuntimeError("ROS 2 (rclpy) chưa được cài đặt trong môi trường này.")
+
         super().__init__("openarm_act_data_recorder")
         self.args = args
         self.writer = writer
         self.bridge = CvBridge()
         self.rejected_samples = 0
-        self.recording_timestamp_ns = None
+        self.last_timestamp_ns = -1
+        self.lock = threading.Lock()
 
-        # Every input comes exclusively from three ROS 2 subscriptions. Callbacks
-        # cache a complete RGB-D pair and the latest joint state; the 50 Hz timer
-        # samples those values. A 25 Hz camera frame is therefore intentionally
-        # used for two dataset timesteps while the 100 Hz joint state is downsampled.
-        self.latest_rgb = None
-        self.latest_rgb_stamp_ns = None
-        self.latest_depth = None
-        self.latest_depth_stamp_ns = None
-        self.latest_camera_pair = None
-        self.latest_state = None
+        # Bộ đệm cảm biến cho chế độ Periodic ZOH
+        self.latest_rgb_msg = None
+        self.latest_depth_msg = None
+        self.latest_state_msg = None
+        self.latest_command_msg = None
+        self.warmup_logged = False
 
         camera_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -194,35 +250,62 @@ class ACTDataRecorder(Node):
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
-        self.rgb_sub = self.create_subscription(
-            Image, args.rgb_topic, self._on_rgb, camera_qos
-        )
-        self.depth_sub = self.create_subscription(
-            Image, args.depth_topic, self._on_depth, camera_qos
-        )
-        self.state_sub = self.create_subscription(
-            JointState, args.state_topic, self._on_state, joint_qos
-        )
-        self.record_timer = self.create_timer(1.0 / FREQUENCY_HZ, self._record_latest)
-        self.get_logger().info(
-            "Subscribed to RGB, depth, and joint state ROS 2 topics; recording "
-            "their latest complete samples at 50 Hz. "
-            "Press Ctrl+C to finish the episode."
-        )
 
-    @staticmethod
-    def _timestamp_ns(message):
-        return (
-            message.header.stamp.sec * 1_000_000_000
-            + message.header.stamp.nanosec
-        )
+        if self.args.sync_mode == "periodic_zoh":
+            # 1. Đăng ký nhận tin tức thời từ các cảm biến độc lập
+            self.create_subscription(Image, args.rgb_topic, self._on_rgb, camera_qos)
+            self.create_subscription(Image, args.depth_topic, self._on_depth, camera_qos)
+            self.create_subscription(JointState, args.state_topic, self._on_state, joint_qos)
+            self.create_subscription(JointState, args.command_topic, self._on_command, joint_qos)
 
-    @staticmethod
-    def _ordered_values(message: JointState, field: str):
+            # 2. Timer chu kỳ lấy mẫu cố định (ví dụ: 50.0Hz -> 20.0ms)
+            timer_period = 1.0 / self.args.frequency_hz
+            self.timer = self.create_timer(timer_period, self._on_periodic_timer)
+            self.get_logger().info(
+                f"[*] Khởi động ACT Data Recorder chế độ Periodic ZOH tại {self.args.frequency_hz} Hz (chu kỳ {timer_period*1000:.1f}ms). "
+                f"Nhấn Ctrl+C để kết thúc episode."
+            )
+        else:
+            # Chế độ Approximate Time Synchronizer truyền thống
+            subscribers = [
+                message_filters.Subscriber(self, Image, args.rgb_topic, qos_profile=camera_qos),
+                message_filters.Subscriber(self, Image, args.depth_topic, qos_profile=camera_qos),
+                message_filters.Subscriber(self, JointState, args.state_topic, qos_profile=joint_qos),
+                message_filters.Subscriber(self, JointState, args.command_topic, qos_profile=joint_qos),
+            ]
+            self.sync = message_filters.ApproximateTimeSynchronizer(
+                subscribers,
+                queue_size=25,
+                slop=args.sync_tolerance_ms / 1000.0,
+            )
+            self.sync.registerCallback(self._on_approx_sample)
+            self.get_logger().info(
+                f"[*] Khởi động ACT Data Recorder chế độ Approximate Synchronizer. Nhấn Ctrl+C để kết thúc episode."
+            )
+
+    def _on_rgb(self, msg):
+        with self.lock:
+            self.latest_rgb_msg = msg
+
+    def _on_depth(self, msg):
+        with self.lock:
+            self.latest_depth_msg = msg
+
+    def _on_state(self, msg):
+        with self.lock:
+            self.latest_state_msg = msg
+
+    def _on_command(self, msg):
+        with self.lock:
+            self.latest_command_msg = msg
+
+    def _ordered_values(self, message: JointState, field: str):
         raw_values = getattr(message, field)
-        if len(raw_values) != 16:
+        expected_joints = self.writer.joint_names
+        expected_count = len(expected_joints)
+        if len(raw_values) != expected_count:
             raise ValueError(
-                f"expected 16 {field} values, received {len(raw_values)}"
+                f"expected {expected_count} {field} values, received {len(raw_values)}"
             )
         if not message.name:
             values = np.asarray(raw_values, dtype=np.float32)
@@ -230,10 +313,10 @@ class ACTDataRecorder(Node):
             if len(message.name) != len(raw_values):
                 raise ValueError(f"joint name and {field} lengths differ")
             by_name = dict(zip(message.name, raw_values))
-            missing = [name for name in JOINT_NAMES if name not in by_name]
+            missing = [name for name in expected_joints if name not in by_name]
             if missing:
                 raise ValueError(f"missing joints: {missing}")
-            values = np.asarray([by_name[name] for name in JOINT_NAMES], dtype=np.float32)
+            values = np.asarray([by_name[name] for name in expected_joints], dtype=np.float32)
         if not np.all(np.isfinite(values)):
             raise ValueError("joint values contain NaN or infinity")
         return values
@@ -252,6 +335,24 @@ class ACTDataRecorder(Node):
                     rgb,
                     (IMAGE_WIDTH, IMAGE_HEIGHT),
                     interpolation=cv2.INTER_AREA,
+    def _process_and_record(self, rgb_msg, depth_msg, state_msg, command_msg, timestamp_ns):
+        try:
+            if timestamp_ns <= self.last_timestamp_ns:
+                self._reject("Rejected duplicate or non-monotonic timestamp")
+                return
+
+            rgb = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
+            depth = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
+
+            expected_rgb_shape = (self.writer.img_height, self.writer.img_width, 3)
+            expected_depth_shape = (self.writer.img_height, self.writer.img_width)
+            if rgb.shape != expected_rgb_shape:
+                raise ValueError(
+                    f"RGB shape must be {expected_rgb_shape}, got {rgb.shape}"
+                )
+            if depth.shape != expected_depth_shape:
+                raise ValueError(
+                    f"depth shape must be {expected_depth_shape}, got {depth.shape}"
                 )
             self.latest_rgb = np.asarray(rgb, dtype=np.uint8).copy()
             self.latest_rgb_stamp_ns = self._timestamp_ns(message)
@@ -274,6 +375,17 @@ class ACTDataRecorder(Node):
                 )
             self.latest_depth = np.where(
                 depth == 0, 0, np.clip(depth, DEPTH_MIN_MM, DEPTH_MAX_MM)
+
+            qpos = self._ordered_values(state_msg, "position")
+            qvel = self._ordered_values(state_msg, "velocity")
+            effort = self._ordered_values(state_msg, "effort")
+            action = self._ordered_values(command_msg, "position")
+
+            # Xử lý độ sâu: giữ 0 cho pixel mất tín hiệu, cắt khoảng cách theo working range quy định
+            depth = np.where(
+                depth == 0,
+                0,
+                np.clip(depth, self.writer.depth_min_mm, self.writer.depth_max_mm),
             ).astype(np.uint16, copy=False)
             self.latest_depth_stamp_ns = self._timestamp_ns(message)
             self._update_camera_pair()
@@ -327,53 +439,103 @@ class ACTDataRecorder(Node):
                 action,
                 self.recording_timestamp_ns,
             )
-            if self.writer.sample_count % 250 == 0:
-                seconds = self.writer.sample_count / FREQUENCY_HZ
+            self.last_timestamp_ns = timestamp_ns
+
+            if self.writer.sample_count % int(self.writer.frequency_hz * 5) == 0:
+                seconds = self.writer.sample_count / self.writer.frequency_hz
                 self.get_logger().info(
-                    f"Recorded {self.writer.sample_count} samples ({seconds:.1f} s)"
+                    f"Recorded {self.writer.sample_count} samples ({seconds:.1f} s @ {self.writer.frequency_hz:.1f}Hz)"
                 )
             if self.args.max_duration > 0:
-                elapsed = self.writer.sample_count / FREQUENCY_HZ
+                elapsed = self.writer.sample_count / self.writer.frequency_hz
                 if elapsed >= self.args.max_duration:
                     self.get_logger().info("Maximum duration reached; stopping episode")
                     rclpy.shutdown()
         except Exception as error:
             self._reject(f"Could not record latest ROS 2 topic samples: {error}")
 
+    def _on_periodic_timer(self):
+        """Callback định kỳ kích hoạt chính xác theo chu kỳ frequency_hz (50Hz = 20ms)."""
+        with self.lock:
+            rgb_msg = self.latest_rgb_msg
+            depth_msg = self.latest_depth_msg
+            state_msg = self.latest_state_msg
+            command_msg = self.latest_command_msg
+
+        # Kiểm tra điều kiện khởi động luồng cảm biến (Warm-up check)
+        if rgb_msg is None or depth_msg is None or state_msg is None or command_msg is None:
+            if not self.warmup_logged:
+                waiting = []
+                if rgb_msg is None: waiting.append("RGB Image")
+                if depth_msg is None: waiting.append("Depth Image")
+                if state_msg is None: waiting.append("Joint States")
+                if command_msg is None: waiting.append("Joint Commands")
+                self.get_logger().info(
+                    f"[*] Đang chờ luồng cảm biến xuất hiện: {', '.join(waiting)}...",
+                    throttle_duration_sec=2.0
+                )
+            return
+
+        self.warmup_logged = True
+        timestamp_ns = self.get_clock().now().nanoseconds
+        self._process_and_record(rgb_msg, depth_msg, state_msg, command_msg, timestamp_ns)
+
+    def _on_approx_sample(self, rgb_msg, depth_msg, state_msg, command_msg):
+        """Callback đồng bộ xấp xỉ truyền thống (khi chạy ở mode approximate)."""
+        timestamp_ns = rgb_msg.header.stamp.sec * 1_000_000_000 + rgb_msg.header.stamp.nanosec
+        self._process_and_record(rgb_msg, depth_msg, state_msg, command_msg, timestamp_ns)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", default="data_set")
-    parser.add_argument("--episode", default=None)
-    parser.add_argument("--rgb-topic", default="/camera/act/rgb")
-    parser.add_argument("--depth-topic", default="/camera/act/depth")
-    parser.add_argument("--state-topic", default="/openarm/joint_states")
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=10,
-        help="HDF5 write batch size; unrelated to the ACT action chunk size",
-    )
-    parser.add_argument("--max-duration", type=float, default=25.0)
-    parser.add_argument(
-        "--sim",
-        action="store_true",
-        help="mark the episode as simulation data",
-    )
+    parser.add_argument("--output-dir", default="dataset", help="Thư mục lưu trữ HDF5")
+    parser.add_argument("--episode", default=None, help="Tên episode (tùy chọn, mặc định sinh theo thời gian)")
+    parser.add_argument("--frequency-hz", type=float, default=50.0, help="Tần số lấy mẫu ghi dữ liệu cố định (mặc định: 50.0 Hz)")
+    parser.add_argument("--sync-mode", type=str, default="periodic_zoh", choices=["periodic_zoh", "approximate"],
+                        help="Cơ chế đồng bộ: 'periodic_zoh' (khuyên dùng - 50Hz chuẩn ZOH) hoặc 'approximate' (chờ camera)")
+    parser.add_argument("--rgb-topic", default="/camera/act/rgb", help="ROS 2 topic ảnh RGB")
+    parser.add_argument("--depth-topic", default="/camera/act/depth", help="ROS 2 topic ảnh Depth")
+    parser.add_argument("--state-topic", default="/openarm/joint_states", help="ROS 2 topic trạng thái khớp thực tế")
+    parser.add_argument("--command-topic", default="/openarm/joint_commands", help="ROS 2 topic lệnh góc điều khiển")
+    parser.add_argument("--sync-tolerance-ms", type=float, default=12.0, help="Dung sai đồng bộ cho mode approximate (ms)")
+    parser.add_argument("--img-height", type=int, default=480, help="Chiều cao ảnh RGB-D (mặc định: 480)")
+    parser.add_argument("--img-width", type=int, default=640, help="Chiều rộng ảnh RGB-D (mặc định: 640)")
+    parser.add_argument("--depth-scale", type=float, default=0.001, help="Hệ số quy đổi depth (mặc định: 0.001)")
+    parser.add_argument("--depth-min-mm", type=int, default=200, help="Khoảng cách depth tối thiểu hợp lệ mm (mặc định: 200)")
+    parser.add_argument("--depth-max-mm", type=int, default=1200, help="Khoảng cách depth tối đa hợp lệ mm (mặc định: 1200)")
+    parser.add_argument("--num-joints", type=int, default=16, help="Số lượng khớp robot (mặc định: 16)")
+    parser.add_argument("--batch-size", type=int, default=10, help="HDF5 write batch size")
+    parser.add_argument("--max-duration", type=float, default=25.0, help="Thời lượng ghi tối đa của 1 episode (giây, mặc định: 25.0s)")
+    parser.add_argument("--sim", action="store_true", help="Đánh dấu episode là dữ liệu mô phỏng Simulation")
+
     args = parser.parse_args()
-    if args.batch_size <= 0 or args.max_duration < 0:
-        parser.error("invalid batch size or maximum duration")
+
+    if args.frequency_hz <= 0:
+        parser.error("Tần số sampling frequency-hz phải > 0")
+    if args.sync_tolerance_ms <= 0 or args.batch_size <= 0 or args.max_duration < 0:
+        parser.error("invalid tolerance, batch size, or maximum duration")
+
+    if not HAS_ROS2:
+        print("[X] Lỗi: Cần môi trường ROS 2 (rclpy) để khởi động node thu thập dữ liệu trên Robot/IPC.", file=sys.stderr)
+        sys.exit(1)
 
     episode_name = args.episode or datetime.now().strftime("episode_%Y%m%d_%H%M%S")
     if not episode_name.replace("-", "").replace("_", "").isalnum():
         parser.error("episode name may contain only letters, numbers, '-' and '_'")
 
     writer = EpisodeWriter(
-        Path(args.output_dir).expanduser(),
-        episode_name,
-        args.batch_size,
+        output_dir=Path(args.output_dir).expanduser(),
+        episode_name=episode_name,
+        batch_size=args.batch_size,
+        frequency_hz=args.frequency_hz,
+        img_height=args.img_height,
+        img_width=args.img_width,
+        depth_scale=args.depth_scale,
+        depth_min_mm=args.depth_min_mm,
+        depth_max_mm=args.depth_max_mm,
         is_sim=args.sim,
     )
+
     rclpy.init()
     node = ACTDataRecorder(args, writer)
     try:
@@ -388,7 +550,7 @@ def main():
         if final_path:
             print(
                 f"[Recorder] Saved {writer.sample_count} samples to {final_path} "
-                f"({node.rejected_samples} rejected)",
+                f"({node.rejected_samples} rejected, Frequency: {args.frequency_hz}Hz)",
                 flush=True,
             )
         else:
