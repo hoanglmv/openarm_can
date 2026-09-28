@@ -113,9 +113,21 @@ class CheckpointManager:
         # 1. Tải trọng số mô hình
         state_dict = checkpoint["model_state_dict"] if "model_state_dict" in checkpoint else checkpoint
         
+        # Chuẩn hóa prefix cho các checkpoint khác nhau (module., model., action_queries)
+        adapted_state_dict = {}
+        for k, v in state_dict.items():
+            clean_k = k
+            if clean_k.startswith("module."):
+                clean_k = clean_k[7:]
+            if clean_k.startswith("model."):
+                clean_k = clean_k[6:]
+            if clean_k == "action_queries" or clean_k == "model.action_queries":
+                clean_k = "policy_decoder.action_queries"
+            adapted_state_dict[clean_k] = v
+
         # Nếu model bọc trong DataParallel
         target_model = model.module if hasattr(model, "module") else model
-        missing, unexpected = target_model.load_state_dict(state_dict, strict=strict)
+        missing, unexpected = target_model.load_state_dict(adapted_state_dict, strict=strict)
         if len(missing) > 0:
             print(f"[!] Cảnh báo các keys bị thiếu khi load: {missing}")
         if len(unexpected) > 0:

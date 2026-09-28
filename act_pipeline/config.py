@@ -88,3 +88,8 @@ class EvalConfig:
     temporal_ensemble: bool = True
     ensemble_m: float = 0.01        # Hệ số suy giảm trọng số exp(-m * i)
     device: str = "cuda"
+    
+    # Hardware & Real-Time Control
+    control_hz: float = 50.0        # Tần số chu kỳ điều khiển robot (Hz)
+    camera_fps: int = 60            # Tần số camera (FPS, ví dụ: 25, 30, 60)
+    non_blocking_cam: bool = True   # Chế độ đọc camera non-blocking tránh nghẽn vòng lặp
