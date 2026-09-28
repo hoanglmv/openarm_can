@@ -87,6 +87,9 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ action: "set_execution_mode", mode }));
+        if (mode !== "sim") {
+            ws.send(JSON.stringify({ action: "sync_robot_state" }));
+        }
     }
 }
 
@@ -211,6 +214,9 @@ function initWebSocket() {
                 } else if (!isReal) {
                     const badge = document.getElementById("ws-status-badge");
                     if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SIM</strong>";
+                }
+                if (msg.data.initial && msg.data.execution_mode && typeof setGlobalExecutionMode === "function") {
+                    setGlobalExecutionMode(msg.data.execution_mode, false);
                 }
                 if (typeof handleTelemetry === "function") {
                     handleTelemetry(msg.data);

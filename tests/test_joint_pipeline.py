@@ -7,7 +7,7 @@ def test_simulated_source_has_100_unique_samples_per_second():
     for _ in range(100):
         deadline += 0.01
         time.sleep(max(0.0, deadline - time.perf_counter()))
-        timestamps.append(time.time_ns())
+        timestamps.append(time.monotonic_ns())
 
     assert len(set(timestamps)) == 100
     assert all(right > left for left, right in zip(timestamps, timestamps[1:]))
