@@ -96,16 +96,17 @@ flowchart LR
 
 ---
 
-## 3. Lợi Thế Vượt Trội Của Kênh Chiều Sâu (Depth) Cho Bài Toán Gấp Vải Hai Tay
+## 3. Lợi Thế Vượt Trội Của Kênh Chiều Sâu (Depth) Cho Bài Toán Xào Nấu Hai Tay (Cooking & Stir-Frying)
 
-1. **Đo đạc chính xác chiều cao mặt phẳng đáy ($Z = 0$)**:
-   - Camera RGB thông thường dễ bị đánh lừa bởi bóng đổ của cánh tay robot.
-   - Kênh Depth cung cấp độ cao tuyệt đối tính bằng milimét. Robot biết chính xác khi nào 2 đầu kẹp cách mặt vải $1\text{ cm}$ để đóng kẹp, **loại bỏ hoàn toàn lỗi đâm đầu kẹp xuống bàn làm quá dòng motor**.
-2. **Nhận diện độ phồng của nếp gấp (Fold Wrinkles & Creases)**:
-   - Áo thun trải trên mặt bàn có thể có nếp nhăn cùng màu với thân áo khiến ảnh RGB khó phát hiện.
-   - Kênh Depth làm nổi bật ngay lập tức độ gồ ghề không gian của từng nếp vải.
-3. **Quỹ đạo vòm cung Parabol 3D hoàn hảo**:
-   - Hai cánh tay nâng nếp vải lên đúng độ cao $12 - 15\text{ cm}$ so với mặt bàn theo trục $Z$ và lật sang đối xứng, giúp tấm vải tự rủ phẳng phiu tự nhiên trước khi hạ xuống.
+1. **Đo đạc chính xác độ sâu lòng chảo và mặt cong Parabol ($Z_{\text{wok}}$)**:
+   - Camera RGB thông thường dễ bị đánh lừa bởi bóng đổ của cánh tay và thành chảo cao.
+   - Kênh Depth cung cấp độ sâu thực tế từng milimét. Robot xác định chính xác vị trí tiếp xúc đáy chảo để đầu vá trượt êm ái sát lòng chảo, **loại bỏ hoàn toàn lỗi đâm gãy vá xào hoặc gây kẹt motor quá dòng**.
+2. **Nhận diện phân bố và khối lượng nguyên liệu trong chảo**:
+   - Thức ăn (thịt, rau củ) có thể cùng dải màu với gia vị hoặc sốt xào khiến ảnh RGB khó phân biệt độ dày.
+   - Kênh Depth đo đạc trực tiếp độ gồ ghề của lớp thực phẩm trong lòng chảo, giúp Policy tự động vi chỉnh góc nghiêng và độ sâu của xẻng phù hợp với lượng nguyên liệu thực tế.
+3. **Phối hợp 3D không gian giữa hai tay (Bimanual 3D Coordination)**:
+   - Tay trái giữ/xốc chảo và tay phải cầm xẻng đảo cùng chuyển động trong không gian 3 chiều.
+   - Nhờ thông tin chiều sâu $Z$, mô hình phối hợp đồng bộ biên độ xốc chảo của tay trái với nhịp xúc lật của tay phải, chống va chạm chéo giữa 2 cánh tay khi thao tác ở tốc độ cao.
 
 ---
 *Xem giao diện đồ họa tương tác HTML đầy đủ tại: [ACT_ARCHITECTURE.html](file:///c:/Users/Admin/Desktop/20261/VinRobotics/OpenArm/openarm_can/ACT_ARCHITECTURE.html).*

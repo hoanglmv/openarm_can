@@ -2,12 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 Production Hardware Inference Script for Bimanual OpenArm (16-DOF) + Chest RGB-D
+Tác vụ: Thao tác tự động hai tay (Bimanual Manipulation / Cooking / Pick-and-Place).
+Nối trực tiếp từ Camera RGB-D -> Model ACT -> Temporal Ensembling -> SocketCAN 16 Động cơ Damiao.
+
 Tích hợp điều khiển quỹ đạo mượt mà (Trajectory Generator & S-Curve Smoothing):
 1. S-Curve Cosine Warm-up: Hòa nhập êm ái từ vị trí thực tế tới tư thế bắt đầu (triệt tiêu giật khởi động).
 2. Trajectory Velocity & Acceleration Clamping: Bọc từng khớp theo đặc tính động cơ (DM8009, DM4340, DM4310).
 3. Temporal Ensembling: Làm mượt dự đoán hành động ACT chunk theo hàm trọng số exp(-m*i).
 4. Gripper Dual-Mode: Hỗ trợ POS_FORCE với giới hạn lực kẹp an toàn (torque_pu=0.15) hoặc MIT Mode.
 5. Safe S-Curve Home / Soft E-Stop: Đưa robot lùi về Home an toàn bằng quỹ đạo cong trước khi ngắt mô-men, chống rơi tự do.
+6. 3 tầng ngắt dừng an toàn: Dừng tự nhiên khi về Home (|Δq| < 0.008 rad liên tục 1 giây), Timeout tối đa, Dừng khẩn cấp Soft E-Stop.
 """
 
 import os

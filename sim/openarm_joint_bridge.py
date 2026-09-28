@@ -17,12 +17,17 @@ import socket
 import time
 from typing import List
 
-import rclpy
-from rclpy.executors import ExternalShutdownException
-from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import JointState
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+try:
+    import rclpy
+    from rclpy.executors import ExternalShutdownException
+    from rclpy.node import Node
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import JointState
+    from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+except ImportError:
+    import sys
+    print("[ROS Bridge] ROS 2 (rclpy/sensor_msgs) not found. ROS 2 bridge disabled.")
+    sys.exit(0)
 
 JOINT_NAMES = [
     "left_j1", "left_j2", "left_j3", "left_j4",

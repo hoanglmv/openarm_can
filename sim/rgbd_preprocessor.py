@@ -5,16 +5,21 @@ import argparse
 import threading
 
 import cv2
-import message_filters
-import rclpy
-from builtin_interfaces.msg import Time
-from cv_bridge import CvBridge
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.executors import ExternalShutdownException
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import Image
+try:
+    import message_filters
+    import rclpy
+    from builtin_interfaces.msg import Time
+    from cv_bridge import CvBridge
+    from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+    from rclpy.executors import ExternalShutdownException
+    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.node import Node
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import Image
+except ImportError:
+    import sys
+    print("[RGB-D Preprocessor] ROS 2 dependencies not found. Preprocessor disabled.")
+    sys.exit(0)
 
 
 class RGBDPreprocessor(Node):
