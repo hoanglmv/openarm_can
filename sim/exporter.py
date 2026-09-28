@@ -310,14 +310,9 @@ class JointStateExporter100Hz:
                 for mid in range(1, 17):
                     m = self.server.motors.get(mid)
                     if m:
-                        if mid == 8:
+                        if mid in (8, 16):
                             raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
                             ratio = (1.0 - raw_ratio) if getattr(m, 'invert', False) else raw_ratio
-                            pos = ratio * 0.043
-                            act = getattr(m, 'q_target', pos)
-                        elif mid == 16:
-                            raw_ratio = max(0.0, min(1.0, abs(m.q) / 1.20))
-                            ratio = raw_ratio if getattr(m, 'invert', False) else (1.0 - raw_ratio)
                             pos = ratio * 0.043
                             act = getattr(m, 'q_target', pos)
                         else:

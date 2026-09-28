@@ -176,14 +176,14 @@ def test_gripper_d4310_and_origins():
     server._send_gripper_command(m_left_grip, 0.0)
     server._send_gripper_command(m_right_grip, 0.0)
     assert abs(m_left_grip.q_target - 0.0) < 1e-5, f"Left gripper closed target must be 0.0 rad, got {m_left_grip.q_target}"
-    assert abs(m_right_grip.q_target - (+1.20)) < 1e-5, f"Right gripper closed target must be +1.20 rad, got {m_right_grip.q_target}"
+    assert abs(m_right_grip.q_target - 0.0) < 1e-5, f"Right gripper closed target must be 0.0 rad, got {m_right_grip.q_target}"
 
     # Test Fully Open (0.043 m / 43 mm)
     server._send_gripper_command(m_left_grip, 0.043)
     server._send_gripper_command(m_right_grip, 0.043)
     assert abs(m_left_grip.q_target - (-1.20)) < 1e-5, f"Left gripper open target must be -1.20 rad, got {m_left_grip.q_target}"
-    assert abs(m_right_grip.q_target - 0.0) < 1e-5, f"Right gripper open target must be 0.0 rad, got {m_right_grip.q_target}"
-    print("✓ Gripper command mapping verified: Left closes at 0.0 rad, opens at -1.20 rad; Right closes at +1.20 rad, opens at 0.0 rad")
+    assert abs(m_right_grip.q_target - (-1.20)) < 1e-5, f"Right gripper open target must be -1.20 rad, got {m_right_grip.q_target}"
+    print("✓ Gripper command mapping verified: Both Left and Right close at 0.0 rad, open at -1.20 rad")
 
     # 3. Test Gripper Feedback to_dict() display in mm
     # Left Gripper
@@ -195,13 +195,13 @@ def test_gripper_d4310_and_origins():
     assert abs(m_left_grip.to_dict()["q_deg"] - 43.0) < 0.5
 
     # Right Gripper
-    m_right_grip.q = 1.20
-    assert abs(m_right_grip.to_dict()["q_deg"] - 0.0) < 0.5, f"Right gripper closed at 1.20 rad should be 0 mm, got {m_right_grip.to_dict()['q_deg']}"
-    m_right_grip.q = 0.60
-    assert abs(m_right_grip.to_dict()["q_deg"] - 21.5) < 0.5, f"Right gripper half open at 0.60 rad should be 21.5 mm, got {m_right_grip.to_dict()['q_deg']}"
     m_right_grip.q = 0.0
-    assert abs(m_right_grip.to_dict()["q_deg"] - 43.0) < 0.5, f"Right gripper open at 0.0 rad should be 43 mm, got {m_right_grip.to_dict()['q_deg']}"
-    print("✓ Gripper feedback to_dict() verified: Left (0 rad -> 0mm, -1.2 rad -> 43mm), Right (1.2 rad -> 0mm, 0 rad -> 43mm)")
+    assert abs(m_right_grip.to_dict()["q_deg"] - 0.0) < 0.5, f"Right gripper closed at 0.0 rad should be 0 mm, got {m_right_grip.to_dict()['q_deg']}"
+    m_right_grip.q = -0.60
+    assert abs(m_right_grip.to_dict()["q_deg"] - 21.5) < 0.5, f"Right gripper half open at -0.60 rad should be 21.5 mm, got {m_right_grip.to_dict()['q_deg']}"
+    m_right_grip.q = -1.20
+    assert abs(m_right_grip.to_dict()["q_deg"] - 43.0) < 0.5, f"Right gripper open at -1.20 rad should be 43 mm, got {m_right_grip.to_dict()['q_deg']}"
+    print("✓ Gripper feedback to_dict() verified: Both Left and Right (0 rad -> 0mm, -1.2 rad -> 43mm)")
 
 
 def test_record_workflow():
