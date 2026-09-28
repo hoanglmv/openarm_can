@@ -3,9 +3,14 @@
 """Unit tests for sim/data_recorder.py and ACT HDF5 dataset compliance."""
 
 import os
+import sys
 import shutil
 import tempfile
 from pathlib import Path
+
+# Add project root to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import numpy as np
 import h5py
 import pytest

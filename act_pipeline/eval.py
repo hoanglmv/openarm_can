@@ -16,6 +16,7 @@ import time
 import json
 import glob
 import argparse
+import h5py
 from typing import Dict, List, Optional, Tuple, Any
 
 # Đảm bảo mã hóa UTF-8 an toàn trên Windows và Linux
@@ -30,7 +31,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import h5py
+from tqdm import tqdm
+# Đảm bảo import act_pipeline hoạt động độc lập bất kể CWD
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from act_pipeline.config import ModelConfig
 from act_pipeline.models.act_model import ACTPolicy
@@ -68,7 +71,7 @@ def evaluate_dataset_batch(
     action_std = stats["action_std"]
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc="[Eval] Đánh giá Dataset", leave=False, dynamic_ncols=True):
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
             actions = batch["actions"].to(device, non_blocking=True)
@@ -153,7 +156,7 @@ def simulate_episode_rollout(
         raw_pred_actions = []
         ensemble_pred_actions = []
 
-        for t in range(T):
+        for t in tqdm(range(T), desc=f"[Rollout] {os.path.basename(hdf5_path)}", leave=False, dynamic_ncols=True):
             # 1. Tiền xử lý RGB-D tại bước t
             rgb_t = raw_rgb[t] if raw_rgb.ndim == 4 else raw_rgb[t][..., :3]
             depth_t = raw_depth[t] if raw_depth is not None else None
