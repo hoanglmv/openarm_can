@@ -714,27 +714,42 @@
                             <span>Chế Độ Thực Thi (Execution Mode)</span>
                         </div>
                         <div class="act-modes-grid">
+                            <!-- Option 1: Chỉ Mô Phỏng -->
                             <label class="act-mode-option active" id="label-mode-preview">
                                 <input type="radio" name="act-mode-radio" id="radio-act-preview" value="preview" checked>
                                 <div class="act-mode-content">
                                     <div class="act-mode-heading">
-                                        <strong>3D Simulation Preview (Mô Phỏng 3D)</strong>
-                                        <span class="badge badge-accent">Khuyên dùng</span>
+                                        <strong>1. Chỉ Mô Phỏng 3D (Simulation Only)</strong>
+                                        <span class="badge badge-accent">An toàn 100%</span>
                                     </div>
                                     <p class="act-mode-desc">
-                                        Đọc telemetry thực tế từ 16 motor & camera làm input, dự đoán chunk 50 bước, vẽ đường path 3D và mô phỏng cử động an toàn (không gửi xung CAN).
+                                        Chỉ hiển thị chuyển động trên 3D Digital Twin và vẽ Future Path. Tuyệt đối không gửi xung CAN xuống robot thật (không cần bật động cơ).
                                     </p>
                                 </div>
                             </label>
+                            <!-- Option 2: Chỉ Robot Thật -->
                             <label class="act-mode-option act-mode-danger" id="label-mode-hardware">
-                                <input type="radio" name="act-mode-radio" id="radio-act-hardware" value="hardware">
+                                <input type="radio" name="act-mode-radio" id="radio-act-hardware" value="hardware_only">
                                 <div class="act-mode-content">
                                     <div class="act-mode-heading">
-                                        <strong>Physical Robot Control (Robot Thật)</strong>
+                                        <strong>2. Chỉ Robot Thật (Physical Robot Only)</strong>
                                         <span class="badge badge-warning">CAN Bus Real</span>
                                     </div>
                                     <p class="act-mode-desc">
-                                        Bơm xung điều khiển mượt mà qua S-Curve xuống 16 động cơ CAN bus ở 40Hz. Hãy kiểm tra đường path 3D trước khi kích hoạt!
+                                        Gửi lệnh vị trí trực tiếp xuống 16 động cơ robot thật. Mô hình 3D chỉ theo dõi góc phản hồi thực tế từ encoder (không chạy mô phỏng trước).
+                                    </p>
+                                </div>
+                            </label>
+                            <!-- Option 3: Chạy Cả 2 -->
+                            <label class="act-mode-option act-mode-dual" id="label-mode-dual">
+                                <input type="radio" name="act-mode-radio" id="radio-act-dual" value="dual">
+                                <div class="act-mode-content">
+                                    <div class="act-mode-heading">
+                                        <strong>3. Chạy Cả 2 (Dual: Mô Phỏng & Robot Thật)</strong>
+                                        <span class="badge badge-success">Đồng bộ Real-Time</span>
+                                    </div>
+                                    <p class="act-mode-desc">
+                                        Đồng thời vừa mô phỏng 3D + vẽ quỹ đạo tương lai, vừa bơm xung điều khiển vị trí trực tiếp xuống 16 động cơ robot thật theo thời gian thực.
                                     </p>
                                 </div>
                             </label>
@@ -987,18 +1002,18 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
     <script src="vendor/urdf-loader/URDFLoader.js?v=1"></script>
     
     <!-- Modular OpenArm Dashboard Architecture -->
-    <script src="js/config.js?v=12"></script>
-    <script src="js/network.js?v=19"></script>
-    <script src="js/three_scene.js?v=13"></script>
-    <script src="js/three_model.js?v=13"></script>
-    <script src="js/urdf_model.js?v=5"></script>
-    <script src="js/ui_sliders.js?v=12"></script>
-    <script src="js/ui_target.js?v=12"></script>
-    <script src="js/telemetry.js?v=20"></script>
-    <script src="js/dance_routines.js?v=12"></script>
-    <script src="js/dance_engine.js?v=12"></script>
-    <script src="js/future_path.js?v=1"></script>
-    <script src="js/ui_act_model.js?v=1"></script>
-    <script src="app.js?v=12"></script>
+    <script src="js/config.js?v=22"></script>
+    <script src="js/network.js?v=22"></script>
+    <script src="js/three_scene.js?v=22"></script>
+    <script src="js/three_model.js?v=22"></script>
+    <script src="js/urdf_model.js?v=22"></script>
+    <script src="js/ui_sliders.js?v=22"></script>
+    <script src="js/ui_target.js?v=22"></script>
+    <script src="js/telemetry.js?v=22"></script>
+    <script src="js/dance_routines.js?v=22"></script>
+    <script src="js/dance_engine.js?v=22"></script>
+    <script src="js/future_path.js?v=22"></script>
+    <script src="js/ui_act_model.js?v=22"></script>
+    <script src="app.js?v=22"></script>
 </body>
 </html>

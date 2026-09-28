@@ -485,7 +485,7 @@ class ModelInferenceEngine:
             self.latest_pred_timestamp = time.time()
             self.step_counter += 1
 
-            if control_mode == "hardware" and self.server:
+            if control_mode in ["hardware", "hardware_only", "dual", "both"] and self.server:
                 self._dispatch_hardware_commands(next_cmd)
 
             return {
@@ -527,8 +527,8 @@ class ModelInferenceEngine:
                     self.latest_pred_timestamp = time.time()
                     self.step_counter += 1
 
-                # 4. Dispatch commands if hardware mode is active
-                if self.control_mode == "hardware":
+                # 4. Dispatch commands if hardware or dual mode is active
+                if self.control_mode in ["hardware", "hardware_only", "dual", "both"]:
                     self._dispatch_hardware_commands(next_cmd)
 
                 # Measure actual FPS

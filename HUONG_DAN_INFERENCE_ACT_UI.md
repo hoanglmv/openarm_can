@@ -15,9 +15,10 @@ Tài liệu này hướng dẫn cách sử dụng tính năng **Inference Model 
      - 🔵 **Tay Trái (Left TCP)**: Đường cong neon **Cyan** (`#00e5ff`) + Waypoint dots.
      - 🟠 **Tay Phải (Right TCP)**: Đường cong neon **Orange** (`#ff6d00`) + Waypoint dots.
      - 🎯 **Target Goal Sphere**: Quả cầu đánh dấu vị trí đích tại bước $t=50$.
-3. **Hai Chế Độ Thực Thi An Toàn (Dual Execution Modes)**:
-   - 🛡️ **3D Simulation Preview (Mô Phỏng 3D)**: Lấy dữ liệu góc thực làm input, mô hình suy luận, vẽ đường cong 3D và mô phỏng cử động cánh tay trên Three.js. **Tuyệt đối KHÔNG gửi xung CAN xuống động cơ**, đảm bảo an toàn 100% khi thử nghiệm weights mới.
-   - ⚡ **Physical Robot Execution (Robot Thật)**: Bơm xung điều khiển mượt mà qua **S-Curve Warm-up** và **Trajectory Smoother** (giới hạn gia tốc, vận tốc động cơ Damiao DM8009, DM4340, DM4310) xuống 16 động cơ CAN bus ở 40Hz.
+3. **Ba Chế Độ Thực Thi Linh Hoạt (3 Execution Modes)**:
+   - **Chỉ Mô Phỏng 3D (Simulation Only)**: Lấy dữ liệu góc thực & camera làm input, mô hình suy luận, vẽ đường cong 3D và mô phỏng cử động cánh tay trên Three.js. **Tuyệt đối KHÔNG gửi xung CAN xuống động cơ**, không cần bật motor, an toàn 100% khi thử nghiệm weights mới.
+   - **Chỉ Robot Thật (Physical Robot Only)**: Bơm xung điều khiển mượt mà qua **S-Curve Warm-up** và **Trajectory Smoother** xuống 16 động cơ CAN bus ở 40Hz. Mô hình 3D chỉ theo dõi góc phản hồi thực tế đọc về từ encoder.
+   - **Chạy Cả 2 (Dual: Mô Phỏng & Robot Thật)**: Đồng thời vừa mô phỏng 3D + vẽ quỹ đạo tương lai (Future Action Path), vừa trực tiếp điều khiển 16 động cơ CAN bus của robot thật theo thời gian thực (Digital Twin song hành với Physical Robot).
 
 ---
 

@@ -1092,8 +1092,16 @@ class OpenArmDashboardServer:
                 ensemble_m=ensemble_m,
                 checkpoint_path=ckpt
             )
-            mode_desc = "3D MÔ PHỎNG AN TOÀN" if ctrl_mode == "preview" else "ROBOT THẬT (CAN BUS)"
-            notice_type = "info" if ctrl_mode == "preview" else "warning"
+            if ctrl_mode == "preview":
+                mode_desc = "CHỈ MÔ PHỎNG 3D (AN TOÀN)"
+                notice_type = "info"
+            elif ctrl_mode == "hardware_only":
+                mode_desc = "CHỈ ROBOT THẬT (CAN BUS)"
+                notice_type = "warning"
+            else:  # "dual" or "hardware"
+                mode_desc = "CHẠY CẢ 2 (MÔ PHỎNG & ROBOT THẬT)"
+                notice_type = "warning"
+
             if hasattr(self, 'loop') and self.loop:
                 asyncio.run_coroutine_threadsafe(
                     self.broadcast_notice(notice_type, f"Chạy Model Inference ACT: Chế độ {mode_desc} ({vel_scale:.2f}x speed)"),

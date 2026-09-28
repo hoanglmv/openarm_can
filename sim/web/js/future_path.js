@@ -161,61 +161,6 @@ function computeTCPPositions(action16) {
         return { left: null, right: null };
     }
 
-    if (openArmUrdfRobot && openArmModelMode === "urdf") {
-        // 1. Save current robot joint states
-        const savedJointValues = {};
-        for (let motorId = 1; motorId <= 16; motorId++) {
-            const jointName = motorToUrdfJoint[motorId];
-            if (openArmUrdfRobot.joints && openArmUrdfRobot.joints[jointName]) {
-                savedJointValues[jointName] = openArmUrdfRobot.joints[jointName].jointValue;
-            }
-        }
-
-        // 2. Set action vector joint angles
-        for (let motorId = 1; motorId <= 16; motorId++) {
-            const jointName = motorToUrdfJoint[motorId];
-            let val = action16[motorId - 1];
-            if (motorId === 1) val = -val;
-            if (motorId === 8 || motorId === 16) val = Math.max(0.0, Math.min(0.043, Math.abs(val)));
-
-            if (openArmUrdfRobot.joints && openArmUrdfRobot.joints[jointName]) {
-                openArmUrdfRobot.setJointValue(jointName, val);
-            }
-        }
-
-        // 3. Update world transformation matrices
-        openArmUrdfRobot.updateMatrixWorld(true);
-
-        const leftTcpLink =
-            (openArmUrdfRobot.links && openArmUrdfRobot.links["openarm_left_hand_tcp"]) ||
-            openArmUrdfRobot.getObjectByName("openarm_left_hand_tcp") ||
-            (openArmUrdfRobot.links && openArmUrdfRobot.links["openarm_left_hand"]) ||
-            openArmUrdfRobot.getObjectByName("openarm_left_hand");
-
-        const rightTcpLink =
-            (openArmUrdfRobot.links && openArmUrdfRobot.links["openarm_right_hand_tcp"]) ||
-            openArmUrdfRobot.getObjectByName("openarm_right_hand_tcp") ||
-            (openArmUrdfRobot.links && openArmUrdfRobot.links["openarm_right_hand"]) ||
-            openArmUrdfRobot.getObjectByName("openarm_right_hand");
-
-        const leftPos = new THREE.Vector3();
-        const rightPos = new THREE.Vector3();
-
-        if (leftTcpLink) leftTcpLink.getWorldPosition(leftPos);
-        if (rightTcpLink) rightTcpLink.getWorldPosition(rightPos);
-
-        // 4. Restore original robot joint states
-        for (const [jName, jVal] of Object.entries(savedJointValues)) {
-            if (openArmUrdfRobot.joints && openArmUrdfRobot.joints[jName]) {
-                openArmUrdfRobot.setJointValue(jName, jVal);
-            }
-        }
-        openArmUrdfRobot.updateMatrixWorld(true);
-
-        return { left: leftPos, right: rightPos };
-    }
-
-    // Procedural Fallback
     const leftPos = computeProceduralArmFK(
         true,
         action16[0], action16[1], action16[2], action16[3], action16[4], action16[5], action16[6]

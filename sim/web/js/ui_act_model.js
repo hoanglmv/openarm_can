@@ -38,30 +38,51 @@ function setupActModelUI() {
         });
     }
 
-    // 2. Hook Start / Stop / Step Buttons
+    // 2. Hook Start / Stop / Step Buttons & Execution Mode Radios
     const btnStart = document.getElementById("btn-act-start");
     const btnStop = document.getElementById("btn-act-stop");
     const btnStep = document.getElementById("btn-act-step");
     const sliderSpeed = document.getElementById("slider-act-speed");
-    const radioPreview = document.getElementById("radio-act-preview");
-    const radioHardware = document.getElementById("radio-act-hardware");
+
+    // Dynamic active styling for the 3 mode labels
+    const modeRadios = document.querySelectorAll('input[name="act-mode-radio"]');
+    modeRadios.forEach((radio) => {
+        radio.addEventListener("change", () => {
+            document.querySelectorAll(".act-mode-option").forEach((opt) => opt.classList.remove("active"));
+            const parentLabel = radio.closest(".act-mode-option");
+            if (parentLabel) parentLabel.classList.add("active");
+        });
+    });
+
+    const getSelectedControlMode = () => {
+        const checked = document.querySelector('input[name="act-mode-radio"]:checked');
+        return checked ? checked.value : "preview";
+    };
 
     if (btnStart) {
         btnStart.addEventListener("click", () => {
-            const isHardware = radioHardware && radioHardware.checked;
-            const controlMode = isHardware ? "hardware" : "preview";
+            const controlMode = getSelectedControlMode();
             const velScale = sliderSpeed ? parseFloat(sliderSpeed.value) : 1.0;
             const ckpt = inputCkpt ? inputCkpt.value.trim() : "";
 
-            if (isHardware) {
+            if (controlMode === "hardware_only") {
                 const confirmed = confirm(
                     "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
-                    "Bạn đang chọn chế độ 'ĐIỀU KHIỂN ROBOT THẬT (CAN BUS)'.\n" +
+                    "Bạn đang chọn chế độ 'CHỈ ROBOT THẬT (CAN BUS)'.\n" +
                     "Lệnh vị trí từ Model ACT sẽ được gửi trực tiếp xuống 16 động cơ!\n" +
                     "Hãy chắc chắn không có người đứng trong tầm với của robot. Tiếp tục?"
                 );
                 if (!confirmed) return;
+            } else if (controlMode === "dual") {
+                const confirmed = confirm(
+                    "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
+                    "Bạn đang chọn chế độ 'CHẠY CẢ 2 (MÔ PHỎNG & ROBOT THẬT)'.\n" +
+                    "Hệ thống sẽ đồng thời mô phỏng 3D và bơm xung điều khiển xuống 16 động cơ CAN bus!\n" +
+                    "Hãy chắc chắn không gian xung quanh robot an toàn. Tiếp tục?"
+                );
+                if (!confirmed) return;
             }
+            // If controlMode === "preview" (Chỉ mô phỏng), runs immediately without warning prompt
 
             sendWsMessage({
                 action: "model_start",
@@ -81,10 +102,10 @@ function setupActModelUI() {
 
     if (btnStep) {
         btnStep.addEventListener("click", () => {
-            const isHardware = radioHardware && radioHardware.checked;
+            const controlMode = getSelectedControlMode();
             sendWsMessage({
                 action: "model_step",
-                control_mode: isHardware ? "hardware" : "preview",
+                control_mode: controlMode,
             });
         });
     }
@@ -188,11 +209,13 @@ function handleActInferenceTelemetry(infData) {
 
     // Update Status Badge & Cards
     if (actInferenceState.running) {
-        const isHw = actInferenceState.mode === "hardware";
-        updateActStatusBadge(
-            isHw ? "warning" : "success",
-            isHw ? "CHẠY ROBOT THẬT (CAN)" : "MÔ PHỎNG 3D (AN TOÀN)"
-        );
+        if (actInferenceState.mode === "hardware_only") {
+            updateActStatusBadge("warning", "CHỈ ROBOT THẬT (CAN)");
+        } else if (actInferenceState.mode === "dual") {
+            updateActStatusBadge("success", "CHẠY CẢ 2 (3D + ROBOT)");
+        } else {
+            updateActStatusBadge("info", "CHỈ MÔ PHỎNG 3D (AN TOÀN)");
+        }
     } else if (actInferenceState.isLoaded) {
         updateActStatusBadge(
             actInferenceState.isSynthetic ? "accent" : "primary",
@@ -231,8 +254,8 @@ function handleActInferenceTelemetry(infData) {
             updateFutureActionPath(infData.future_actions);
         }
 
-        // If in 3D Preview simulation mode and running, preview motion on Three.js robot
-        if (actInferenceState.running && actInferenceState.mode === "preview" && infData.future_actions.length > 0) {
+        // If in 3D Preview simulation or Dual mode, preview motion on Three.js robot
+        if (actInferenceState.running && (actInferenceState.mode === "preview" || actInferenceState.mode === "dual") && infData.future_actions.length > 0) {
             const step0 = infData.future_actions[0];
             if (step0 && step0.length >= 16) {
                 for (let i = 0; i < 16; i++) {

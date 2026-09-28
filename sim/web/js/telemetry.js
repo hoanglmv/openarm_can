@@ -148,7 +148,7 @@ function handleTelemetry(data) {
         }
     });
 
-    if (!isRealMode && motors.length > 0 && typeof setOpenArmModelVisibility === "function") {
+    if (motors.length > 0 && typeof setOpenArmModelVisibility === "function") {
         setOpenArmModelVisibility(true);
     }
 

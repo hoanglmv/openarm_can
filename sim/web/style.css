@@ -3003,6 +3003,24 @@ body.theme-light .export-widget-bar {
     border-color: #ef4444;
 }
 
+.act-mode-option.act-mode-danger.active {
+    border-color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.06);
+}
+
+.act-mode-option.act-mode-dual input[type="radio"] {
+    accent-color: #0284c7;
+}
+
+.act-mode-option.act-mode-dual:hover {
+    border-color: #0284c7;
+}
+
+.act-mode-option.act-mode-dual.active {
+    border-color: #0284c7;
+    background-color: rgba(2, 132, 199, 0.08);
+}
+
 .act-mode-content {
     display: flex;
     flex-direction: column;

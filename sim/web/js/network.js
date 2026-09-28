@@ -109,7 +109,7 @@ function initWebSocket() {
         hasInitialRobotSync = false;
         releaseOpenArmVisualCommandTargets();
         if (typeof setOpenArmModelVisibility === "function") {
-            setOpenArmModelVisibility(false);
+            setOpenArmModelVisibility(true);
         }
         if (badge) {
             badge.className = "badge badge-success";
@@ -131,9 +131,6 @@ function initWebSocket() {
                 } else if (isReal && hasInitialRobotSync && !completePhysicalState) {
                     hasInitialRobotSync = false;
                     releaseOpenArmVisualCommandTargets();
-                    if (typeof setOpenArmModelVisibility === "function") {
-                        setOpenArmModelVisibility(false);
-                    }
                     const badge = document.getElementById("ws-status-badge");
                     if (badge) badge.innerHTML = "WebSocket: <strong>CONNECTED • SYNCING</strong>";
                     showToast("warning", "Mất feedback từ phần cứng. Đã khóa lệnh chuyển động để chờ đồng bộ lại.");
