@@ -500,8 +500,8 @@ def parse_args():
     parser.add_argument("--action_dim", type=int, default=16, help="Số bậc tự do 2 tay robot (16 động cơ)")
     parser.add_argument("--qpos_dim", type=int, default=16, help="Số chiều góc khớp đầu vào")
     parser.add_argument("--latent_dim", type=int, default=32, help="Số chiều vector ẩn z của CVAE")
-    parser.add_argument("--cvae_layers", type=int, default=2, help="Số layers Transformer Encoder của CVAE")
-    parser.add_argument("--decoder_layers", type=int, default=4, help="Số layers Transformer Decoder của Policy")
+    parser.add_argument("--cvae_layers", type=int, default=4, help="Số layers Transformer Encoder của CVAE (Chuẩn Stanford ACT = 4)")
+    parser.add_argument("--decoder_layers", type=int, default=7, help="Số layers Transformer Decoder của Policy (Chuẩn Stanford ACT = 7)")
     parser.add_argument("--unfreeze_backbone", action="store_true", help="Nếu đặt cờ này, sẽ fine-tune toàn bộ ResNet18 thay vì đóng băng")
 
     # Hàm mất mát Loss
