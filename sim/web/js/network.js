@@ -18,15 +18,14 @@ const HARDWARE_MOTION_ACTIONS = new Set([
 ]);
 
 function setGlobalExecutionMode(mode, triggerToast = true) {
-    if (mode !== "sim" && mode !== "real" && mode !== "dual") return;
+    if (mode === "real") mode = "dual";
+    if (mode !== "sim" && mode !== "dual") return;
     globalExecutionMode = mode;
 
     // 1. Update button states in left panel
     const btnSim = document.getElementById("btn-global-mode-sim");
-    const btnReal = document.getElementById("btn-global-mode-real");
     const btnDual = document.getElementById("btn-global-mode-dual");
     if (btnSim) btnSim.classList.toggle("active", mode === "sim");
-    if (btnReal) btnReal.classList.toggle("active", mode === "real");
     if (btnDual) btnDual.classList.toggle("active", mode === "dual");
 
     // 2. Update panel badge
@@ -35,12 +34,9 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
         if (mode === "sim") {
             badge.className = "badge badge-accent";
             badge.textContent = "Chỉ Mô Phỏng (3D Sim)";
-        } else if (mode === "real") {
-            badge.className = "badge badge-warning";
-            badge.textContent = "Chỉ Robot Thật (CAN)";
         } else {
             badge.className = "badge badge-success";
-            badge.textContent = "Chạy Cả 2 (3D + Robot)";
+            badge.textContent = "Chạy Cả 2 (Mô Phỏng & Robot)";
         }
     }
 
@@ -51,9 +47,6 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
         if (mode === "sim") {
             headerPill.className = "badge badge-accent";
             headerText.textContent = "Chỉ Mô Phỏng";
-        } else if (mode === "real") {
-            headerPill.className = "badge badge-warning";
-            headerText.textContent = "Chỉ Robot Thật";
         } else {
             headerPill.className = "badge badge-success";
             headerText.textContent = "Chạy Cả 2";
@@ -62,15 +55,13 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
 
     // 4. Synchronize with ACT Model tab radios
     const radioPreview = document.getElementById("radio-act-preview");
-    const radioHardware = document.getElementById("radio-act-hardware");
     const radioDual = document.getElementById("radio-act-dual");
-    if (radioPreview && radioHardware && radioDual) {
+    if (radioPreview && radioDual) {
         if (mode === "sim") radioPreview.checked = true;
-        else if (mode === "real") radioHardware.checked = true;
         else if (mode === "dual") radioDual.checked = true;
 
         document.querySelectorAll(".act-mode-option").forEach(opt => opt.classList.remove("active"));
-        const activeRadio = mode === "sim" ? radioPreview : (mode === "real" ? radioHardware : radioDual);
+        const activeRadio = mode === "sim" ? radioPreview : radioDual;
         const parentLabel = activeRadio.closest(".act-mode-option");
         if (parentLabel) parentLabel.classList.add("active");
     }
@@ -78,8 +69,6 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
     if (triggerToast) {
         if (mode === "sim") {
             showToast("info", "Chế độ: CHỈ MÔ PHỎNG (An toàn 100%, không gửi xung CAN)");
-        } else if (mode === "real") {
-            showToast("warning", "Chế độ: CHỈ ROBOT THẬT (Lệnh điều khiển trực tiếp 16 động cơ CAN bus)");
         } else {
             showToast("success", "Chế độ: CHẠY CẢ 2 (Đồng thời mô phỏng 3D và điều khiển robot thật)");
         }
@@ -87,7 +76,7 @@ function setGlobalExecutionMode(mode, triggerToast = true) {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ action: "set_execution_mode", mode }));
-        if (mode !== "sim") {
+        if (mode === "dual") {
             ws.send(JSON.stringify({ action: "sync_robot_state" }));
         }
     }
@@ -101,7 +90,13 @@ function setOpenArmVisualCommandTarget(motorId, position) {
 }
 
 function shouldApplyOpenArmTelemetry(motor) {
-    if (currentUsbState) return true; // Always apply live telemetry in real hardware mode
+    // In simulation-only mode, the 3D model and sliders are 100% virtual and interactive.
+    // Never allow background hardware telemetry to fight with or jitter the 3D model!
+    if (globalExecutionMode === "sim") {
+        return false;
+    }
+
+    if (currentUsbState) return true; // In dual mode, apply live telemetry
     const id = Number(motor && motor.id);
     if (!visualCommandTargets.has(id)) return true;
 

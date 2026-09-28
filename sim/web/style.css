@@ -403,7 +403,7 @@ body.theme-light .execution-mode-box {
 
 .execution-mode-tabs {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 4px;
     background-color: var(--bg-base);
     padding: 3px;
@@ -422,7 +422,7 @@ body.theme-light .execution-mode-tabs {
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
-    padding: 7px 4px;
+    padding: 7px 6px;
     border-radius: calc(var(--radius-sm) - 1px);
     cursor: pointer;
     text-align: center;
@@ -444,13 +444,6 @@ body.theme-light .btn-exec-mode:hover {
     background-color: #0284c7;
     color: #ffffff;
     box-shadow: 0 1px 4px rgba(2, 132, 199, 0.35);
-    font-weight: 700;
-}
-
-.btn-exec-mode.active[data-mode="real"] {
-    background-color: #d97706;
-    color: #ffffff;
-    box-shadow: 0 1px 4px rgba(217, 119, 6, 0.35);
     font-weight: 700;
 }
 

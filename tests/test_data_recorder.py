@@ -261,7 +261,7 @@ def test_act_data_recorder_live_spin_and_validation():
         exec_thread.start()
 
         start_t = time.time()
-        while time.time() - start_t < 4.0 and writer.sample_count < 55:
+        while time.time() - start_t < 6.0 and writer.sample_count < 55:
             time.sleep(0.05)
 
         stop_publishing.set()

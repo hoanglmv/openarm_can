@@ -123,10 +123,13 @@ function onWindowResize() {
     renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
-// Render Animation Loop
+// Render Animation Loop (60 / 120 FPS fluid kinematics)
 function animate() {
     requestAnimationFrame(animate);
     if (controls) controls.update();
+    if (typeof stepOpenArmUrdfInterpolation === "function") {
+        stepOpenArmUrdfInterpolation();
+    }
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }

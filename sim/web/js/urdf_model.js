@@ -132,7 +132,11 @@ function buildBimanualOpenArm() {
     );
 }
 
-function updateOpenArmUrdfJoint(motor) {
+// Smooth joint interpolator state maps for 60/120 FPS fluid motion
+const urdfCurrentJointValues = new Map();
+const urdfTargetJointValues = new Map();
+
+function updateOpenArmUrdfJoint(motor, immediate = false) {
     if (!motor || !(motor.id in motorToUrdfJoint)) return false;
     if (openArmModelMode === "procedural") return false;
 
@@ -149,12 +153,40 @@ function updateOpenArmUrdfJoint(motor) {
         value = Math.max(0.0, Math.min(0.044, Math.abs(value)));
     }
 
-    if (openArmUrdfRobot) {
-        openArmUrdfRobot.setJointValue(name, value);
-    } else {
-        pendingUrdfJointValues.set(name, value);
+    urdfTargetJointValues.set(name, value);
+
+    if (immediate || !urdfCurrentJointValues.has(name)) {
+        urdfCurrentJointValues.set(name, value);
+        if (openArmUrdfRobot) {
+            openArmUrdfRobot.setJointValue(name, value);
+        } else {
+            pendingUrdfJointValues.set(name, value);
+        }
     }
     return true;
+}
+
+// Step joint interpolation each requestAnimationFrame tick for buttery-smooth 60fps movement
+function stepOpenArmUrdfInterpolation() {
+    if (!openArmUrdfRobot || urdfTargetJointValues.size === 0) return;
+
+    // 0.38 lerp rate gives ultra-crisp responsive tracking while filtering 100% of packet jitter
+    const lerpRate = 0.38;
+    urdfTargetJointValues.forEach((targetVal, name) => {
+        let curVal = urdfCurrentJointValues.get(name);
+        if (curVal === undefined) curVal = targetVal;
+
+        const delta = targetVal - curVal;
+        if (Math.abs(delta) > 0.00015) {
+            curVal += delta * lerpRate;
+            urdfCurrentJointValues.set(name, curVal);
+            openArmUrdfRobot.setJointValue(name, curVal);
+        } else if (curVal !== targetVal) {
+            curVal = targetVal;
+            urdfCurrentJointValues.set(name, curVal);
+            openArmUrdfRobot.setJointValue(name, curVal);
+        }
+    });
 }
 
 // Update whichever 3D model is active. This is shared by live telemetry and by

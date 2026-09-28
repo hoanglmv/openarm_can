@@ -1065,15 +1065,16 @@ class OpenArmDashboardServer:
 
         elif action == "set_execution_mode":
             new_mode = payload.get("mode", "sim")
-            if new_mode in ["sim", "real", "dual"]:
+            if new_mode == "real":
+                new_mode = "dual"
+            if new_mode in ["sim", "dual"]:
                 self.execution_mode = new_mode
                 print(f"[Execution Mode] Chế độ thực thi chuyển sang: {new_mode.upper()}")
                 mode_titles = {
                     "sim": "Chỉ Mô Phỏng (3D Sim)",
-                    "real": "Chỉ Robot Thật (CAN Bus)",
                     "dual": "Chạy Cả 2 (Mô Phỏng & Robot Thật)"
                 }
-                notice_types = {"sim": "info", "real": "warning", "dual": "success"}
+                notice_types = {"sim": "info", "dual": "success"}
                 if hasattr(self, 'loop') and self.loop:
                     asyncio.run_coroutine_threadsafe(
                         self.broadcast_notice(notice_types.get(new_mode, "info"), f"Chế độ thực thi: {mode_titles.get(new_mode, new_mode)}"),
@@ -1581,6 +1582,13 @@ class OpenArmDashboardServer:
                         m.q_cmd = m.q
                         m.q_target = m.q
                         m.q_des = m.q
+                        continue
+
+                    # In simulation-only mode, track user target directly and responsively
+                    if getattr(self, "execution_mode", "sim") == "sim":
+                        m.q_cmd = m.q_target
+                        m.q = m.q_target
+                        m.q_des = m.q_target
                         continue
 
                     # Velocity-limited step towards target

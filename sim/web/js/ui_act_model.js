@@ -53,7 +53,7 @@ function setupActModelUI() {
             if (parentLabel) parentLabel.classList.add("active");
 
             // Sync with global execution mode button in left control panel
-            const globalMode = radio.value === "preview" ? "sim" : (radio.value === "hardware_only" ? "real" : "dual");
+            const globalMode = radio.value === "preview" ? "sim" : "dual";
             if (typeof setGlobalExecutionMode === "function") {
                 setGlobalExecutionMode(globalMode, false);
             }
@@ -71,15 +71,7 @@ function setupActModelUI() {
             const velScale = sliderSpeed ? parseFloat(sliderSpeed.value) : 1.0;
             const ckpt = inputCkpt ? inputCkpt.value.trim() : "";
 
-            if (controlMode === "hardware_only") {
-                const confirmed = confirm(
-                    "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
-                    "Bạn đang chọn chế độ 'CHỈ ROBOT THẬT (CAN BUS)'.\n" +
-                    "Lệnh vị trí từ Model ACT sẽ được gửi trực tiếp xuống 16 động cơ!\n" +
-                    "Hãy chắc chắn không có người đứng trong tầm với của robot. Tiếp tục?"
-                );
-                if (!confirmed) return;
-            } else if (controlMode === "dual") {
+            if (controlMode === "dual") {
                 const confirmed = confirm(
                     "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
                     "Bạn đang chọn chế độ 'CHẠY CẢ 2 (MÔ PHỎNG & ROBOT THẬT)'.\n" +

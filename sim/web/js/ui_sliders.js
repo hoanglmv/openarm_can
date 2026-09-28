@@ -269,30 +269,14 @@ window.toggleGripperInvert = function(arm) {
 
 // Setup Master Event Handlers
 function setupEventHandlers() {
-    // 0. Global Execution Mode Buttons (Chỉ Mô Phỏng / Chỉ Robot Thật / Chạy Cả 2)
+    // 0. Global Execution Mode Buttons (Chỉ Mô Phỏng / Chạy Cả 2)
     const btnModeSim = document.getElementById("btn-global-mode-sim");
-    const btnModeReal = document.getElementById("btn-global-mode-real");
     const btnModeDual = document.getElementById("btn-global-mode-dual");
 
     if (btnModeSim) {
         btnModeSim.addEventListener("click", () => {
             if (typeof setGlobalExecutionMode === "function") {
                 setGlobalExecutionMode("sim");
-            }
-        });
-    }
-    if (btnModeReal) {
-        btnModeReal.addEventListener("click", () => {
-            if (typeof setGlobalExecutionMode === "function") {
-                const confirmed = confirm(
-                    "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
-                    "Bạn đang chọn chế độ 'CHỈ ROBOT THẬT (CAN BUS)'.\n" +
-                    "Các thao tác điều khiển sẽ gửi trực tiếp xuống 16 động cơ!\n" +
-                    "Hãy chắc chắn không có người đứng trong tầm với của robot. Tiếp tục?"
-                );
-                if (confirmed) {
-                    setGlobalExecutionMode("real");
-                }
             }
         });
     }
