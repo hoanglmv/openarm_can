@@ -64,6 +64,10 @@ function handleTelemetry(data) {
     const isRealMode = (data.mode === "real");
     updateUsbUiState(isRealMode);
 
+    if (data.velocity_limit !== undefined && typeof window.syncSpeedControls === "function") {
+        window.syncSpeedControls(data.velocity_limit, false);
+    }
+
     motors.forEach(m => {
         const motorHasUsableState = !isRealMode
             || (hasInitialRobotSync && m.has_sync === true && isOpenArmFeedbackFresh(m));

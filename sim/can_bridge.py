@@ -183,15 +183,6 @@ class RealRobotHardwareBridge:
         except Exception:
             pass
 
-        # Also transmit Classic CAN frame for any 8-byte management, query, or control frame
-        # to ensure compatibility whether the motor is operating in CAN-FD or Classic CAN
-        if len(data) == 8:
-            try:
-                frame_classic = struct.pack(CAN_FRAME_FMT, can_id, 8, data)
-                sock.send(frame_classic)
-            except Exception:
-                pass
-
     def query_all_physical(self):
         """Immediately broadcast state query frames (0xCC) to all 16 physical motors."""
         for m in self.motors.values():
@@ -199,16 +190,22 @@ class RealRobotHardwareBridge:
             self.send_frame(m.can_if, 0x7FF, query_data)
 
     def _poll_loop(self):
-        """Periodically query motor status so dashboard displays real angles even at standstill."""
+        """Periodically query motor status for motors that are not actively streaming control feedback."""
         time.sleep(0.1)
         self.query_all_physical()
 
         while self.running:
             try:
-                self.query_all_physical()
+                now = time.time()
+                # Only query motors that have not received feedback recently (> 100ms)
+                # Actively controlled motors already stream feedback on every MIT/POSFORCE frame!
+                for m in self.motors.values():
+                    if now - getattr(m, 'last_update', 0) > 0.10:
+                        query_data = bytes([m.send_id & 0xFF, (m.send_id >> 8) & 0xFF, 0xCC, 0, 0, 0, 0, 0])
+                        self.send_frame(m.can_if, 0x7FF, query_data)
             except Exception:
                 pass
-            time.sleep(0.04)  # 25 Hz
+            time.sleep(0.05)  # 20 Hz
 
     def _rx_loop(self, iface: str, sock: socket.socket):
         """Continuously receive telemetry feedback from physical motors."""
@@ -274,25 +271,14 @@ class RealRobotHardwareBridge:
 
         with self.lock:
             motor.error_code = error_code
-            if motor.joint_idx == 8:
-                if error_code == 1:
-                    motor.enabled = True
-                elif error_code == 0 and motor.enabled:
-                    # Motor was power-cycled / unplugged and replugged!
-                    now = time.time()
-                    if now - getattr(motor, '_last_rearm', 0) > 1.0:
-                        motor._last_rearm = now
-                        self.init_gripper_motor(motor.id, save_flash=False)
-            else:
-                if error_code >= 8:
+            if error_code == 0 or error_code >= 8:
+                motor.enabled = False
+            elif error_code == 1:
+                # Keep disabled if user explicitly disarmed
+                if getattr(motor, '_disarmed_by_user', False):
                     motor.enabled = False
-                elif error_code == 1:
+                else:
                     motor.enabled = True
-                elif error_code == 0:
-                    # Motor electronics still report position, but torque output
-                    # is disabled. Keep publishing q so the digital twin follows
-                    # a gravity-driven/manual movement of the physical arm.
-                    motor.enabled = False
 
             q_uint = (d1 << 8) | d2
             dq_uint = (d3 << 4) | (d4 >> 4)

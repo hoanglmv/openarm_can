@@ -24,18 +24,23 @@ function setOpenArmVisualCommandTarget(motorId, position) {
 }
 
 function shouldApplyOpenArmTelemetry(motor) {
+    if (currentUsbState) return true; // Always apply live telemetry in real hardware mode
     const id = Number(motor && motor.id);
     if (!visualCommandTargets.has(id)) return true;
 
     const command = visualCommandTargets.get(id);
+    // Timeout safeguard: after 2.0s, release visual lock so live telemetry is never permanently blocked
+    if (Date.now() - command.issuedAt > 2000) {
+        visualCommandTargets.delete(id);
+        return true;
+    }
+
     const target = command.position;
     const measured = Number(motor.q);
-    const tolerance = (id === 8 || id === 16) ? 0.00075 : 0.015;
+    const tolerance = (id === 8 || id === 16) ? 0.003 : 0.035;
 
     // A fresh OFF/fault response means torque is no longer holding the target.
-    // Release the visual target so manual or gravity-driven movement is visible.
     if (isOpenArmFeedbackFresh(motor) && motor.enabled === false) {
-        if (Date.now() - command.issuedAt < 100) return false;
         visualCommandTargets.delete(id);
         return true;
     }
@@ -45,8 +50,7 @@ function shouldApplyOpenArmTelemetry(motor) {
         return isOpenArmFeedbackFresh(motor);
     }
 
-    // Once the measured robot reaches the commanded target, telemetry may take
-    // ownership again. Until then the 3D model keeps displaying target B.
+    // Once the measured robot reaches the commanded target, telemetry takes ownership again
     if (Number.isFinite(measured) && Math.abs(measured - target) <= tolerance) {
         visualCommandTargets.delete(id);
         return true;
@@ -192,20 +196,20 @@ function sendAction(action, payload = {}) {
         return false;
     }
 
-    // Preview commanded joint targets immediately. The telemetry stream remains
-    // authoritative after the physical robot reaches the commanded position.
+    // In real mode, Three.js 3D model reflects live physical telemetry at 40 Hz without desync.
+    // In simulation mode, preview commanded joint targets immediately.
     if (typeof updateOpenArmJointVisual === "function") {
-        if (action === "set_mit") {
-            setOpenArmVisualCommandTarget(payload.id, payload.q);
-            updateOpenArmJointVisual({ id: payload.id, q: payload.q });
-        } else if (action === "set_gripper") {
-            setOpenArmVisualCommandTarget(payload.id, payload.pos);
-            updateOpenArmJointVisual({ id: payload.id, q: payload.pos });
-        } else if (action === "go_to_zero_pose") {
-            for (let id = 1; id <= 16; id++) {
-                setOpenArmVisualCommandTarget(id, 0.0);
-                updateOpenArmJointVisual({ id, q: 0.0 });
+        if (!currentUsbState) {
+            if (action === "set_mit") {
+                setOpenArmVisualCommandTarget(payload.id, payload.q);
+                updateOpenArmJointVisual({ id: payload.id, q: payload.q });
+            } else if (action === "set_gripper") {
+                setOpenArmVisualCommandTarget(payload.id, payload.pos);
+                updateOpenArmJointVisual({ id: payload.id, q: payload.pos });
             }
+        }
+        if (action === "go_to_zero_pose") {
+            releaseOpenArmVisualCommandTargets();
         }
     }
 

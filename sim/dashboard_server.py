@@ -774,6 +774,7 @@ class OpenArmDashboardServer:
                     "frames_rx": rx_count,
                     "frames_tx": tx_count,
                     "mode": self.mode,
+                    "velocity_limit": self.velocity_limit,
                     "initial": True,
                     "stream_stats": stream_info
                 }
@@ -1107,8 +1108,10 @@ class OpenArmDashboardServer:
 
         elif action == "enable_all":
             print("[Command] Enable All Motors")
+            self.active_preset = None
             with self.hw.lock:
                 for m in self.motors.values():
+                    m._disarmed_by_user = False
                     m.enabled = True
                     m.error_code = 1
                     m.q_cmd = m.q
@@ -1120,10 +1123,14 @@ class OpenArmDashboardServer:
             if self.mode == "real":
                 def _bg_enable():
                     for m in self.motors.values():
-                        if m.joint_idx == 8:
-                            self.hw.init_gripper_motor(m.id, save_flash=False)
-                        else:
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
+                    time.sleep(0.015)
+                    for m in self.motors.values():
+                        if m.joint_idx != 8:
                             self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+                    time.sleep(0.015)
+                    for gid in [8, 16]:
+                        self.hw.init_gripper_motor(gid, save_flash=False)
                 threading.Thread(target=_bg_enable, daemon=True).start()
             else:
                 for m in self.hw.motors.values():
@@ -1134,15 +1141,20 @@ class OpenArmDashboardServer:
         elif action == "disable_all":
             print("[Command] Disarm / Disable All Motors")
             self.active_preset = None
+            with self.trajectory_lock:
+                self.active_trajectory_id += 1
             with self.hw.lock:
                 for m in self.motors.values():
+                    m._disarmed_by_user = True
                     m.enabled = False
                     m.error_code = 0
                     m.q_cmd = m.q
                     m.q_target = m.q
             if self.mode == "real":
-                for m in self.motors.values():
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFD]))
+                for _ in range(2):
+                    for m in self.motors.values():
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFD]))
+                    time.sleep(0.005)
             else:
                 for m in self.hw.motors.values():
                     m.enabled = False
@@ -1154,6 +1166,7 @@ class OpenArmDashboardServer:
             m = self.motors.get(motor_id)
             if m:
                 with self.hw.lock:
+                    m._disarmed_by_user = False
                     m.enabled = True
                     m.error_code = 1
                     m.q_cmd = m.q
@@ -1177,12 +1190,15 @@ class OpenArmDashboardServer:
             m = self.motors.get(motor_id)
             if m:
                 with self.hw.lock:
+                    m._disarmed_by_user = True
                     m.enabled = False
                     m.error_code = 0
                     m.q_cmd = m.q
                     m.q_target = m.q
                 if self.mode == "real":
-                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFD]))
+                    for _ in range(2):
+                        self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFD]))
+                        time.sleep(0.005)
                 else:
                     m.enabled = False
                     m.error_code = 0
@@ -1258,8 +1274,9 @@ class OpenArmDashboardServer:
                 return
 
             default_g = DEFAULT_GAINS.get(motor_id, {"kp": 35.0, "kd": 1.5})
-            kp = float(payload.get("kp", default_g["kp"]))
-            kd = float(payload.get("kd", default_g["kd"]))
+            # Always respect DEFAULT_GAINS for the actuator's mass & inertia unless explicitly provided
+            kp = float(payload["kp"]) if ("kp" in payload and payload["kp"] is not None) else default_g["kp"]
+            kd = float(payload["kd"]) if ("kd" in payload and payload["kd"] is not None) else default_g["kd"]
             tau = float(payload.get("tau", 0.0))
 
             motor = self.motors.get(motor_id)
@@ -1270,10 +1287,21 @@ class OpenArmDashboardServer:
                 lim = JOINT_LIMITS.get(motor_id, (-12.5, 12.5))
                 q = max(lim[0], min(lim[1], q_raw))
                 if not motor.enabled:
-                    motor.enabled = True
-                    motor.q_cmd = motor.q
-                    if self.mode == "real":
-                        self.hw.send_frame(motor.can_if, motor.send_id, bytes([0xFF] * 7 + [0xFC]))
+                    # Enable all motors on this arm so it maintains rigid holding posture
+                    arm_ids = range(1, 8) if motor_id <= 8 else range(9, 16)
+                    for mid in arm_ids:
+                        arm_m = self.motors.get(mid)
+                        if arm_m and not arm_m.enabled:
+                            arm_m._disarmed_by_user = False
+                            arm_m.enabled = True
+                            arm_m.error_code = 1
+                            arm_m.q_cmd = arm_m.q
+                            arm_m.q_target = arm_m.q
+                            g = DEFAULT_GAINS.get(mid, {"kp": 35.0, "kd": 1.5})
+                            arm_m.kp = g["kp"]
+                            arm_m.kd = g["kd"]
+                            if self.mode == "real":
+                                self.hw.send_frame(arm_m.can_if, arm_m.send_id, bytes([0xFF] * 7 + [0xFC]))
                 motor.q_target = q
                 motor.kp = kp
                 motor.kd = kd
@@ -1474,8 +1502,10 @@ class OpenArmDashboardServer:
 
                     if abs(diff) <= max_step:
                         m.q_cmd = m.q_target
+                        target_vel = 0.0
                     else:
                         m.q_cmd += math.copysign(max_step, diff)
+                        target_vel = math.copysign(v_lim, diff)
 
                     m.q_des = m.q_cmd
 
@@ -1510,27 +1540,31 @@ class OpenArmDashboardServer:
                                 mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
                                 self.hw.send_frame(m.can_if, m.send_id, mit_data)
                         else:
-                            # 7-DOF Arm motors (MIT Mode)
-                            motor_dir = getattr(m, 'direction', 1.0)
-                            physical_q_cmd = m.q_cmd * motor_dir
-                            physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
+                            # 7-DOF Arm motors (MIT Mode) - rate-limited to 100 Hz (10 ms)
+                            now = time.time()
+                            if now - getattr(m, '_last_mit_tx', 0) >= 0.010:
+                                m._last_mit_tx = now
+                                motor_dir = getattr(m, 'direction', 1.0)
+                                physical_q_cmd = m.q_cmd * motor_dir
+                                physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
+                                physical_dq_cmd = target_vel * motor_dir
 
-                            q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
-                            dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
-                            kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
-                            kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                            tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
+                                q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
+                                dq_uint = double_to_uint(physical_dq_cmd, -m.vMax, m.vMax, 12)
+                                kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
+                                kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
+                                tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
 
-                            d0 = (q_uint >> 8) & 0xFF
-                            d1 = q_uint & 0xFF
-                            d2 = (dq_uint >> 4) & 0xFF
-                            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
-                            d4 = kp_uint & 0xFF
-                            d5 = (kd_uint >> 4) & 0xFF
-                            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
-                            d7 = tau_uint & 0xFF
-                            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
-                            self.hw.send_frame(m.can_if, m.send_id, mit_data)
+                                d0 = (q_uint >> 8) & 0xFF
+                                d1 = q_uint & 0xFF
+                                d2 = (dq_uint >> 4) & 0xFF
+                                d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                                d4 = kp_uint & 0xFF
+                                d5 = (kd_uint >> 4) & 0xFF
+                                d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                                d7 = tau_uint & 0xFF
+                                mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                                self.hw.send_frame(m.can_if, m.send_id, mit_data)
                     else:
                         m.q = m.q_cmd
 
@@ -1563,12 +1597,13 @@ class OpenArmDashboardServer:
         self.active_preset = None
         with self.trajectory_lock:
             self.active_trajectory_id += 1
+            current_traj_id = self.active_trajectory_id
 
+        # 1. Reset disarm flag, keep software enabled paused while physical arming takes place
         with self.hw.lock:
             for m in self.motors.values():
-                m.enabled = True
-                m.error_code = 1
-                # Smooth transition: command interpolates starting from current actual position m.q
+                m._disarmed_by_user = False
+                m.enabled = False  # Hold off _trajectory_loop from sending MIT packets during hardware enable
                 m.q_cmd = m.q
                 m.q_target = 0.0
                 m.tau_ff = 0.0
@@ -1577,24 +1612,49 @@ class OpenArmDashboardServer:
                 m.kd = gains["kd"]
 
         if self.mode == "real":
-            # 1. Clear error flags on physical motors
+            # Step 1: Send 0xFB (Clear Errors) to ALL 16 motors across can0 and can1 simultaneously
             for m in self.motors.values():
                 self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFB]))
-            time.sleep(0.015)
+            time.sleep(0.020)
 
-            # 2. Enable all physical arm motors
+            # Step 2: Enable all 14 arm motors (0xFC) on both can0 (Right) and can1 (Left) simultaneously
             for m in self.motors.values():
-                if m.joint_idx == 8:
-                    self.hw.init_gripper_motor(m.id, save_flash=False)
-                else:
+                if m.joint_idx != 8:
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             time.sleep(0.015)
 
-            # 3. Drive both grippers to 0 mm (closed)
+            # Repeat 0xFC confirmation for arm motors to guarantee 100% receipt
+            for m in self.motors.values():
+                if m.joint_idx != 8:
+                    self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
+            time.sleep(0.015)
+
+            # Step 3: Enable both grippers (0xFC)
             for gid in [8, 16]:
-                m = self.motors.get(gid)
-                if m:
-                    self._send_gripper_command(m, 0.0)
+                gm = self.motors.get(gid)
+                if gm:
+                    self.hw.send_frame(gm.can_if, gm.send_id, bytes([0xFF] * 7 + [0xFC]))
+            time.sleep(0.015)
+
+            # Step 4: Command both grippers to 0.0 mm (closed)
+            for gid in [8, 16]:
+                gm = self.motors.get(gid)
+                if gm:
+                    self._send_gripper_command(gm, 0.0)
+
+        # Check if user cancelled or clicked another action during the enable sequence
+        if not self.running or self.active_trajectory_id != current_traj_id:
+            print("[Motion Control] Zero Pose sequence aborted by newer command.")
+            return
+
+        # Step 5: Now that all physical motors are armed and quiescent on both CAN buses:
+        # Synchronize q_cmd to current actual physical q, set q_target = 0.0, and turn on software enable
+        with self.hw.lock:
+            for m in self.motors.values():
+                m.q_cmd = m.q
+                m.q_target = 0.0
+                m.enabled = True
+                m.error_code = 1
 
         if hasattr(self, 'loop') and self.loop:
             asyncio.run_coroutine_threadsafe(
@@ -1700,6 +1760,7 @@ class OpenArmDashboardServer:
                         "frames_rx": rx_count,
                         "frames_tx": tx_count,
                         "mode": self.mode,
+                        "velocity_limit": self.velocity_limit,
                         "stream_stats": stream_info,
                         "export_stats": self.exporter.get_stats()
                     }
@@ -1728,9 +1789,48 @@ class OpenArmDashboardServer:
 
             await asyncio.sleep(1.0 / TELEMETRY_FREQ)
 
+    def _process_ws_http_request(self, connection, request):
+        """Redirect browser HTTP visits on port 8889 straight to Dashboard HTTP port 8888."""
+        try:
+            conn_header = request.headers.get("Connection", "").lower()
+            if "upgrade" not in conn_header:
+                host_header = request.headers.get("Host", "localhost")
+                host_name = host_header.split(":")[0] if ":" in host_header else host_header
+                redirect_url = f"http://{host_name}:{HTTP_PORT}/"
+                body = (
+                    f'<!DOCTYPE html><html><head>'
+                    f'<meta http-equiv="refresh" content="0; url={redirect_url}">'
+                    f'<title>Redirecting to OpenArm Dashboard</title>'
+                    f'</head>'
+                    f'<body style="font-family:sans-serif;text-align:center;padding:50px;background:#0d1117;color:#c9d1d9;">'
+                    f'<h2>Đang chuyển hướng tới OpenArm Dashboard...</h2>'
+                    f'<p>Cổng {WS_PORT} là cổng kết nối WebSocket Telemetry. Giao diện điều khiển chạy tại: '
+                    f'<a style="color:#58a6ff;" href="{redirect_url}">{redirect_url}</a></p>'
+                    f'<p><a style="display:inline-block;padding:10px 20px;background:#238636;color:white;text-decoration:none;border-radius:6px;font-weight:bold;" href="{redirect_url}">Vào Dashboard Ngay</a></p>'
+                    f'<script>window.location.href="{redirect_url}";</script>'
+                    f'</body></html>'
+                ).encode("utf-8")
+                from websockets.http11 import Response
+                from websockets.datastructures import Headers
+                headers = Headers([
+                    ("Location", redirect_url),
+                    ("Content-Type", "text/html; charset=utf-8"),
+                    ("Content-Length", str(len(body))),
+                    ("Connection", "close"),
+                ])
+                return Response(302, "Found", headers, body)
+        except Exception as e:
+            print(f"[WebSocket] Error handling HTTP redirect on port {WS_PORT}: {e}")
+        return None
+
     async def run_ws_server(self):
         """Launch asyncio WebSocket server on port 8889."""
         self.loop = asyncio.get_running_loop()
-        server = await websockets.serve(self.ws_handler, "0.0.0.0", WS_PORT)
+        server = await websockets.serve(
+            self.ws_handler,
+            "0.0.0.0",
+            WS_PORT,
+            process_request=self._process_ws_http_request
+        )
         print(f"[Dashboard] WebSocket Server running on ws://localhost:{WS_PORT} (Mode: {self.mode.upper()})")
         await self.broadcast_telemetry_loop()
