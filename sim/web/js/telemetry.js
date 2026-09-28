@@ -212,16 +212,16 @@ function handleExportStats(stats) {
         if (headerBadge) headerBadge.className = "badge badge-export recording";
         if (badgeText) badgeText.textContent = `REC (${samples.toLocaleString()})`;
         if (dot) dot.className = "export-status-dot recording";
-        if (subInfo) subInfo.textContent = `🔴 Đang record: exports/${filename} • ${hz} Hz • UDP :${stats.udp_port || 9871}`;
+        if (subInfo) subInfo.textContent = `Đang record: exports/${filename} • ${hz} Hz • UDP :${stats.udp_port || 9871}`;
         if (samplesBadge) {
             samplesBadge.className = "badge badge-danger";
-            samplesBadge.textContent = `🔴 Đang Record: ${samples.toLocaleString()} mẫu (${elapsed}s)`;
+            samplesBadge.textContent = `Đang Record: ${samples.toLocaleString()} mẫu (${elapsed}s)`;
         }
         if (recordBtn) {
             recordBtn.className = "btn-record-main recording";
             recordBtn.title = "Bấm để dừng và lưu file Record";
         }
-        if (recordIcon) recordIcon.textContent = "■";
+        if (recordIcon) recordIcon.textContent = "";
         if (recordText) recordText.textContent = "Dừng Record (End)";
     } else {
         // --- IDLE / STOPPED STATE ---
@@ -237,10 +237,10 @@ function handleExportStats(stats) {
         }
 
         if (samples > 0 && filename) {
-            if (subInfo) subInfo.textContent = `✓ Đã lưu HDF5: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
+            if (subInfo) subInfo.textContent = `Đã lưu HDF5: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
             if (samplesBadge) {
                 samplesBadge.className = "badge badge-success";
-                samplesBadge.textContent = `✓ Đã lưu • ${samples.toLocaleString()} mẫu (${elapsed}s)`;
+                samplesBadge.textContent = `Đã lưu • ${samples.toLocaleString()} mẫu (${elapsed}s)`;
             }
         } else {
             if (subInfo) subInfo.textContent = `Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu HDF5 (.hdf5) • UDP :${stats.udp_port || 9871}`;
@@ -254,7 +254,7 @@ function handleExportStats(stats) {
             recordBtn.className = "btn-record-main";
             recordBtn.title = "Bấm để bắt đầu Record dữ liệu góc khớp";
         }
-        if (recordIcon) recordIcon.textContent = "●";
+        if (recordIcon) recordIcon.textContent = "";
         if (recordText) recordText.textContent = "Bắt đầu Record";
     }
 }

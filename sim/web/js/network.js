@@ -144,6 +144,9 @@ function initWebSocket() {
                 if (typeof handleTelemetry === "function") {
                     handleTelemetry(msg.data);
                 }
+                if (msg.data.inference && typeof handleActInferenceTelemetry === "function") {
+                    handleActInferenceTelemetry(msg.data.inference);
+                }
             } else if (msg.type === "traffic") {
                 if (typeof handleTraffic === "function") {
                     handleTraffic(msg.data);

@@ -37,6 +37,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. Initialize Robot Dance Studio Subsystem
     initDanceEngine();
 
+    // 8. Initialize AI ACT Model & 3D Future Action Path Visualizer
+    if (typeof initFuturePathVisualizer === "function") {
+        initFuturePathVisualizer();
+    }
+    if (typeof setupActModelUI === "function") {
+        setupActModelUI();
+    }
+
     console.log("[INIT] OpenArm Modular Dashboard initialized successfully.");
 });
 

@@ -50,6 +50,7 @@ try:
     from can_bridge import RealRobotHardwareBridge
     from exporter import JointStateExporter100Hz
     from http_server import CustomHTTPHandler
+    from model_inference_engine import ModelInferenceEngine
     from motor_simulator import DamiaoArmSimulator
 except ImportError:
     from .config import (
@@ -78,6 +79,7 @@ except ImportError:
     from .can_bridge import RealRobotHardwareBridge
     from .exporter import JointStateExporter100Hz
     from .http_server import CustomHTTPHandler
+    from .model_inference_engine import ModelInferenceEngine
     from .motor_simulator import DamiaoArmSimulator
 
 
@@ -159,6 +161,9 @@ class OpenArmDashboardServer:
         self.loop = None
         self.active_trajectory_id = 0
         self.trajectory_lock = threading.Lock()
+
+        # AI Model Inference Engine (ACT Policy & Future Action Predictor)
+        self.inference_engine = ModelInferenceEngine(server=self)
 
     def start(self):
         """Start all background services, threads, and WebSocket server."""
@@ -430,6 +435,11 @@ class OpenArmDashboardServer:
     def stop(self):
         """Clean shutdown of all background threads, processes, and sockets."""
         self.running = False
+        if hasattr(self, "inference_engine") and self.inference_engine.running:
+            try:
+                self.inference_engine.stop_inference()
+            except Exception:
+                pass
         try:
             self.hw.stop()
         except Exception:
@@ -1054,14 +1064,65 @@ class OpenArmDashboardServer:
         elif action in ["record_start", "export_start"]:
             self.exporter.start_session("record")
             if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+
+        # -------------------------------------------------------------
+        # AI MODEL INFERENCE & FUTURE TRAJECTORY ACTIONS (ACT POLICY)
+        # -------------------------------------------------------------
+        elif action == "model_load":
+            ckpt = payload.get("checkpoint", "checkpoints/best_checkpoint.pth")
+            dev = payload.get("device", "cuda")
+            res = self.inference_engine.load_model(ckpt, device=dev)
+            status_text = res.get("metadata", {}).get("status", "Đã nạp")
+            notice_type = "success" if res.get("success") and not res.get("synthetic") else "info"
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice(notice_type, f"Model AI: {status_text} [{dev.upper()}]"),
+                    self.loop
+                )
+
+        elif action == "model_start":
+            ctrl_mode = payload.get("control_mode", "preview")  # 'preview' or 'hardware'
+            vel_scale = float(payload.get("vel_scale", 1.0))
+            ensemble_m = float(payload.get("ensemble_m", 0.01))
+            ckpt = payload.get("checkpoint", "")
+            res = self.inference_engine.start_inference(
+                control_mode=ctrl_mode,
+                vel_scale=vel_scale,
+                ensemble_m=ensemble_m,
+                checkpoint_path=ckpt
+            )
+            mode_desc = "3D MÔ PHỎNG AN TOÀN" if ctrl_mode == "preview" else "ROBOT THẬT (CAN BUS)"
+            notice_type = "info" if ctrl_mode == "preview" else "warning"
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice(notice_type, f"Chạy Model Inference ACT: Chế độ {mode_desc} ({vel_scale:.2f}x speed)"),
+                    self.loop
+                )
+
+        elif action == "model_stop":
+            self.inference_engine.stop_inference()
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice("warning", "Đã dừng Model Inference ACT."),
+                    self.loop
+                )
+
+        elif action == "model_step":
+            ctrl_mode = payload.get("control_mode", "preview")
+            res = self.inference_engine.single_step(control_mode=ctrl_mode)
+            if hasattr(self, 'loop') and self.loop:
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_notice("info", f"Bước đơn #{res.get('step', 1)}: Độ trễ {res.get('latency_ms', 0)}ms, Max |Δq| {res.get('max_delta_q', 0)} rad"),
+                    self.loop
+                )
 
         elif action in ["record_stop", "export_stop"]:
             prev_samples = self.exporter.samples
             prev_name = self.exporter.file_name or "joint_states"
             self.exporter.close_session()
             if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
 
         elif action in ["record_toggle", "export_toggle"]:
             if self.exporter.active:
@@ -1069,11 +1130,11 @@ class OpenArmDashboardServer:
                 prev_name = self.exporter.file_name or "joint_states"
                 self.exporter.close_session()
                 if hasattr(self, 'loop') and self.loop:
-                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"⏹ Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
             else:
                 self.exporter.start_session("record")
                 if hasattr(self, 'loop') and self.loop:
-                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "🔴 Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
 
         elif action == "export_new_session":
             self.exporter.start_session("record")
@@ -1753,6 +1814,13 @@ class OpenArmDashboardServer:
                         "last_ago": round(now_ts - last_t, 2) if last_t > 0 else -1
                     }
 
+                    # Inference Engine Status & Future Action Horizon
+                    inference_info = self.inference_engine.get_status()
+                    if self.inference_engine.latest_future_actions and (
+                        self.inference_engine.running or (now_ts - self.inference_engine.latest_pred_timestamp < 3.0)
+                    ):
+                        inference_info["future_actions"] = self.inference_engine.latest_future_actions
+
                 telem_msg = json.dumps({
                     "type": "telemetry",
                     "data": {
@@ -1762,7 +1830,8 @@ class OpenArmDashboardServer:
                         "mode": self.mode,
                         "velocity_limit": self.velocity_limit,
                         "stream_stats": stream_info,
-                        "export_stats": self.exporter.get_stats()
+                        "export_stats": self.exporter.get_stats(),
+                        "inference": inference_info
                     }
                 })
 
@@ -1834,3 +1903,26 @@ class OpenArmDashboardServer:
         )
         print(f"[Dashboard] WebSocket Server running on ws://localhost:{WS_PORT} (Mode: {self.mode.upper()})")
         await self.broadcast_telemetry_loop()
+
+
+def main():
+    can0_available = os.path.exists("/sys/class/net/can0")
+    if "--sim" in sys.argv or "--mode=sim" in sys.argv:
+        mode = "sim"
+    elif "--real" in sys.argv or "--mode=real" in sys.argv:
+        mode = "real"
+    else:
+        mode = "real" if can0_available else "sim"
+
+    print(f"[Dashboard] Mode selected: {mode.upper()} (can0 available: {can0_available})")
+    server = OpenArmDashboardServer(mode=mode, can0_if="can0", can1_if="can1")
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        print("\n[Dashboard] Stopping...")
+    finally:
+        server.stop()
+
+
+if __name__ == "__main__":
+    main()

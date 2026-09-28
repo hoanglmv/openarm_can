@@ -294,7 +294,8 @@ function setupEventHandlers() {
         joints: document.getElementById("pane-joints"),
         grippers: document.getElementById("pane-grippers"),
         presets: document.getElementById("pane-presets"),
-        target: document.getElementById("pane-target")
+        target: document.getElementById("pane-target"),
+        act: document.getElementById("pane-act")
     };
 
     function switchControlMode(mode) {
@@ -667,13 +668,13 @@ function setupEventHandlers() {
             telemPanel.classList.add("collapsed");
             if (telemGrid) telemGrid.style.display = "none";
             if (telemTabs) telemTabs.style.display = "none";
-            if (btnTelemExpand) btnTelemExpand.textContent = "Mở rộng ▲";
+            if (btnTelemExpand) btnTelemExpand.textContent = "Mở rộng";
             if (btnTelemHeader) btnTelemHeader.classList.remove("active");
         } else {
             telemPanel.classList.remove("collapsed");
             if (telemGrid) telemGrid.style.display = "grid";
             if (telemTabs) telemTabs.style.display = "flex";
-            if (btnTelemExpand) btnTelemExpand.textContent = "Thu gọn ▼";
+            if (btnTelemExpand) btnTelemExpand.textContent = "Thu gọn";
             if (btnTelemHeader) btnTelemHeader.classList.add("active");
         }
         setTimeout(onWindowResize, 50);

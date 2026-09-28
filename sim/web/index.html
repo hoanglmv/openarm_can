@@ -82,12 +82,7 @@
             <!-- Motion Speed / Rotation Velocity Control Bar -->
             <div class="speed-control-bar">
                 <div class="speed-control-header">
-                    <span class="speed-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="speed-icon">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
-                        Tốc Độ Quay Khớp
-                    </span>
+                    <span class="speed-title">Tốc Độ Quay Khớp</span>
                     <span class="speed-val-badge" id="disp-speed-global">0.25 rad/s (14°/s)</span>
                 </div>
                 <div class="speed-slider-row">
@@ -118,6 +113,9 @@
                     </button>
                     <button class="mode-tab-btn" id="btn-mode-target" data-mode="target" title="Nhập góc khớp mong muốn và gửi tín hiệu SDK điều khiển chuyển động">
                         Nhập Joint State
+                    </button>
+                    <button class="mode-tab-btn btn-mode-ai" id="btn-mode-act" data-mode="act" title="AI Model Inference & Future Trajectory Path (ACT Policy)">
+                        Model ACT (AI)
                     </button>
                 </div>
             </div>
@@ -157,7 +155,7 @@
                                 <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0)">Đóng (0mm)</button>
                                 <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.0215)">50% (21.5mm)</button>
                                 <button class="btn-gripper-action" onclick="setGripperDirect('left', 0.043)">Mở (43mm)</button>
-                                <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('left')" title="Đảo ngược chiều quay của động cơ kẹp">⇄ Đảo chiều</button>
+                                <button class="btn-gripper-action btn-gripper-invert" onclick="toggleGripperInvert('left')" title="Đảo ngược chiều quay của động cơ kẹp">Đảo chiều</button>
                             </div>
                         </div>
 
@@ -659,11 +657,164 @@
                 </div>
             </div>
 
+            <!-- PANE 5: AI MODEL INFERENCE & 3D FUTURE ACTION PATH (ACT POLICY) -->
+            <div class="mode-pane" id="pane-act" style="display: none;">
+                <div class="act-model-container">
+                    <!-- Header Bar -->
+                    <div class="act-section-header">
+                        <div class="act-header-left">
+                            <div>
+                                <h3>Mô Hình Tự Hành ACT (AI Inference)</h3>
+                                <span class="act-header-sub">Dự đoán chuỗi 50 hành động tương lai (Future Action Horizon)</span>
+                            </div>
+                        </div>
+                        <span class="badge badge-idle" id="act-model-status-badge">CHƯA NẠP</span>
+                    </div>
+
+                    <!-- Card 1: Checkpoint / Weights Loader -->
+                    <div class="act-card">
+                        <div class="act-card-title">
+                            <span>Trọng Số Mô Hình (Model Checkpoint)</span>
+                        </div>
+                        <div class="act-input-row">
+                            <input type="text" id="input-act-checkpoint" class="act-input-text" value="checkpoints/best_checkpoint.pth" placeholder="Nhập đường dẫn file checkpoint .pth...">
+                            <select id="select-act-device" class="act-select-device" title="Thiết bị chạy model">
+                                <option value="cuda" selected>CUDA (GPU)</option>
+                                <option value="cpu">CPU</option>
+                            </select>
+                            <button type="button" class="btn btn-primary btn-compact" id="btn-act-load">Nạp Model</button>
+                        </div>
+                        <!-- Suggested / Recent Checkpoint Chips -->
+                        <div class="act-chips-row">
+                            <span class="act-chips-label">Gợi ý file:</span>
+                            <button type="button" class="btn-ckpt-chip" data-path="checkpoints/best_checkpoint.pth">best_checkpoint.pth</button>
+                            <button type="button" class="btn-ckpt-chip" data-path="checkpoints/act_deploy_weights.pth">act_deploy_weights.pth</button>
+                            <button type="button" class="btn-ckpt-chip" data-path="dataset/act_openarm_model.pth">act_openarm_model.pth</button>
+                        </div>
+                        <!-- Model Info Specs -->
+                        <div class="act-specs-grid">
+                            <div class="act-spec-item">
+                                <span class="act-spec-label">Kiến trúc:</span>
+                                <strong class="act-spec-val" id="disp-act-arch">ACT CVAE (512d)</strong>
+                            </div>
+                            <div class="act-spec-item">
+                                <span class="act-spec-label">File nạp:</span>
+                                <strong class="act-spec-val" id="disp-act-ckpt">best_checkpoint.pth</strong>
+                            </div>
+                            <div class="act-spec-item">
+                                <span class="act-spec-label">Tầm nhìn:</span>
+                                <strong class="act-spec-val" id="disp-act-chunk">50 bước (1.0s)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Dual Execution Mode Selection -->
+                    <div class="act-card">
+                        <div class="act-card-title">
+                            <span>Chế Độ Thực Thi (Execution Mode)</span>
+                        </div>
+                        <div class="act-modes-grid">
+                            <label class="act-mode-option active" id="label-mode-preview">
+                                <input type="radio" name="act-mode-radio" id="radio-act-preview" value="preview" checked>
+                                <div class="act-mode-content">
+                                    <div class="act-mode-heading">
+                                        <strong>3D Simulation Preview (Mô Phỏng 3D)</strong>
+                                        <span class="badge badge-accent">Khuyên dùng</span>
+                                    </div>
+                                    <p class="act-mode-desc">
+                                        Đọc telemetry thực tế từ 16 motor & camera làm input, dự đoán chunk 50 bước, vẽ đường path 3D và mô phỏng cử động an toàn (không gửi xung CAN).
+                                    </p>
+                                </div>
+                            </label>
+                            <label class="act-mode-option act-mode-danger" id="label-mode-hardware">
+                                <input type="radio" name="act-mode-radio" id="radio-act-hardware" value="hardware">
+                                <div class="act-mode-content">
+                                    <div class="act-mode-heading">
+                                        <strong>Physical Robot Control (Robot Thật)</strong>
+                                        <span class="badge badge-warning">CAN Bus Real</span>
+                                    </div>
+                                    <p class="act-mode-desc">
+                                        Bơm xung điều khiển mượt mà qua S-Curve xuống 16 động cơ CAN bus ở 40Hz. Hãy kiểm tra đường path 3D trước khi kích hoạt!
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Action Controls & Velocity Scale -->
+                    <div class="act-card">
+                        <div class="act-speed-row">
+                            <span class="act-speed-label">Tốc Độ Vận Tốc:</span>
+                            <input type="range" id="slider-act-speed" min="0.2" max="1.5" step="0.05" value="1.0" class="act-slider">
+                            <span class="act-speed-badge" id="disp-act-speed">1.00x</span>
+                        </div>
+                        <div class="act-btn-row">
+                            <button type="button" class="btn btn-success btn-act-start" id="btn-act-start" title="Bắt đầu chạy chu trình inference liên tục">
+                                Bắt Đầu Chạy (Start)
+                            </button>
+                            <button type="button" class="btn btn-danger btn-act-stop" id="btn-act-stop" title="Dừng inference ngay lập tức">
+                                Dừng (Stop)
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-act-step" id="btn-act-step" title="Chạy duy nhất 1 bước inference để kiểm tra quỹ đạo">
+                                Bước Đơn (Step)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: 3D Future Action Path Settings -->
+                    <div class="act-card">
+                        <div class="act-card-title">
+                            <span>Hiển Thị Quỹ Đạo Tương Lai 3D (Future Path)</span>
+                        </div>
+                        <div class="act-path-toggles">
+                            <label class="act-checkbox-label">
+                                <input type="checkbox" id="check-show-future-path" checked>
+                                <span>Bật Quỹ Đạo 3D</span>
+                            </label>
+                            <label class="act-checkbox-label">
+                                <input type="checkbox" id="check-show-left-path" checked>
+                                <span class="tag-dot-cyan"></span>
+                                <span>Tay Trái (Cyan)</span>
+                            </label>
+                            <label class="act-checkbox-label">
+                                <input type="checkbox" id="check-show-right-path" checked>
+                                <span class="tag-dot-orange"></span>
+                                <span>Tay Phải (Orange)</span>
+                            </label>
+                        </div>
+                        <div class="act-horizon-row">
+                            <span class="act-horizon-label">Tầm nhìn dự đoán:</span>
+                            <input type="range" id="slider-path-horizon" min="10" max="50" step="5" value="50" class="act-slider">
+                            <span class="act-horizon-badge" id="disp-path-horizon">50 bước (Horizon 1.00s)</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: Live Inference Telemetry Metrics -->
+                    <div class="act-metrics-card">
+                        <div class="act-metric-box">
+                            <span class="metric-title">ĐỘ TRỄ</span>
+                            <span class="metric-val" id="disp-act-latency">0.0 ms</span>
+                        </div>
+                        <div class="act-metric-box">
+                            <span class="metric-title">TẦN SỐ</span>
+                            <span class="metric-val" id="disp-act-hz">0.0 FPS</span>
+                        </div>
+                        <div class="act-metric-box">
+                            <span class="metric-title">SỐ BƯỚC</span>
+                            <span class="metric-val" id="disp-act-steps">0</span>
+                        </div>
+                        <div class="act-metric-box">
+                            <span class="metric-title">MAX |Δq|</span>
+                            <span class="metric-val" id="disp-act-delta">0.0000 rad</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- COLLAPSIBLE ACCORDION: MỤC HIỂN THỊ THÊM (ADVANCED ACTIONS) -->
             <details class="more-actions-details">
                 <summary class="more-actions-summary">
                     <span>Tùy chọn & Tác vụ nâng cao</span>
-                    <span class="summary-arrow">▼</span>
                 </summary>
                 <div class="more-actions-content">
                     <div class="more-actions-buttons">
@@ -705,6 +856,7 @@
                         <button class="btn-tool" id="btn-top-view" title="Top View">Top</button>
                         <button class="btn-tool" id="btn-toggle-grid" title="Toggle Grid">Grid: ON</button>
                         <button class="btn-tool" id="btn-toggle-axes" title="Toggle Axes">Axes: ON</button>
+                        <button class="btn-tool active btn-tool-accent" id="btn-toggle-future-path" title="Bật/Tắt hiển thị quỹ đạo tương lai 3D (Future Action Path)">AI Path: ON</button>
                     </div>
                 </div>
                 <div id="three-container" class="three-container">
@@ -735,7 +887,6 @@
             <div class="panel telemetry-panel collapsed" id="telemetry-panel">
                 <div class="telemetry-bar-header" id="telemetry-toggle-header">
                     <div class="telem-header-left">
-                        <span class="telem-arrow-indicator" id="telem-arrow">▶</span>
                         <h2>Thông Số 16 Động Cơ (Live Telemetry)</h2>
                         <span class="badge badge-success" id="telem-summary-badge">16 Động cơ • 400Hz</span>
                     </div>
@@ -761,7 +912,6 @@
                         <span class="badge badge-outline" id="export-samples-badge">Chờ bắt đầu</span>
                         <a href="/api/export/download" class="btn-subtle-sm" id="btn-export-download" title="Tải file HDF5 (.hdf5) vừa ghi về máy" download>Tải HDF5</a>
                         <button class="btn-record-main" id="btn-record-toggle" title="Bắt đầu hoặc Dừng Record">
-                            <span class="rec-icon" id="btn-record-icon">●</span>
                             <span id="btn-record-text">Bắt đầu Record</span>
                         </button>
                     </div>
@@ -847,6 +997,8 @@ Click any button above to test the CLI interacting with the simulated 16-motor C
     <script src="js/telemetry.js?v=20"></script>
     <script src="js/dance_routines.js?v=12"></script>
     <script src="js/dance_engine.js?v=12"></script>
+    <script src="js/future_path.js?v=1"></script>
+    <script src="js/ui_act_model.js?v=1"></script>
     <script src="app.js?v=12"></script>
 </body>
 </html>
