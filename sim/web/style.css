@@ -1386,6 +1386,68 @@ body.theme-light .camera-feed-card {
     display: block;
 }
 
+/* Round red dataset record button, top-left of the 3D robot viewport */
+.btn-dataset-rec {
+    position: absolute;
+    z-index: 10;
+    top: 10px;
+    left: 10px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    background: rgba(15, 23, 42, 0.55);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.btn-dataset-rec:hover {
+    transform: scale(1.08);
+    background: rgba(15, 23, 42, 0.75);
+}
+
+.btn-dataset-rec-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ef4444;
+    transition: all 0.2s ease;
+}
+
+.btn-dataset-rec.recording {
+    animation: pulse-rec-btn 1.4s infinite;
+}
+
+.btn-dataset-rec.recording .btn-dataset-rec-icon {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    background: #dc2626;
+}
+
+.dataset-rec-timer {
+    position: absolute;
+    z-index: 10;
+    top: 17px;
+    left: 52px;
+    display: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(220, 38, 38, 0.9);
+    color: #ffffff;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.dataset-rec-timer.visible {
+    display: block;
+}
+
 .camera-feed-placeholder {
     position: absolute;
     inset: 0;
