@@ -180,17 +180,17 @@ class ModelInferenceEngine:
         # Inference loop control
         self.running = False
         self.thread: Optional[threading.Thread] = None
-        self.control_mode = "preview"  # 'preview' (safe 3D sim) or 'hardware' (real CAN bus)
+        self.control_mode = "shadow"  # 'shadow' (50Hz realtime zero-action), 'preview' (3D sim), or 'dual'/'hardware'
         self.vel_scale = 1.0
         self.ensemble_m = 0.01
-        self.target_hz = 40.0
+        self.target_hz = 50.0  # Strict 50Hz (dt = 20ms) as per KE_HOACH_REALTIME_VISUAL_50HZ.md
 
         # Ensembling & Smoothing
         self.chunk_size = 50
         self.action_dim = 16
         self.ensemble: Optional[Any] = None
         self.smoother = TrajectorySmoother(vel_scale=1.0, dt=1.0 / self.target_hz)
-        self.synthetic_gen = SyntheticTrajectoryGenerator(chunk_size=self.chunk_size)
+        self.synthetic_gen = SyntheticTrajectoryGenerator(chunk_size=self.chunk_size, dt=1.0 / self.target_hz)
 
         # Telemetry & Output Cache
         self.latest_future_actions: List[List[float]] = []
@@ -433,6 +433,18 @@ class ModelInferenceEngine:
                         qpos[motor_id - 1] = float(motor.q)
         return qpos
 
+    def get_latest_rgbd(self, torch_dev=None) -> Any:
+        """
+        Fetch synchronized 4-channel RGB-D frame from single chest camera.
+        Conforms strictly to 1 Chest Camera RealSense contract (KE_HOACH_REALTIME_VISUAL_50HZ.md).
+        """
+        if self.server and hasattr(self.server, "latest_rgbd_tensor") and self.server.latest_rgbd_tensor is not None:
+            tensor = self.server.latest_rgbd_tensor
+            if torch_dev is not None and TORCH_AVAILABLE and isinstance(tensor, torch.Tensor):
+                return tensor.to(torch_dev)
+            return tensor
+        return None
+
     def infer_step(self, current_qpos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Execute one inference cycle:
@@ -447,13 +459,15 @@ class ModelInferenceEngine:
             norm_qpos = normalize_data(current_qpos, self.stats["qpos_mean"], self.stats["qpos_std"])
             qpos_t = torch.tensor(norm_qpos, dtype=torch.float32).unsqueeze(0).to(torch_dev)
 
-            # Synthetic image frame if camera feed is not directly hooked
+            # Fetch frame from 1 single chest camera (or dummy if streaming not active)
             h = getattr(self.model_config, "img_height", 240)
             w = getattr(self.model_config, "img_width", 320)
-            dummy_img = torch.zeros((1, 4, h, w), dtype=torch.float32, device=torch_dev)
+            camera_img = self.get_latest_rgbd(torch_dev=torch_dev)
+            if camera_img is None:
+                camera_img = torch.zeros((1, 4, h, w), dtype=torch.float32, device=torch_dev)
 
             with torch.no_grad():
-                pred_chunk_norm, _, _ = self.model(image=dummy_img, qpos=qpos_t, actions=None)
+                pred_chunk_norm, _, _ = self.model(image=camera_img, qpos=qpos_t, actions=None)
                 pred_chunk_norm = pred_chunk_norm.squeeze(0).cpu().numpy()
 
             future_actions = unnormalize_data(pred_chunk_norm, self.stats["action_mean"], self.stats["action_std"])
@@ -477,12 +491,12 @@ class ModelInferenceEngine:
 
     def start_inference(
         self,
-        control_mode: str = "preview",
+        control_mode: str = "shadow",
         vel_scale: float = 1.0,
         ensemble_m: float = 0.01,
         checkpoint_path: str = "",
     ) -> Dict[str, Any]:
-        """Start the background inference loop."""
+        """Start the background 50Hz inference loop."""
         with self.lock:
             need_reload = False
             if not self.is_loaded:
@@ -519,7 +533,10 @@ class ModelInferenceEngine:
                 self.thread = threading.Thread(target=self._inference_loop, daemon=True)
                 self.thread.start()
 
-            print(f"[ModelEngine] Inference started in '{self.control_mode.upper()}' mode (Vel Scale: {self.vel_scale}x)")
+            if self.control_mode == "shadow":
+                print(f"[ModelEngine] Inference started in 'SHADOW' mode (50Hz Realtime Loop, Zero Motion Override - Passive Telemetry)")
+            else:
+                print(f"[ModelEngine] Inference started in '{self.control_mode.upper()}' mode (50Hz Realtime Loop, Vel Scale: {self.vel_scale}x)")
             return {
                 "success": True,
                 "mode": self.control_mode,
@@ -534,7 +551,7 @@ class ModelInferenceEngine:
             print("[ModelEngine] Inference stopped.")
             return {"success": True, "status": "stopped"}
 
-    def single_step(self, control_mode: str = "preview") -> Dict[str, Any]:
+    def single_step(self, control_mode: str = "shadow") -> Dict[str, Any]:
         """Execute exactly one inference step and return the future action horizon."""
         with self.lock:
             if not self.is_loaded:
@@ -547,7 +564,10 @@ class ModelInferenceEngine:
             self.latest_pred_timestamp = time.time()
             self.step_counter += 1
 
-            if control_mode in ["preview", "sim"]:
+            if control_mode == "shadow":
+                # Realtime AI Shadow: Zero motion on physical or virtual robot!
+                pass
+            elif control_mode in ["preview", "sim"]:
                 if self.server:
                     for i, val in enumerate(next_cmd[:16]):
                         motor_id = i + 1
@@ -576,7 +596,7 @@ class ModelInferenceEngine:
             self.server._set_single_joint_target(motor_id, float(val))
 
     def _inference_loop(self):
-        """Continuous ~40Hz loop executing model inference and future trajectory caching."""
+        """Continuous 50Hz loop executing model inference and future trajectory caching."""
         dt = 1.0 / self.target_hz
         last_time = time.perf_counter()
         hz_measure_t = time.perf_counter()
@@ -589,7 +609,7 @@ class ModelInferenceEngine:
                 # 1. Read real joint angles from hardware/sim
                 current_qpos = self.get_current_real_qpos()
 
-                # 2. Predict 50 future actions
+                # 2. Predict 50 future actions at 50Hz (1.0s horizon)
                 future_actions, next_cmd = self.infer_step(current_qpos)
 
                 # 3. Cache future action horizon for UI 3D visualizer
@@ -599,9 +619,12 @@ class ModelInferenceEngine:
                     self.step_counter += 1
 
                 # 4. Dispatch commands:
-                # In preview / sim mode: update virtual/simulator state so 3D digital twin moves smoothly!
-                # In hardware / dual mode: dispatch to real hardware CAN bus
-                if self.control_mode in ["preview", "sim"]:
+                # In 'shadow' mode: ZERO MOTION OVERRIDE! Robot remains at actual position.
+                # In 'preview' / 'sim' mode: update virtual/simulator state so 3D digital twin moves.
+                # In 'hardware' / 'dual' mode: dispatch to real hardware CAN bus
+                if self.control_mode == "shadow":
+                    pass
+                elif self.control_mode in ["preview", "sim"]:
                     if self.server:
                         for i, val in enumerate(next_cmd[:16]):
                             motor_id = i + 1
@@ -624,7 +647,7 @@ class ModelInferenceEngine:
             except Exception as e:
                 print(f"[ModelEngine Error]: {e}")
 
-            # Sleep to maintain stable control rate
+            # Sleep to maintain stable 50Hz control rate (dt = 0.020s)
             elapsed = time.perf_counter() - loop_start
             sleep_t = dt - elapsed
             if sleep_t > 0.001:

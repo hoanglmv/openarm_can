@@ -629,6 +629,8 @@ function setupEventHandlers() {
     if (btnResetCam) btnResetCam.addEventListener("click", resetCamera);
     const btnFrontView = document.getElementById("btn-front-view");
     if (btnFrontView) btnFrontView.addEventListener("click", setFrontView);
+    const btnSideView = document.getElementById("btn-side-view");
+    if (btnSideView) btnSideView.addEventListener("click", setSideView);
     const btnLeftView = document.getElementById("btn-left-view");
     if (btnLeftView) btnLeftView.addEventListener("click", setLeftArmView);
     const btnRightView = document.getElementById("btn-right-view");

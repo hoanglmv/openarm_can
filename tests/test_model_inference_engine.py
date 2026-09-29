@@ -44,27 +44,30 @@ def test_synthetic_trajectory_generator_continuity():
 
 def test_model_inference_engine_lifecycle():
     engine = ModelInferenceEngine(server=None)
+    assert engine.target_hz == 50.0
 
     # 1. Load model (should succeed in preview/mock or pytorch mode)
     load_res = engine.load_model("checkpoints/act_deploy_weights.pth")
     assert load_res["success"] is True
     assert engine.is_loaded is True
 
-    # 2. Single step inference
-    step_res = engine.single_step(control_mode="preview")
+    # 2. Single step inference in shadow mode (default)
+    step_res = engine.single_step(control_mode="shadow")
     assert step_res["success"] is True
     assert len(step_res["future_actions"]) == 50
     assert len(step_res["future_actions"][0]) == 16
 
-    # 3. Start background inference loop
-    start_res = engine.start_inference(control_mode="preview", vel_scale=1.0)
+    # 3. Start background inference loop in shadow mode
+    start_res = engine.start_inference(control_mode="shadow", vel_scale=1.0)
     assert start_res["success"] is True
     assert engine.running is True
+    assert engine.control_mode == "shadow"
 
     # Allow background loop to process at least 2 ticks
     time.sleep(0.08)
     status = engine.get_status()
     assert status["running"] is True
+    assert status["mode"] == "shadow"
     assert status["step_count"] > 0
     assert status["has_future_actions"] is True
 
@@ -72,3 +75,44 @@ def test_model_inference_engine_lifecycle():
     stop_res = engine.stop_inference()
     assert stop_res["success"] is True
     assert engine.running is False
+
+
+def test_model_inference_engine_shadow_mode_zero_motion():
+    """Verify that shadow mode NEVER modifies joint target angles or dispatches commands."""
+    class DummyMotor:
+        def __init__(self, q=0.5):
+            self.q = q
+            self.q_target = q
+            self.q_cmd = q
+            self.joint_idx = 1
+            self.last_update = time.time()
+
+    class DummyHW:
+        def __init__(self):
+            import threading
+            self.lock = threading.Lock()
+
+    class DummyServer:
+        def __init__(self):
+            self.mode = "sim"
+            self.hw = DummyHW()
+            self.motors = {i: DummyMotor(0.5) for i in range(1, 17)}
+            self.dispatched = []
+
+        def _set_single_joint_target(self, motor_id, pos):
+            self.dispatched.append((motor_id, pos))
+
+    server = DummyServer()
+    engine = ModelInferenceEngine(server=server)
+    engine.load_model()
+
+    # In shadow mode, run single step
+    res = engine.single_step(control_mode="shadow")
+    assert res["success"] is True
+    assert len(res["future_actions"]) == 50
+
+    # Verify all motors still have q_target == 0.5 and q == 0.5
+    for m in server.motors.values():
+        assert m.q_target == 0.5
+        assert m.q == 0.5
+    assert len(server.dispatched) == 0

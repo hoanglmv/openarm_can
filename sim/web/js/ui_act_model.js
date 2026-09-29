@@ -1,12 +1,16 @@
 // ==============================================================================
-// OPENARM AI MODEL INFERENCE & FUTURE TRAJECTORY UI CONTROLLER (ACT)
-// Wires the AI Model control panel, execution modes (3D Simulation Preview vs Real Hardware),
-// live trajectory horizon streaming, and WebSocket command dispatch.
+// OPENARM AI MODEL INFERENCE & FUTURE TRAJECTORY UI CONTROLLER (ACT 50Hz)
+// Conforms strictly to KE_HOACH_REALTIME_VISUAL_50HZ.md:
+//   - Mode 1 (Default): Realtime AI Shadow (50Hz - Zero Motion, Observe Only)
+//   - Mode 2: 3D Simulation Preview (Moves Virtual Twin)
+//   - Mode 3: Physical Robot CAN Bus Control (Dual / Hardware)
+//   - End-Effector 3-Axis Triad Gizmo (Z-Forward, X-Jaw, Y-Normal) Controls
+//   - Ghost Gripper Wireframe at t=50 (Displays predicted J8/J16 stroke)
 // ==============================================================================
 
 let actInferenceState = {
     running: false,
-    mode: "preview", // 'preview' (safe 3D sim) or 'hardware' (real CAN bus)
+    mode: "shadow", // 'shadow' (default 50Hz realtime observe-only), 'preview' (3D sim), or 'dual' (real CAN bus)
     isLoaded: false,
     isSynthetic: false,
     latencyMs: 0,
@@ -79,17 +83,22 @@ function setupActModelUI() {
             const parentLabel = radio.closest(".act-mode-option");
             if (parentLabel) parentLabel.classList.add("active");
 
-            // Sync with global execution mode button in left control panel
-            const globalMode = radio.value === "preview" ? "sim" : "dual";
-            if (typeof setGlobalExecutionMode === "function") {
-                setGlobalExecutionMode(globalMode, false);
+            // Sync with global execution mode button in left control panel if dual is chosen
+            if (radio.value === "dual") {
+                if (typeof setGlobalExecutionMode === "function") {
+                    setGlobalExecutionMode("dual", false);
+                }
+            } else {
+                if (typeof setGlobalExecutionMode === "function") {
+                    setGlobalExecutionMode("sim", false);
+                }
             }
         });
     });
 
     const getSelectedControlMode = () => {
         const checked = document.querySelector('input[name="act-mode-radio"]:checked');
-        return checked ? checked.value : "preview";
+        return checked ? checked.value : "shadow";
     };
 
     if (btnStart) {
@@ -101,13 +110,17 @@ function setupActModelUI() {
             if (controlMode === "dual") {
                 const confirmed = confirm(
                     "CẢNH BÁO AN TOÀN PHẦN CỨNG:\n" +
-                    "Bạn đang chọn chế độ 'CHẠY CẢ 2 (MÔ PHỎNG & ROBOT THẬT)'.\n" +
+                    "Bạn đang chọn chế độ '3. Physical Robot Control (Robot thật CAN Bus)'.\n" +
                     "Hệ thống sẽ đồng thời mô phỏng 3D và bơm xung điều khiển xuống 16 động cơ CAN bus!\n" +
                     "Hãy chắc chắn không gian xung quanh robot an toàn. Tiếp tục?"
                 );
                 if (!confirmed) return;
             }
-            const modeName = controlMode === "preview" ? "Chỉ Mô Phỏng 3D (Simulation)" : "Chạy Cả 2 (Mô Phỏng & Robot Thật)";
+
+            let modeName = "Realtime AI Shadow (50Hz - Zero Motion)";
+            if (controlMode === "preview") modeName = "3D Simulation Preview (Mô phỏng 3D)";
+            if (controlMode === "dual") modeName = "Physical Robot Control (Robot thật CAN Bus)";
+
             if (typeof showToast === "function") {
                 showToast("info", `Đang khởi chạy suy luận ACT: ${modeName}...`);
             }
@@ -135,7 +148,7 @@ function setupActModelUI() {
         btnStep.addEventListener("click", () => {
             const controlMode = getSelectedControlMode();
             if (typeof showToast === "function") {
-                showToast("info", "Đang chạy 1 bước suy luận ACT...");
+                showToast("info", `Đang chạy 1 bước suy luận ACT [${controlMode.toUpperCase()}]...`);
             }
             sendWsMessage({
                 action: "model_step",
@@ -186,7 +199,49 @@ function setupActModelUI() {
         });
     }
 
-    // 5. Hook 3D Viewport Toolbar Button
+    // 5. Hook End-Effector 3-Axis Triad Gizmo & Ghost Gripper Controls
+    const checkShowTriad = document.getElementById("check-show-triad");
+    const checkShowGhostGripper = document.getElementById("check-show-ghost-gripper");
+    const sliderTriadSize = document.getElementById("slider-triad-size");
+    const dispTriadSize = document.getElementById("disp-triad-size");
+    const selectTriadStride = document.getElementById("select-triad-stride");
+
+    if (checkShowTriad) {
+        checkShowTriad.addEventListener("change", (e) => {
+            if (typeof setShowTriads === "function") {
+                setShowTriads(e.target.checked);
+            }
+        });
+    }
+
+    if (checkShowGhostGripper) {
+        checkShowGhostGripper.addEventListener("change", (e) => {
+            if (typeof setShowGhostGripper === "function") {
+                setShowGhostGripper(e.target.checked);
+            }
+        });
+    }
+
+    if (sliderTriadSize) {
+        sliderTriadSize.addEventListener("input", (e) => {
+            const val = parseFloat(e.target.value);
+            if (dispTriadSize) dispTriadSize.textContent = `${Math.round(val * 100)} cm (${val.toFixed(2)}m)`;
+            if (typeof setTriadSize === "function") {
+                setTriadSize(val);
+            }
+        });
+    }
+
+    if (selectTriadStride) {
+        selectTriadStride.addEventListener("change", (e) => {
+            const stride = parseInt(e.target.value, 10);
+            if (typeof setTriadStride === "function") {
+                setTriadStride(stride);
+            }
+        });
+    }
+
+    // 6. Hook 3D Viewport Toolbar Button
     const btnTogglePath = document.getElementById("btn-toggle-future-path");
     if (btnTogglePath) {
         btnTogglePath.addEventListener("click", () => {
@@ -197,7 +252,7 @@ function setupActModelUI() {
         });
     }
 
-    // 6. Hook Presets / Suggested Checkpoint Chips
+    // 7. Hook Presets / Suggested Checkpoint Chips
     document.querySelectorAll(".btn-ckpt-chip").forEach((chip) => {
         chip.addEventListener("click", () => {
             const path = chip.getAttribute("data-path");
@@ -208,7 +263,7 @@ function setupActModelUI() {
         });
     });
 
-    console.log("[INIT] OpenArm ACT AI Model UI subsystem initialized.");
+    console.log("[INIT] OpenArm ACT AI Model UI subsystem initialized (50Hz Realtime Shadow Mode ready).");
 }
 
 function updateViewportPathBtn(active) {
@@ -233,7 +288,7 @@ function handleActInferenceTelemetry(infData) {
     if (!infData) return;
 
     actInferenceState.running = Boolean(infData.running);
-    actInferenceState.mode = infData.mode || "preview";
+    actInferenceState.mode = infData.mode || "shadow";
     actInferenceState.isLoaded = Boolean(infData.is_loaded);
     actInferenceState.isSynthetic = Boolean(infData.is_synthetic);
     actInferenceState.latencyMs = infData.latency_ms || 0;
@@ -241,14 +296,16 @@ function handleActInferenceTelemetry(infData) {
     actInferenceState.stepCount = infData.step_count || 0;
     actInferenceState.maxDeltaQ = infData.max_delta_q || 0;
 
-    // Update Status Badge & Cards
+    // Update Status Badge
     if (actInferenceState.running) {
-        if (actInferenceState.mode === "hardware_only") {
+        if (actInferenceState.mode === "shadow") {
+            updateActStatusBadge("info", "SHADOW 50Hz (CHỈ QUAN SÁT)");
+        } else if (actInferenceState.mode === "hardware_only" || actInferenceState.mode === "hardware") {
             updateActStatusBadge("warning", "CHỈ ROBOT THẬT (CAN)");
         } else if (actInferenceState.mode === "dual") {
             updateActStatusBadge("success", "CHẠY CẢ 2 (3D + ROBOT)");
         } else {
-            updateActStatusBadge("info", "CHỈ MÔ PHỎNG 3D (AN TOÀN)");
+            updateActStatusBadge("accent", "CHỈ MÔ PHỎNG 3D (SIM)");
         }
     } else if (actInferenceState.isLoaded) {
         updateActStatusBadge(
@@ -278,9 +335,9 @@ function handleActInferenceTelemetry(infData) {
         const inputCkpt = document.getElementById("input-act-checkpoint");
         const selectDevice = document.getElementById("select-act-device");
 
-        if (elArch) elArch.textContent = infData.metadata.architecture || "ACT CVAE";
+        if (elArch) elArch.textContent = infData.metadata.architecture || "ACT CVAE (50Hz)";
         if (elCkpt) elCkpt.textContent = infData.metadata.checkpoint || "--";
-        if (elChunk) elChunk.textContent = `${infData.metadata.chunk_size || 50} steps (1.0s)`;
+        if (elChunk) elChunk.textContent = `${infData.metadata.chunk_size || 50} steps (1.0s @ 50Hz)`;
 
         if (inputCkpt && !inputCkpt.dataset.userEdited && infData.metadata.full_path) {
             inputCkpt.value = infData.metadata.full_path;
@@ -290,14 +347,16 @@ function handleActInferenceTelemetry(infData) {
         }
     }
 
-    // Update 3D Future Action Path
+    // Update 3D Future Action Path, 6-DOF Triads & Ghost Gripper
     if (infData.future_actions && Array.isArray(infData.future_actions)) {
         actInferenceState.futureActions = infData.future_actions;
         if (typeof updateFutureActionPath === "function") {
             updateFutureActionPath(infData.future_actions);
         }
 
-        // If in 3D Preview simulation or Dual mode, preview motion on Three.js robot
+        // ZERO MOTION GUARANTEE:
+        // Only in 'preview' or 'dual' mode does the virtual 3D arm follow predicted actions.
+        // In 'shadow' mode, robot posture remains 100% untouched at actual current angles!
         if (actInferenceState.running && (actInferenceState.mode === "preview" || actInferenceState.mode === "dual") && infData.future_actions.length > 0) {
             const step0 = infData.future_actions[0];
             if (step0 && step0.length >= 16) {

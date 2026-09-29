@@ -1160,7 +1160,7 @@ class OpenArmDashboardServer:
                 )
 
         elif action == "model_start":
-            ctrl_mode = payload.get("control_mode", "preview")  # 'preview' or 'hardware'
+            ctrl_mode = payload.get("control_mode", "shadow")  # 'shadow' (default), 'preview', or 'dual'
             vel_scale = float(payload.get("vel_scale", 1.0))
             ensemble_m = float(payload.get("ensemble_m", 0.01))
             ckpt = payload.get("checkpoint", "")
@@ -1170,8 +1170,11 @@ class OpenArmDashboardServer:
                 ensemble_m=ensemble_m,
                 checkpoint_path=ckpt
             )
-            if ctrl_mode == "preview":
-                mode_desc = "CHỈ MÔ PHỎNG 3D (AN TOÀN)"
+            if ctrl_mode == "shadow":
+                mode_desc = "REALTIME AI SHADOW 50Hz (CHỈ QUAN SÁT - ZERO MOTION)"
+                notice_type = "info"
+            elif ctrl_mode == "preview":
+                mode_desc = "CHỈ MÔ PHỎNG 3D (SIMULATION)"
                 notice_type = "info"
             elif ctrl_mode == "hardware_only":
                 mode_desc = "CHỈ ROBOT THẬT (CAN BUS)"
@@ -1195,11 +1198,11 @@ class OpenArmDashboardServer:
                 )
 
         elif action == "model_step":
-            ctrl_mode = payload.get("control_mode", "preview")
+            ctrl_mode = payload.get("control_mode", "shadow")
             res = self.inference_engine.single_step(control_mode=ctrl_mode)
             if hasattr(self, 'loop') and self.loop:
                 asyncio.run_coroutine_threadsafe(
-                    self.broadcast_notice("info", f"Bước đơn #{res.get('step', 1)}: Độ trễ {res.get('latency_ms', 0)}ms, Max |Δq| {res.get('max_delta_q', 0)} rad"),
+                    self.broadcast_notice("info", f"Bước đơn #{res.get('step', 1)} [{ctrl_mode.upper()}]: Độ trễ {res.get('latency_ms', 0)}ms, Max |Δq| {res.get('max_delta_q', 0)} rad"),
                     self.loop
                 )
 

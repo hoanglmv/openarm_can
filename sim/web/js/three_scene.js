@@ -97,6 +97,12 @@ function setFrontView() {
     if (controls) controls.target.set(0, 0.40, 0);
 }
 
+function setSideView() {
+    if (!camera) return;
+    camera.position.set(1.20, 0.42, 0.10);
+    if (controls) controls.target.set(0, 0.40, 0);
+}
+
 function setLeftArmView() {
     if (!camera) return;
     camera.position.set(-0.28, 0.38, 0.65);

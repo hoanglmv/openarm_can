@@ -725,35 +725,48 @@
                         </div>
                     </div>
 
-                    <!-- Card 2: Dual Execution Mode Selection -->
+                    <!-- Card 2: 3 Execution Modes (Shadow 50Hz, Sim Preview, Hardware Dual) -->
                     <div class="act-card">
                         <div class="act-card-title">
                             <span>Chế Độ Thực Thi (Execution Mode)</span>
                         </div>
                         <div class="act-modes-grid">
-                            <!-- Option 1: Chỉ Mô Phỏng -->
-                            <label class="act-mode-option active" id="label-mode-preview">
-                                <input type="radio" name="act-mode-radio" id="radio-act-preview" value="preview" checked>
+                            <!-- Option 1: 50Hz Realtime AI Shadow (Default & Safe) -->
+                            <label class="act-mode-option act-mode-shadow active" id="label-mode-shadow">
+                                <input type="radio" name="act-mode-radio" id="radio-act-shadow" value="shadow" checked>
                                 <div class="act-mode-content">
                                     <div class="act-mode-heading">
-                                        <strong>1. Chỉ Mô Phỏng 3D (Simulation Only)</strong>
-                                        <span class="badge badge-accent">An toàn 100%</span>
+                                        <strong>1. 📡 Realtime AI Shadow (50Hz - Chỉ quan sát)</strong>
+                                        <span class="badge badge-accent">Zero-Motion • An toàn 100%</span>
                                     </div>
                                     <p class="act-mode-desc">
-                                        Lấy dữ liệu thực tế (Live Joint State & Camera) làm đầu vào Model ACT, dự đoán và chỉ hiển thị chuyển động trên 3D Digital Twin + Future Path. Tuyệt đối không gửi lệnh CAN xuống robot thật.
+                                        Suy luận liên tục 50Hz (chu kỳ 20ms) từ góc khớp hiện tại và 1 camera ngực. Hiển thị chùm quỹ đạo 50 bước và hệ trục End-Effector 3 hướng (Z-Tiến, X-Má kẹp, Y-Pháp tuyến). Giữ nguyên góc robot, tuyệt đối không can thiệp cử động.
                                     </p>
                                 </div>
                             </label>
-                            <!-- Option 2: Chạy Cả 2 -->
+                            <!-- Option 2: 3D Simulation Preview -->
+                            <label class="act-mode-option" id="label-mode-preview">
+                                <input type="radio" name="act-mode-radio" id="radio-act-preview" value="preview">
+                                <div class="act-mode-content">
+                                    <div class="act-mode-heading">
+                                        <strong>2. 🛡️ 3D Simulation Preview (Mô phỏng robot trên 3D)</strong>
+                                        <span class="badge badge-info">Mô phỏng 3D</span>
+                                    </div>
+                                    <p class="act-mode-desc">
+                                        Mô phỏng chuyển động robot trực tiếp trên mô hình 3D Digital Twin trong trình duyệt theo quỹ đạo dự đoán. Tuyệt đối không gửi lệnh CAN xuống robot thật.
+                                    </p>
+                                </div>
+                            </label>
+                            <!-- Option 3: Physical Robot Control (Dual) -->
                             <label class="act-mode-option act-mode-dual" id="label-mode-dual">
                                 <input type="radio" name="act-mode-radio" id="radio-act-dual" value="dual">
                                 <div class="act-mode-content">
                                     <div class="act-mode-heading">
-                                        <strong>2. Chạy Cả 2 (Dual: Mô Phỏng & Robot Thật)</strong>
+                                        <strong>3. ⚡ Physical Robot Control (Robot thật CAN Bus)</strong>
                                         <span class="badge badge-success">Đồng bộ Real-Time</span>
                                     </div>
                                     <p class="act-mode-desc">
-                                        Đồng thời vừa mô phỏng 3D + vẽ quỹ đạo tương lai, vừa bơm xung điều khiển vị trí trực tiếp xuống 16 động cơ robot thật theo thời gian thực.
+                                        Đồng thời vừa mô phỏng 3D + vẽ quỹ đạo tương lai, vừa bơm xung điều khiển vị trí trực tiếp xuống 16 động cơ robot thật theo thời gian thực qua CAN bus.
                                     </p>
                                 </div>
                             </label>
@@ -780,10 +793,10 @@
                         </div>
                     </div>
 
-                    <!-- Card 4: 3D Future Action Path Settings -->
+                    <!-- Card 4: 3D Future Action Path & End-Effector Triad Settings -->
                     <div class="act-card">
                         <div class="act-card-title">
-                            <span>Hiển Thị Quỹ Đạo Tương Lai 3D (Future Path)</span>
+                            <span>Hiển Thị Quỹ Đạo Tương Lai 3D & Hệ Trục End-Effector</span>
                         </div>
                         <div class="act-path-toggles">
                             <label class="act-checkbox-label">
@@ -800,11 +813,36 @@
                                 <span class="tag-dot-orange"></span>
                                 <span>Tay Phải (Orange)</span>
                             </label>
+                            <label class="act-checkbox-label" title="Trục Z (Xanh dương - Hướng tiến), Trục X (Đỏ - Má kẹp), Trục Y (Xanh lá - Pháp tuyến)">
+                                <input type="checkbox" id="check-show-triad" checked>
+                                <span class="tag-dot-triad-blue"></span>
+                                <span class="tag-dot-triad-red"></span>
+                                <span class="tag-dot-triad-green"></span>
+                                <span>Hệ Trục 3 Hướng (Z-Tiến, X-Kẹp, Y-Pháp tuyến)</span>
+                            </label>
+                            <label class="act-checkbox-label" title="Vẽ khung dây má kẹp mô phỏng độ mở J8/J16 tại bước đích t=50">
+                                <input type="checkbox" id="check-show-ghost-gripper" checked>
+                                <span>Khung Kẹp Ghost Gripper (t=50)</span>
+                            </label>
                         </div>
                         <div class="act-horizon-row">
                             <span class="act-horizon-label">Tầm nhìn dự đoán:</span>
                             <input type="range" id="slider-path-horizon" min="10" max="50" step="5" value="50" class="act-slider">
                             <span class="act-horizon-badge" id="disp-path-horizon">50 bước (Horizon 1.00s)</span>
+                        </div>
+                        <div class="act-triad-row">
+                            <span class="act-triad-label">Kích thước trục Gizmo:</span>
+                            <input type="range" id="slider-triad-size" min="0.02" max="0.08" step="0.01" value="0.05" class="act-slider">
+                            <span class="act-triad-badge" id="disp-triad-size">5 cm (0.05m)</span>
+                        </div>
+                        <div class="act-triad-row">
+                            <span class="act-triad-label">Mật độ bước (Stride):</span>
+                            <select id="select-triad-stride" class="act-select-device" style="flex: 1;">
+                                <option value="5">Mỗi 5 bước (Chi tiết cao)</option>
+                                <option value="10" selected>Mỗi 10 bước (Khuyên dùng: t=10, 20, 30, 40, 50)</option>
+                                <option value="25">Mỗi 25 bước (t=25, 50)</option>
+                                <option value="50">Chỉ bước đích (t=50)</option>
+                            </select>
                         </div>
                     </div>
 
@@ -870,9 +908,10 @@
                     <div class="viewport-actions">
                         <button class="btn-tool" id="btn-reset-cam" title="Reset Camera">Reset Cam</button>
                         <button class="btn-tool" id="btn-front-view" title="Front View">Front</button>
+                        <button class="btn-tool" id="btn-side-view" title="Side View">Side</button>
+                        <button class="btn-tool" id="btn-top-view" title="Top View">Top</button>
                         <button class="btn-tool" id="btn-left-view" title="Left Arm Close-up">Left Arm</button>
                         <button class="btn-tool" id="btn-right-view" title="Right Arm Close-up">Right Arm</button>
-                        <button class="btn-tool" id="btn-top-view" title="Top View">Top</button>
                         <button class="btn-tool" id="btn-toggle-grid" title="Toggle Grid">Grid: ON</button>
                         <button class="btn-tool" id="btn-toggle-axes" title="Toggle Axes">Axes: ON</button>
                         <button class="btn-tool active btn-tool-accent" id="btn-toggle-future-path" title="Bật/Tắt hiển thị quỹ đạo tương lai 3D (Future Action Path)">AI Path: ON</button>
