@@ -1,0 +1,20 @@
+[Unit]
+Description=OpenArm Dual 7-DOF Control Dashboard & ACT AI Inference Server
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=quan
+Group=quan
+WorkingDirectory=/home/quan/openarm_can
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/home/quan/openarm_can/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=OPENARM_MODEL_CHECKPOINT=/home/quan/openarm_can/checkpoints/act_real_data/best_checkpoint.pth
+ExecStart=/home/quan/openarm_can/.venv/bin/python sim/server.py
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

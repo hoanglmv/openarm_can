@@ -200,20 +200,60 @@ class ModelInferenceEngine:
         self.step_counter: int = 0
         self.max_delta_q: float = 0.0
 
-    def load_model(self, checkpoint_path: str, device: str = "cpu") -> Dict[str, Any]:
+    @classmethod
+    def find_default_checkpoint(cls) -> str:
+        """Find the best available checkpoint file for automatic model loading."""
+        env_ckpt = os.environ.get("OPENARM_MODEL_CHECKPOINT")
+        if env_ckpt and os.path.exists(env_ckpt):
+            return env_ckpt
+
+        candidates = [
+            os.path.join(BASE_DIR, "checkpoints", "act_real_data", "best_checkpoint.pth"),
+            os.path.join(BASE_DIR, "checkpoints", "best_checkpoint.pth"),
+            os.path.join(BASE_DIR, "checkpoints", "act_real_data", "act_deploy_weights.pth"),
+            os.path.join(BASE_DIR, "checkpoints", "act_reach_forward", "best_checkpoint.pth"),
+            os.path.join(BASE_DIR, "checkpoints", "act_reach_forward", "act_deploy_weights.pth"),
+            os.path.join(BASE_DIR, "checkpoints", "act_deploy_weights.pth"),
+            os.path.join(BASE_DIR, "dataset", "act_openarm_model.pth"),
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+
+        # Recursive search in checkpoints dir
+        ckpt_dir = os.path.join(BASE_DIR, "checkpoints")
+        if os.path.exists(ckpt_dir):
+            for root, _, files in os.walk(ckpt_dir):
+                for f in files:
+                    if f.endswith(".pth") and "best" in f.lower():
+                        return os.path.join(root, f)
+            for root, _, files in os.walk(ckpt_dir):
+                for f in files:
+                    if f.endswith(".pth"):
+                        return os.path.join(root, f)
+
+        return os.path.join(BASE_DIR, "checkpoints", "best_checkpoint.pth")
+
+    def load_model(self, checkpoint_path: str = "", device: str = "auto") -> Dict[str, Any]:
         """
         Load weights from checkpoint .pth file, inspect architecture, and set up policy.
         If file not found or torch unavailable, falls back to high-fidelity synthetic model.
         """
         with self.lock:
+            if not checkpoint_path:
+                checkpoint_path = self.find_default_checkpoint()
+
             resolved_path = os.path.abspath(checkpoint_path)
             if not os.path.exists(resolved_path):
                 # Search common locations
                 candidate_paths = [
                     os.path.join(BASE_DIR, checkpoint_path),
                     os.path.join(BASE_DIR, "checkpoints", os.path.basename(checkpoint_path)),
+                    os.path.join(BASE_DIR, "checkpoints", "act_real_data", os.path.basename(checkpoint_path)),
+                    os.path.join(BASE_DIR, "checkpoints", "act_real_data", "best_checkpoint.pth"),
                     os.path.join(BASE_DIR, "checkpoints", "best_checkpoint.pth"),
                     os.path.join(BASE_DIR, "checkpoints", "act_deploy_weights.pth"),
+                    os.path.join(BASE_DIR, "checkpoints", "act_reach_forward", "best_checkpoint.pth"),
                     os.path.join(BASE_DIR, "dataset", "act_openarm_model.pth"),
                 ]
                 for p in candidate_paths:
@@ -256,9 +296,11 @@ class ModelInferenceEngine:
 
             # PyTorch Model Loading
             try:
-                torch_device = torch.device(
-                    device if torch.cuda.is_available() and device.startswith("cuda") else "cpu"
-                )
+                if device == "auto" or not device:
+                    target_dev = "cuda" if torch.cuda.is_available() else "cpu"
+                else:
+                    target_dev = "cuda" if (device.startswith("cuda") and torch.cuda.is_available()) else "cpu"
+                torch_device = torch.device(target_dev)
                 print(f"[ModelEngine] Loading checkpoint: {resolved_path} on {torch_device}...")
 
                 checkpoint = torch.load(resolved_path, map_location=torch_device, weights_only=False)
@@ -270,6 +312,17 @@ class ModelInferenceEngine:
                     if os.path.exists(stats_path):
                         stats = load_norm_stats(stats_path)
                     else:
+                        alt_stats = [
+                            os.path.join(BASE_DIR, "checkpoints", "dataset_stats.pkl"),
+                            os.path.join(BASE_DIR, "checkpoints", "act_real_data", "dataset_stats.pkl"),
+                            os.path.join(BASE_DIR, "checkpoints", "act_reach_forward", "dataset_stats.pkl"),
+                        ]
+                        for s_path in alt_stats:
+                            if os.path.exists(s_path):
+                                stats = load_norm_stats(s_path)
+                                break
+
+                    if stats is None:
                         stats = {
                             "qpos_mean": np.zeros(16, dtype=np.float32),
                             "qpos_std": np.ones(16, dtype=np.float32),
@@ -431,7 +484,16 @@ class ModelInferenceEngine:
     ) -> Dict[str, Any]:
         """Start the background inference loop."""
         with self.lock:
-            if not self.is_loaded or checkpoint_path:
+            need_reload = False
+            if not self.is_loaded:
+                need_reload = True
+            elif checkpoint_path:
+                curr_real = os.path.realpath(self.checkpoint_path) if self.checkpoint_path else ""
+                new_real = os.path.realpath(checkpoint_path) if os.path.exists(checkpoint_path) else checkpoint_path
+                if os.path.exists(checkpoint_path) and curr_real != new_real:
+                    need_reload = True
+
+            if need_reload:
                 path_to_load = checkpoint_path or self.checkpoint_path or "checkpoints/best_checkpoint.pth"
                 self.load_model(path_to_load)
 
@@ -485,7 +547,16 @@ class ModelInferenceEngine:
             self.latest_pred_timestamp = time.time()
             self.step_counter += 1
 
-            if control_mode in ["hardware", "hardware_only", "dual", "both"] and self.server:
+            if control_mode in ["preview", "sim"]:
+                if self.server:
+                    for i, val in enumerate(next_cmd[:16]):
+                        motor_id = i + 1
+                        m = self.server.motors.get(motor_id)
+                        if m:
+                            m.q_target = float(val)
+                            if self.server.mode == "sim":
+                                m.q = float(val)
+            elif control_mode in ["hardware", "hardware_only", "dual", "both"] and self.server:
                 self._dispatch_hardware_commands(next_cmd)
 
             return {
@@ -527,8 +598,19 @@ class ModelInferenceEngine:
                     self.latest_pred_timestamp = time.time()
                     self.step_counter += 1
 
-                # 4. Dispatch commands if hardware or dual mode is active
-                if self.control_mode in ["hardware", "hardware_only", "dual", "both"]:
+                # 4. Dispatch commands:
+                # In preview / sim mode: update virtual/simulator state so 3D digital twin moves smoothly!
+                # In hardware / dual mode: dispatch to real hardware CAN bus
+                if self.control_mode in ["preview", "sim"]:
+                    if self.server:
+                        for i, val in enumerate(next_cmd[:16]):
+                            motor_id = i + 1
+                            m = self.server.motors.get(motor_id)
+                            if m:
+                                m.q_target = float(val)
+                                if self.server.mode == "sim":
+                                    m.q = float(val)
+                elif self.control_mode in ["hardware", "hardware_only", "dual", "both"]:
                     self._dispatch_hardware_commands(next_cmd)
 
                 # Measure actual FPS

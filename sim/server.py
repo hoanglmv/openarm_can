@@ -90,7 +90,31 @@ def main():
         mode = "real" if can0_available else "sim"
 
     print(f"[Dashboard] Mode selected: {mode.upper()} (can0 available: {can0_available})")
-    server = OpenArmDashboardServer(mode=mode, can0_if="can0", can1_if="can1")
+
+    # Model auto-loading configuration
+    no_auto_model = "--no-auto-model" in sys.argv
+    model_checkpoint = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--model" and i + 1 < len(sys.argv):
+            model_checkpoint = sys.argv[i + 1]
+        elif arg.startswith("--model="):
+            model_checkpoint = arg.split("=", 1)[1]
+
+    model_device = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--device" and i + 1 < len(sys.argv):
+            model_device = sys.argv[i + 1]
+        elif arg.startswith("--device="):
+            model_device = arg.split("=", 1)[1]
+
+    server = OpenArmDashboardServer(
+        mode=mode,
+        can0_if="can0",
+        can1_if="can1",
+        auto_load_model=(not no_auto_model),
+        model_checkpoint=model_checkpoint,
+        model_device=model_device,
+    )
     try:
         server.start()
     except KeyboardInterrupt:

@@ -46,3 +46,4 @@ dataset/
 *.hdf5
 *.npz
 exports/
+checkpoints/

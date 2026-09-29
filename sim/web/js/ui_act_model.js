@@ -16,11 +16,38 @@ let actInferenceState = {
     futureActions: [],
 };
 
+// Unified WebSocket message dispatcher compatible with openarm network subsystem
+function sendWsMessage(msg) {
+    if (typeof sendAction === "function") {
+        const { action, ...payload } = msg;
+        return sendAction(action, payload);
+    } else if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+        return true;
+    }
+    console.warn("[WebSocket] Không thể gửi gói tin do chưa kết nối WebSocket:", msg);
+    if (typeof showToast === "function") {
+        showToast("error", "Chưa kết nối WebSocket với máy chủ!");
+    }
+    return false;
+}
+
 function setupActModelUI() {
     // 1. Hook Model Load Button
     const btnLoad = document.getElementById("btn-act-load");
     const inputCkpt = document.getElementById("input-act-checkpoint");
     const selectDevice = document.getElementById("select-act-device");
+
+    if (inputCkpt) {
+        inputCkpt.addEventListener("input", () => {
+            inputCkpt.dataset.userEdited = "true";
+        });
+    }
+    if (selectDevice) {
+        selectDevice.addEventListener("change", () => {
+            selectDevice.dataset.userEdited = "true";
+        });
+    }
 
     if (btnLoad) {
         btnLoad.addEventListener("click", () => {
@@ -80,7 +107,10 @@ function setupActModelUI() {
                 );
                 if (!confirmed) return;
             }
-            // If controlMode === "preview" (Chỉ mô phỏng), runs immediately without warning prompt
+            const modeName = controlMode === "preview" ? "Chỉ Mô Phỏng 3D (Simulation)" : "Chạy Cả 2 (Mô Phỏng & Robot Thật)";
+            if (typeof showToast === "function") {
+                showToast("info", `Đang khởi chạy suy luận ACT: ${modeName}...`);
+            }
 
             sendWsMessage({
                 action: "model_start",
@@ -94,6 +124,9 @@ function setupActModelUI() {
 
     if (btnStop) {
         btnStop.addEventListener("click", () => {
+            if (typeof showToast === "function") {
+                showToast("warning", "Đã dừng suy luận Model ACT.");
+            }
             sendWsMessage({ action: "model_stop" });
         });
     }
@@ -101,6 +134,9 @@ function setupActModelUI() {
     if (btnStep) {
         btnStep.addEventListener("click", () => {
             const controlMode = getSelectedControlMode();
+            if (typeof showToast === "function") {
+                showToast("info", "Đang chạy 1 bước suy luận ACT...");
+            }
             sendWsMessage({
                 action: "model_step",
                 control_mode: controlMode,
@@ -239,10 +275,19 @@ function handleActInferenceTelemetry(infData) {
         const elArch = document.getElementById("disp-act-arch");
         const elCkpt = document.getElementById("disp-act-ckpt");
         const elChunk = document.getElementById("disp-act-chunk");
+        const inputCkpt = document.getElementById("input-act-checkpoint");
+        const selectDevice = document.getElementById("select-act-device");
 
         if (elArch) elArch.textContent = infData.metadata.architecture || "ACT CVAE";
         if (elCkpt) elCkpt.textContent = infData.metadata.checkpoint || "--";
         if (elChunk) elChunk.textContent = `${infData.metadata.chunk_size || 50} steps (1.0s)`;
+
+        if (inputCkpt && !inputCkpt.dataset.userEdited && infData.metadata.full_path) {
+            inputCkpt.value = infData.metadata.full_path;
+        }
+        if (selectDevice && infData.metadata.device && !selectDevice.dataset.userEdited) {
+            selectDevice.value = infData.metadata.device.toLowerCase().includes("cuda") ? "cuda" : "cpu";
+        }
     }
 
     // Update 3D Future Action Path

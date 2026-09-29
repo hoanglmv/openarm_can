@@ -113,10 +113,21 @@ DEFAULT_GAINS: Dict[int, Dict[str, float]] = {
 class OpenArmDashboardServer:
     """Core server orchestrating hardware/simulator, web server, and realtime comms."""
 
-    def __init__(self, mode: str = "real", can0_if: str = "can0", can1_if: Optional[str] = "can1"):
+    def __init__(
+        self,
+        mode: str = "real",
+        can0_if: str = "can0",
+        can1_if: Optional[str] = "can1",
+        auto_load_model: bool = True,
+        model_checkpoint: Optional[str] = None,
+        model_device: Optional[str] = None,
+    ):
         self.mode = mode
         self.can0_if = can0_if
         self.can1_if = can1_if
+        self.auto_load_model = auto_load_model
+        self.model_checkpoint = model_checkpoint
+        self.model_device = model_device
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = True
         self.velocity_limit = 0.25  # rad/s (~14°/s) gentle & safe velocity limit
@@ -208,8 +219,32 @@ class OpenArmDashboardServer:
         self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
         self.export_thread.start()
 
-        # 9. Start WebSocket & Telemetry Broadcaster
+        # 9. Tự động nạp mô hình AI ACT Policy khi khởi động
+        if self.auto_load_model:
+            self._start_auto_load_model()
+
+        # 10. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
+
+    def _start_auto_load_model(self):
+        """Automatically load best available ACT policy model in background upon server start."""
+        def _worker():
+            try:
+                ckpt = self.model_checkpoint or os.environ.get("OPENARM_MODEL_CHECKPOINT", "")
+                dev = self.model_device or "auto"
+                print(f"[Dashboard] 🤖 Đang tự động nạp mô hình ACT khi khởi động...")
+                res = self.inference_engine.load_model(ckpt, device=dev)
+                if res.get("success"):
+                    meta = res.get("metadata", {})
+                    mode_str = f"PyTorch {meta.get('device', 'cpu').upper()}" if not res.get("synthetic") else "Kinematic Preview"
+                    ckpt_name = meta.get("checkpoint") or os.path.basename(ckpt) or "model"
+                    print(f"[Dashboard] ✓ Nạp mô hình ACT thành công: {ckpt_name} [{mode_str}] (Chunk: {meta.get('chunk_size', 50)} steps)")
+                else:
+                    print(f"[Dashboard] ⚠ Không thể tự nạp mô hình ACT: {res.get('error', 'Unknown')}")
+            except Exception as e:
+                print(f"[Dashboard] ⚠ Lỗi tự động nạp mô hình ACT: {e}")
+
+        threading.Thread(target=_worker, daemon=True, name="AutoModelLoader").start()
 
     def _start_camera_driver(self):
         """Launch Intel RealSense ROS 2 camera driver if available."""
@@ -480,8 +515,18 @@ class OpenArmDashboardServer:
             except subprocess.TimeoutExpired:
                 self.camera_driver_process.kill()
 
+    def _is_wsl(self) -> bool:
+        """Check if environment is Windows Subsystem for Linux (WSL)."""
+        try:
+            with open("/proc/version", "r") as f:
+                return "microsoft" in f.read().lower()
+        except Exception:
+            return False
+
     def _find_can_usb(self):
-        """Query usbipd on Windows host for connected CAN adapters."""
+        """Query usbipd on Windows host for connected CAN adapters (WSL only)."""
+        if not self._is_wsl():
+            return None, None
         try:
             res = subprocess.run(["usbipd", "state"], capture_output=True, text=True, timeout=3)
             if res.returncode == 0 and res.stdout.strip():
@@ -509,7 +554,9 @@ class OpenArmDashboardServer:
         return None, None
 
     def _find_realsense_usb(self):
-        """Query usbipd on Windows host for connected RealSense cameras."""
+        """Query usbipd on Windows host for connected RealSense cameras (WSL only)."""
+        if not self._is_wsl():
+            return None, None
         try:
             res = subprocess.run(["usbipd", "list"], capture_output=True, text=True, timeout=2)
             for line in res.stdout.splitlines():
