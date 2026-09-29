@@ -5,18 +5,23 @@ OpenArm ROS 2 Streaming Joint Commands Bridge:
    - /openarm/joint_states (sensor_msgs/msg/JointState)
    - /openarm/joint_commands (sensor_msgs/msg/JointState)
 2. Subscribes to real-time streaming joint commands (Meta Quest VR / Teleop):
-   - /openarm/teleop/joint_commands (sensor_msgs/msg/JointState)
+   - /openarm/teleop/joint_commands (sensor_msgs/msg/JointState - 14 arm joints:
+     left j1..j7 then right j1..j7, or any subset when joint names are given)
    - /teleop/joint_commands (sensor_msgs/msg/JointState - alias)
    - /meta/joint_states (sensor_msgs/msg/JointState - alias for Meta Quest teleop)
-   Forwards received commands directly to the OpenArm high-speed UDP engine (port 9870),
-   which are immediately smoothed by the 400Hz interpolator with zero buffering latency.
+   - /openarm/teleop/left_gripper (sensor_msgs/msg/JointState - position[0])
+   - /openarm/teleop/right_gripper (sensor_msgs/msg/JointState - position[0])
+   Arm and gripper targets are merged into the 16-joint order and forwarded to the
+   OpenArm high-speed UDP engine (port 9870), which drives /openarm/joint_commands.
 """
 
 import argparse
 import json
 import socket
 import time
-from typing import List
+from typing import Dict
+
+from config import JOINT_NAME_TO_ID
 
 try:
     import rclpy
@@ -36,6 +41,11 @@ JOINT_NAMES = [
     "right_j5", "right_j6", "right_j7", "right_gripper",
 ]
 
+# Motor IDs (1-based index into JOINT_NAMES)
+ARM_JOINT_IDS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15]
+LEFT_GRIPPER_ID = 8
+RIGHT_GRIPPER_ID = 16
+
 
 class OpenArmJointBridge(Node):
     def __init__(
@@ -48,6 +58,8 @@ class OpenArmJointBridge(Node):
         command_topic: str = "/openarm/joint_commands",
         teleop_topic: str = "/openarm/teleop/joint_commands",
         meta_topic: str = "/meta/joint_states",
+        left_gripper_topic: str = "/openarm/teleop/left_gripper",
+        right_gripper_topic: str = "/openarm/teleop/right_gripper",
     ):
         super().__init__("openarm_joint_bridge")
 
@@ -68,22 +80,37 @@ class OpenArmJointBridge(Node):
         self.command_pub = self.create_publisher(JointState, command_topic, qos_pub)
 
         # 2. Command Subscribers (Meta Quest VR / Teleop Streaming Joint Commands -> OpenArm)
+        # Latest teleop target per motor ID, merged from the arm and gripper topics
+        self.teleop_targets: Dict[int, float] = {}
+
         self.teleop_sub = self.create_subscription(
             JointState,
             teleop_topic,
-            self._handle_teleop_joint_state,
+            self._handle_teleop_arm_command,
             qos_sub,
         )
         self.teleop_short_sub = self.create_subscription(
             JointState,
             "/teleop/joint_commands",
-            self._handle_teleop_joint_state,
+            self._handle_teleop_arm_command,
             qos_sub,
         )
         self.meta_sub = self.create_subscription(
             JointState,
             meta_topic,
-            self._handle_teleop_joint_state,
+            self._handle_teleop_arm_command,
+            qos_sub,
+        )
+        self.left_gripper_sub = self.create_subscription(
+            JointState,
+            left_gripper_topic,
+            lambda msg: self._handle_teleop_gripper(msg, LEFT_GRIPPER_ID),
+            qos_sub,
+        )
+        self.right_gripper_sub = self.create_subscription(
+            JointState,
+            right_gripper_topic,
+            lambda msg: self._handle_teleop_gripper(msg, RIGHT_GRIPPER_ID),
             qos_sub,
         )
 
@@ -108,7 +135,8 @@ class OpenArmJointBridge(Node):
         self.get_logger().info("🚀 OpenArm ROS 2 Streaming Joint Commands Bridge Ready (Zero-Latency)")
         self.get_logger().info(f"   [PUB] State topic: {state_topic}")
         self.get_logger().info(f"   [PUB] Command topic: {command_topic}")
-        self.get_logger().info(f"   [SUB] Teleop Commands: {teleop_topic} & /teleop/joint_commands")
+        self.get_logger().info(f"   [SUB] Teleop Commands (14 arm joints): {teleop_topic} & /teleop/joint_commands")
+        self.get_logger().info(f"   [SUB] Teleop Grippers: {left_gripper_topic} & {right_gripper_topic}")
         self.get_logger().info(f"   [SUB] Meta Quest VR: {meta_topic}")
         self.get_logger().info(f"   [UDP] Target OpenArm Engine: {udp_target_host}:{udp_target_port}")
         self.get_logger().info("==================================================================")
@@ -162,26 +190,51 @@ class OpenArmJointBridge(Node):
                 throttle_duration_sec=5.0,
             )
 
-    def _handle_teleop_joint_state(self, msg: JointState):
+    def _handle_teleop_arm_command(self, msg: JointState):
         """
-        Receive real-time JointState from Meta Quest VR / Teleop controller
-        and forward directly to OpenArm UDP engine (port 9870).
+        Receive the 14 arm joint targets from Meta Quest VR / Teleop controller.
+        Gripper joints are ignored here; they come from the dedicated gripper topics.
         """
         if not msg.position:
             return
 
+        if msg.name and len(msg.name) == len(msg.position):
+            updates = {}
+            for name, position in zip(msg.name, msg.position):
+                motor_id = JOINT_NAME_TO_ID.get(str(name).lower())
+                if motor_id in ARM_JOINT_IDS:
+                    updates[motor_id] = float(position)
+        elif len(msg.position) == len(ARM_JOINT_IDS):
+            updates = dict(zip(ARM_JOINT_IDS, (float(p) for p in msg.position)))
+        else:
+            self.get_logger().warning(
+                f"Rejected teleop arm command: expected {len(ARM_JOINT_IDS)} positions "
+                f"(or named joints), got {len(msg.position)}",
+                throttle_duration_sec=2.0,
+            )
+            return
+
+        if not updates:
+            return
+        self.teleop_targets.update(updates)
+        self._forward_teleop_targets()
+
+    def _handle_teleop_gripper(self, msg: JointState, motor_id: int):
+        """Receive a single gripper target (position[0]) from the teleop controller."""
+        if not msg.position:
+            return
+        self.teleop_targets[motor_id] = float(msg.position[0])
+        self._forward_teleop_targets()
+
+    def _forward_teleop_targets(self):
+        """Forward the merged arm + gripper targets, in JOINT_NAMES order, to the OpenArm UDP engine (port 9870)."""
+        motor_ids = sorted(self.teleop_targets)
         payload = {
             "source": "Meta Quest VR Teleop",
             "timestamp": time.time(),
+            "names": [JOINT_NAMES[motor_id - 1] for motor_id in motor_ids],
+            "positions": [self.teleop_targets[motor_id] for motor_id in motor_ids],
         }
-
-        # Case 1: Message contains joint names
-        if msg.name and len(msg.name) == len(msg.position):
-            payload["names"] = list(msg.name)
-            payload["positions"] = [float(p) for p in msg.position]
-        else:
-            # Case 2: Direct list of positions
-            payload["positions"] = [float(p) for p in msg.position]
 
         try:
             raw_bytes = json.dumps(payload).encode("utf-8")
@@ -191,7 +244,7 @@ class OpenArmJointBridge(Node):
             if now - self.last_teleop_log >= 2.0:
                 hz = self.teleop_count / (now - self.last_teleop_log)
                 self.get_logger().info(
-                    f"[Meta Teleop Stream] {hz:.1f} Hz | Received {len(msg.position)} joint targets -> Forwarded to OpenArm"
+                    f"[Meta Teleop Stream] {hz:.1f} Hz | Forwarded {len(motor_ids)} merged joint targets -> OpenArm"
                 )
                 self.teleop_count = 0
                 self.last_teleop_log = now
@@ -214,6 +267,8 @@ def main():
     parser.add_argument("--command-topic", default="/openarm/joint_commands")
     parser.add_argument("--teleop-topic", default="/openarm/teleop/joint_commands")
     parser.add_argument("--meta-topic", default="/meta/joint_states")
+    parser.add_argument("--left-gripper-topic", default="/openarm/teleop/left_gripper")
+    parser.add_argument("--right-gripper-topic", default="/openarm/teleop/right_gripper")
     args = parser.parse_args()
 
     rclpy.init()
@@ -226,6 +281,8 @@ def main():
         command_topic=args.command_topic,
         teleop_topic=args.teleop_topic,
         meta_topic=args.meta_topic,
+        left_gripper_topic=args.left_gripper_topic,
+        right_gripper_topic=args.right_gripper_topic,
     )
     try:
         rclpy.spin(node)

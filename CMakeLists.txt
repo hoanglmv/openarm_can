@@ -123,7 +123,18 @@ add_executable(openarm-can-demo examples/demo.cpp)
 target_link_libraries(openarm-can-demo openarm_can)
 install(TARGETS openarm-can-demo DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-find_package(CLI11 REQUIRED)
+find_package(CLI11 QUIET)
+if(NOT CLI11_FOUND)
+  # Fall back to fetching CLI11 when it isn't installed (e.g. no libcli11-dev)
+  include(FetchContent)
+  FetchContent_Declare(
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG v2.4.2
+    GIT_SHALLOW TRUE)
+  set(CLI11_PRECOMPILED OFF)
+  FetchContent_MakeAvailable(CLI11)
+endif()
 
 # Read-only health/diagnostics example
 add_executable(openarm-can-health examples/health.cpp)
