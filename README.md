@@ -497,6 +497,37 @@ File HDF5 chứa `observations/qpos`, `observations/qvel`,
 
 ---
 
+### Cách 7: Điều khiển Teleop / Kính Meta Quest VR qua ROS 2 (Zero-Latency Streaming)
+
+Hệ thống hỗ trợ cơ chế stream danh sách Joint Command (`sensor_msgs/msg/JointState`) trực tiếp từ kính VR Meta Quest hoặc thiết bị Teleop với độ trễ xấp xỉ 0 (Zero-latency):
+
+1. **Khởi chạy ROS 2 Bridge:**
+   ```bash
+   python3 sim/openarm_joint_bridge.py
+   ```
+   Bridge lắng nghe lệnh tại:
+   - `/openarm/teleop/joint_commands` (chuẩn)
+   - `/teleop/joint_commands` (alias)
+   - `/meta/joint_states` (alias kính Meta Quest)
+
+2. **Bắn lệnh đơn lẻ (CLI test):**
+   ```bash
+   ros2 topic pub --once /openarm/teleop/joint_commands sensor_msgs/msg/JointState "{name: ['left_j1', 'left_j4', 'left_gripper'], position: [0.2, 0.85, 0.025]}"
+   ```
+
+3. **Stream chuỗi cử động / waypoints (100 Hz):**
+   ```bash
+   # Giả lập luồng Meta Quest VR teleop liên tục:
+   python3 tools/test_meta_trajectory.py --mode teleop --rate 100
+
+   # Stream danh sách Joint Commands (Waypoints) liên tục:
+   python3 tools/test_meta_trajectory.py --mode waypoints --rate 100
+   ```
+
+*Lưu ý:* Backend OpenArm chạy vòng lặp 400Hz kết hợp bộ nội suy S-curve (`v_lim = 0.25 rad/s`), tự động làm mượt mọi cử động đột ngột từ kính VR mà không cần dùng `JointTrajectory` phức tạp.
+
+---
+
 ## 7. Bảng ánh xạ Khớp & CAN ID
 
 Hệ thống OpenArm Dual-Arm sử dụng tổng cộng 16 nút CAN phân bố trên 2 kênh CAN-FD riêng biệt:

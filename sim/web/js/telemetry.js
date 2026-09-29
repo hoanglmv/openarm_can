@@ -69,7 +69,8 @@ function handleTelemetry(data) {
     }
 
     motors.forEach(m => {
-        const motorHasUsableState = !isRealMode
+        const motorHasUsableState = (globalExecutionMode === "sim")
+            || !isRealMode
             || (hasInitialRobotSync && m.has_sync === true && isOpenArmFeedbackFresh(m));
         // Update DOM Telemetry Card
         const chip = document.getElementById(`chip-${m.id}`);

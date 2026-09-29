@@ -90,44 +90,38 @@ function setOpenArmVisualCommandTarget(motorId, position) {
 }
 
 function shouldApplyOpenArmTelemetry(motor) {
-    // In simulation-only mode, the 3D model and sliders are 100% virtual and interactive.
-    // Never allow background hardware telemetry to fight with or jitter the 3D model!
-    if (globalExecutionMode === "sim") {
+    if (!motor || !motor.id) return false;
+    const id = Number(motor.id);
+
+    // If the user is actively dragging/touching this specific slider in the browser,
+    // do not let incoming telemetry fight with the user's manual dragging pointer.
+    const isLeft = id <= 8;
+    const jointIndex = (id <= 8 ? id : id - 8) - 1;
+    const armGroup = isLeft ? 'left' : 'right';
+    const sliderEl = document.getElementById(`slider-${armGroup}-${jointIndex}`);
+    if (sliderEl && document.activeElement === sliderEl) {
+        return false;
+    }
+    if (id === 8) {
+        const topSlider = document.getElementById("slider-gripper-left");
+        if (topSlider && document.activeElement === topSlider) return false;
+    }
+    if (id === 16) {
+        const topSlider = document.getElementById("slider-gripper-right");
+        if (topSlider && document.activeElement === topSlider) return false;
+    }
+
+    // If the user recently manually adjusted this slider, hold for 500ms before accepting telemetry
+    if (visualCommandTargets.has(id)) {
+        const command = visualCommandTargets.get(id);
+        if (Date.now() - command.issuedAt > 500) {
+            visualCommandTargets.delete(id);
+            return true;
+        }
         return false;
     }
 
-    if (currentUsbState) return true; // In dual mode, apply live telemetry
-    const id = Number(motor && motor.id);
-    if (!visualCommandTargets.has(id)) return true;
-
-    const command = visualCommandTargets.get(id);
-    // Timeout safeguard: after 2.0s, release visual lock so live telemetry is never permanently blocked
-    if (Date.now() - command.issuedAt > 2000) {
-        visualCommandTargets.delete(id);
-        return true;
-    }
-
-    const target = command.position;
-    const measured = Number(motor.q);
-    const tolerance = (id === 8 || id === 16) ? 0.003 : 0.035;
-
-    // A fresh OFF/fault response means torque is no longer holding the target.
-    if (isOpenArmFeedbackFresh(motor) && motor.enabled === false) {
-        visualCommandTargets.delete(id);
-        return true;
-    }
-
-    if (Number(motor.error_code) > 1) {
-        visualCommandTargets.delete(id);
-        return isOpenArmFeedbackFresh(motor);
-    }
-
-    // Once the measured robot reaches the commanded target, telemetry takes ownership again
-    if (Number.isFinite(measured) && Math.abs(measured - target) <= tolerance) {
-        visualCommandTargets.delete(id);
-        return true;
-    }
-    return false;
+    return true;
 }
 
 function releaseOpenArmVisualCommandTargets() {

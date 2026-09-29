@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 OpenArm ROS 2 Joint State Bridge
-Subscribes to ROS 2 topics (sensor_msgs/JointState, trajectory_msgs/JointTrajectory)
+Subscribes to ROS 2 topics (sensor_msgs/JointState)
 and streams joint targets to the OpenArm controller via high-speed UDP (or WebSocket).
 """
 
@@ -17,7 +17,6 @@ try:
     from rclpy.node import Node
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
     from sensor_msgs.msg import JointState
-    from trajectory_msgs.msg import JointTrajectory
     ROS2_AVAILABLE = True
 except ImportError:
     ROS2_AVAILABLE = False

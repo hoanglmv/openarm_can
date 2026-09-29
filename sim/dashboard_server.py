@@ -817,7 +817,8 @@ class OpenArmDashboardServer:
         Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
         and MIT mode fallback.
         """
-        if self.mode == "real" and not m.has_physical_sync:
+        should_send_hw = (self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"])
+        if should_send_hw and not m.has_physical_sync:
             print(f"[Safety] Ignored gripper command for motor {m.id}: physical position is not synchronized yet")
             return False
 
@@ -833,17 +834,21 @@ class OpenArmDashboardServer:
 
         if not m.enabled:
             m.enabled = True
-            if self.mode == "real":
+            if should_send_hw:
                 self.hw.init_gripper_motor(m.id, save_flash=False)
         elif m.error_code >= 8:
-            if self.mode == "real":
+            if should_send_hw:
                 self.hw.init_gripper_motor(m.id, save_flash=False)
             m.error_code = 1
 
         m.q_target = rad_target
         m.q_cmd = rad_target
+        if getattr(self, "execution_mode", "sim") == "sim":
+            m.q = rad_target
+            m.q_des = rad_target
+            m.has_physical_sync = True
 
-        if self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"]:
+        if should_send_hw:
             # 1. Primary: POS_FORCE mode frame on m.send_id + 0x300 (0x308)
             # Speed limit: 10.0 rad/s (vel_uint = 1000)
             # Safe torque current limit: 15% (i_uint = 1500 ~ 1.5 Nm)
@@ -883,7 +888,8 @@ class OpenArmDashboardServer:
         m = self.motors.get(motor_id)
         if not m:
             return False
-        if self.mode == "real" and not m.has_physical_sync:
+        should_send_hw = (self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"])
+        if should_send_hw and not m.has_physical_sync:
             print(f"[Safety] Ignored target for motor {motor_id}: physical position is not synchronized yet")
             return False
         if motor_id in [8, 16]:
@@ -898,9 +904,14 @@ class OpenArmDashboardServer:
             if not m.enabled:
                 m.enabled = True
                 m.q_cmd = m.q
-                if self.mode == "real":
+                if should_send_hw:
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             m.q_target = q
+            if getattr(self, "execution_mode", "sim") == "sim":
+                m.q = q
+                m.q_cmd = q
+                m.q_des = q
+                m.has_physical_sync = True
             return True
 
     def _execute_trajectory(self, traj_points: list, joint_names: list, traj_id: int):
@@ -1573,6 +1584,14 @@ class OpenArmDashboardServer:
         while self.running:
             try:
                 for motor_id, m in self.motors.items():
+                    # In simulation-only mode, track user target directly and responsively
+                    if getattr(self, "execution_mode", "sim") == "sim":
+                        m.q_cmd = m.q_target
+                        m.q = m.q_target
+                        m.q_des = m.q_target
+                        m.has_physical_sync = True
+                        continue
+
                     # Never transmit a position command based on the default 0.0
                     # state before the first physical feedback frame has arrived.
                     if self.mode == "real" and not m.has_physical_sync:
@@ -1582,13 +1601,6 @@ class OpenArmDashboardServer:
                         m.q_cmd = m.q
                         m.q_target = m.q
                         m.q_des = m.q
-                        continue
-
-                    # In simulation-only mode, track user target directly and responsively
-                    if getattr(self, "execution_mode", "sim") == "sim":
-                        m.q_cmd = m.q_target
-                        m.q = m.q_target
-                        m.q_des = m.q_target
                         continue
 
                     # Velocity-limited step towards target

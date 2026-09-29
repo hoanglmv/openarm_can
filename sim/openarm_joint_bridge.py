@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-OpenArm ROS 2 Bidirectional Joint & Trajectory Bridge:
+OpenArm ROS 2 Streaming Joint Commands Bridge:
 1. Publishes OpenArm real/sim joint states & commanded actions to ROS 2 topics:
    - /openarm/joint_states (sensor_msgs/msg/JointState)
    - /openarm/joint_commands (sensor_msgs/msg/JointState)
-2. Subscribes to external motion commands (Meta Quest VR / Teleop / Trajectory Planner):
+2. Subscribes to real-time streaming joint commands (Meta Quest VR / Teleop):
    - /openarm/teleop/joint_commands (sensor_msgs/msg/JointState)
-   - /openarm/joint_trajectory (trajectory_msgs/msg/JointTrajectory)
+   - /teleop/joint_commands (sensor_msgs/msg/JointState - alias)
    - /meta/joint_states (sensor_msgs/msg/JointState - alias for Meta Quest teleop)
-   Forwards received commands directly to the OpenArm high-speed UDP engine (port 9870).
+   Forwards received commands directly to the OpenArm high-speed UDP engine (port 9870),
+   which are immediately smoothed by the 400Hz interpolator with zero buffering latency.
 """
 
 import argparse
@@ -23,7 +24,6 @@ try:
     from rclpy.node import Node
     from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import JointState
-    from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 except ImportError:
     import sys
     print("[ROS Bridge] ROS 2 (rclpy/sensor_msgs) not found. ROS 2 bridge disabled.")
@@ -48,11 +48,10 @@ class OpenArmJointBridge(Node):
         command_topic: str = "/openarm/joint_commands",
         teleop_topic: str = "/openarm/teleop/joint_commands",
         meta_topic: str = "/meta/joint_states",
-        trajectory_topic: str = "/openarm/joint_trajectory",
     ):
         super().__init__("openarm_joint_bridge")
 
-        # QoS profiles
+        # QoS profiles: BEST_EFFORT for minimum latency real-time streaming
         qos_pub = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=5,
@@ -63,20 +62,21 @@ class OpenArmJointBridge(Node):
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
-        qos_traj = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10,
-            reliability=ReliabilityPolicy.RELIABLE,
-        )
 
         # 1. State Publishers (OpenArm -> ROS 2)
         self.state_pub = self.create_publisher(JointState, state_topic, qos_pub)
         self.command_pub = self.create_publisher(JointState, command_topic, qos_pub)
 
-        # 2. Command Subscribers (Meta Quest VR / Teleop / Planners -> OpenArm)
+        # 2. Command Subscribers (Meta Quest VR / Teleop Streaming Joint Commands -> OpenArm)
         self.teleop_sub = self.create_subscription(
             JointState,
             teleop_topic,
+            self._handle_teleop_joint_state,
+            qos_sub,
+        )
+        self.teleop_short_sub = self.create_subscription(
+            JointState,
+            "/teleop/joint_commands",
             self._handle_teleop_joint_state,
             qos_sub,
         )
@@ -85,12 +85,6 @@ class OpenArmJointBridge(Node):
             meta_topic,
             self._handle_teleop_joint_state,
             qos_sub,
-        )
-        self.trajectory_sub = self.create_subscription(
-            JointTrajectory,
-            trajectory_topic,
-            self._handle_joint_trajectory,
-            qos_traj,
         )
 
         # UDP Sockets
@@ -111,11 +105,11 @@ class OpenArmJointBridge(Node):
         self.last_teleop_log = 0.0
 
         self.get_logger().info("==================================================================")
-        self.get_logger().info("🚀 OpenArm ROS 2 Bidirectional Teleop & Trajectory Bridge Ready")
+        self.get_logger().info("🚀 OpenArm ROS 2 Streaming Joint Commands Bridge Ready (Zero-Latency)")
         self.get_logger().info(f"   [PUB] State topic: {state_topic}")
         self.get_logger().info(f"   [PUB] Command topic: {command_topic}")
-        self.get_logger().info(f"   [SUB] Meta Quest / Teleop: {teleop_topic} & {meta_topic}")
-        self.get_logger().info(f"   [SUB] Joint Trajectory: {trajectory_topic}")
+        self.get_logger().info(f"   [SUB] Teleop Commands: {teleop_topic} & /teleop/joint_commands")
+        self.get_logger().info(f"   [SUB] Meta Quest VR: {meta_topic}")
         self.get_logger().info(f"   [UDP] Target OpenArm Engine: {udp_target_host}:{udp_target_port}")
         self.get_logger().info("==================================================================")
 
@@ -204,45 +198,6 @@ class OpenArmJointBridge(Node):
         except Exception as e:
             self.get_logger().warning(f"Error forwarding teleop stream: {e}", throttle_duration_sec=2.0)
 
-    def _handle_joint_trajectory(self, msg: JointTrajectory):
-        """
-        Receive multi-point or single-point JointTrajectory from ROS 2 planner/VR
-        and dispatch formatted trajectory to OpenArm UDP engine (port 9870).
-        """
-        if not msg.points:
-            return
-
-        joint_names = list(msg.joint_names) if msg.joint_names else JOINT_NAMES
-        points_data = []
-
-        for pt in msg.points:
-            t_sec = float(pt.time_from_start.sec) + float(pt.time_from_start.nanosec) * 1e-9
-            pt_dict = {
-                "time": t_sec,
-                "positions": [float(p) for p in pt.positions],
-            }
-            if pt.velocities:
-                pt_dict["velocities"] = [float(v) for v in pt.velocities]
-            points_data.append(pt_dict)
-
-        payload = {
-            "source": "ROS 2 Trajectory",
-            "timestamp": time.time(),
-            "joint_names": joint_names,
-            "trajectory": points_data,
-        }
-
-        try:
-            raw_bytes = json.dumps(payload).encode("utf-8")
-            self.sock_out.sendto(raw_bytes, self.udp_target)
-            total_duration = points_data[-1]["time"] if points_data else 0.0
-            self.get_logger().info(
-                f"[Trajectory Received] {len(points_data)} waypoints, duration: {total_duration:.2f}s "
-                f"for joints: {joint_names[:4]}... -> Forwarded to OpenArm"
-            )
-        except Exception as e:
-            self.get_logger().warning(f"Error forwarding trajectory: {e}")
-
     def destroy_node(self):
         self.sock_in.close()
         self.sock_out.close()
@@ -259,7 +214,6 @@ def main():
     parser.add_argument("--command-topic", default="/openarm/joint_commands")
     parser.add_argument("--teleop-topic", default="/openarm/teleop/joint_commands")
     parser.add_argument("--meta-topic", default="/meta/joint_states")
-    parser.add_argument("--trajectory-topic", default="/openarm/joint_trajectory")
     args = parser.parse_args()
 
     rclpy.init()
@@ -272,7 +226,6 @@ def main():
         command_topic=args.command_topic,
         teleop_topic=args.teleop_topic,
         meta_topic=args.meta_topic,
-        trajectory_topic=args.trajectory_topic,
     )
     try:
         rclpy.spin(node)
