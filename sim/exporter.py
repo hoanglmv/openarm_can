@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Copyright 2026 Enactic, Inc. / OpenArm Control & Simulation
 """
-100Hz High-Precision Joint State Continuous Exporter & UDP Streamer.
-Logs 16-axis positions, velocities, torques, and temperatures into HDF5 (.hdf5)
-compliant with robotic imitation learning (ALOHA, ACT, Robomimic).
-Also writes companion CSV and broadcasts real-time UDP packets.
+Standardized Multimodal Dataset Exporter & UDP Streamer (ACT / ALOHA format).
+Logs 16-axis positions, velocities, torques, temperatures, AND synchronized
+camera RGB-D frames (/observations/images/chest_rgb, chest_depth) into HDF5 (.hdf5)
+compliant with robotic imitation learning (ALOHA, ACT, Robomimic) at 50 Hz.
+Also writes companion CSV and broadcasts real-time UDP packets (port 9871).
 """
 
 import json
@@ -22,6 +23,20 @@ try:
 except ImportError:
     HAS_H5PY = False
 
+try:
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+try:
+    from .config import RECORDER_ALIGNMENT_HZ
+except ImportError:
+    try:
+        from config import RECORDER_ALIGNMENT_HZ
+    except ImportError:
+        RECORDER_ALIGNMENT_HZ = 50.0
+
 JOINT_NAMES = [
     "left_j1", "left_j2", "left_j3", "left_j4",
     "left_j5", "left_j6", "left_j7", "left_gripper",
@@ -32,25 +47,28 @@ JOINT_NAMES = [
 
 class JointStateExporter100Hz:
     """
-    100Hz Joint State Exporter into HDF5 (.hdf5) and CSV format:
+    Standardized Multimodal Dataset Exporter (ACT / ALOHA HDF5 format):
     - Creates HDF5 datasets:
-        /observations/qpos          [T, 16] float32
-        /observations/qvel          [T, 16] float32
-        /observations/effort        [T, 16] float32
-        /observations/temperatures  [T, 16] float32
-        /action                     [T, 16] float32
-        /timestamp                  [T]     float64
-        /timestamp_ns               [T]     int64
-        /rel_time_s                 [T]     float32
-    - Precision loop running at 100 Hz (10 ms interval via perf_counter)
+        /observations/images/chest_rgb    [T, 480, 640, 3] uint8
+        /observations/images/chest_depth  [T, 480, 640]    uint16
+        /observations/qpos                [T, 16]          float32
+        /observations/qvel                [T, 16]          float32
+        /observations/effort              [T, 16]          float32
+        /observations/temperatures        [T, 16]          float32
+        /action                           [T, 16]          float32
+        /timestamp                        [T]              float64
+        /timestamp_ns                     [T]              int64
+        /rel_time_s                       [T]              float32
+    - Sampling loop running at 50 Hz (20 ms interval, aligned with RECORDER_ALIGNMENT_HZ)
     - Broadcasts real-time UDP stream on port 9871 for ROS 2 / external consumers
     """
 
-    def __init__(self, server, export_dir: str = "exports", udp_port: int = 9871):
+    def __init__(self, server, export_dir: str = "exports", udp_port: int = 9871, frequency_hz: float = RECORDER_ALIGNMENT_HZ):
         self.server = server
         self.export_dir = os.path.abspath(export_dir)
         os.makedirs(self.export_dir, exist_ok=True)
         self.udp_port = udp_port
+        self.frequency_hz = frequency_hz
         self.running = False
         self.active = False
 
@@ -71,6 +89,8 @@ class JointStateExporter100Hz:
         self._buf_time: List[float] = []
         self._buf_time_ns: List[int] = []
         self._buf_rel_time: List[float] = []
+        self._buf_rgb: List[np.ndarray] = []
+        self._buf_depth: List[np.ndarray] = []
 
         self.samples = 0
         self.start_time = 0.0
@@ -99,36 +119,43 @@ class JointStateExporter100Hz:
             if HAS_H5PY:
                 self.h5_file = h5py.File(self.file_path, "w", libver="latest")
                 obs_grp = self.h5_file.create_group("observations")
+                images_grp = obs_grp.create_group("images")
                 self.h5_datasets = {
                     "qpos": obs_grp.create_dataset(
-                        "qpos", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                        "qpos", shape=(0, 16), maxshape=(None, 16), chunks=(50, 16), dtype=np.float32
                     ),
                     "qvel": obs_grp.create_dataset(
-                        "qvel", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                        "qvel", shape=(0, 16), maxshape=(None, 16), chunks=(50, 16), dtype=np.float32
                     ),
                     "effort": obs_grp.create_dataset(
-                        "effort", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                        "effort", shape=(0, 16), maxshape=(None, 16), chunks=(50, 16), dtype=np.float32
                     ),
                     "temperatures": obs_grp.create_dataset(
-                        "temperatures", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                        "temperatures", shape=(0, 16), maxshape=(None, 16), chunks=(50, 16), dtype=np.float32
+                    ),
+                    "chest_rgb": images_grp.create_dataset(
+                        "chest_rgb", shape=(0, 480, 640, 3), maxshape=(None, 480, 640, 3), chunks=(1, 480, 640, 3), dtype=np.uint8
+                    ),
+                    "chest_depth": images_grp.create_dataset(
+                        "chest_depth", shape=(0, 480, 640), maxshape=(None, 480, 640), chunks=(1, 480, 640), dtype=np.uint16
                     ),
                     "action": self.h5_file.create_dataset(
-                        "action", shape=(0, 16), maxshape=(None, 16), chunks=(100, 16), dtype=np.float32
+                        "action", shape=(0, 16), maxshape=(None, 16), chunks=(50, 16), dtype=np.float32
                     ),
                     "timestamp": self.h5_file.create_dataset(
-                        "timestamp", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.float64
+                        "timestamp", shape=(0,), maxshape=(None,), chunks=(50,), dtype=np.float64
                     ),
                     "timestamp_ns": self.h5_file.create_dataset(
-                        "timestamp_ns", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.int64
+                        "timestamp_ns", shape=(0,), maxshape=(None,), chunks=(50,), dtype=np.int64
                     ),
                     "rel_time_s": self.h5_file.create_dataset(
-                        "rel_time_s", shape=(0,), maxshape=(None,), chunks=(100,), dtype=np.float32
+                        "rel_time_s", shape=(0,), maxshape=(None,), chunks=(50,), dtype=np.float32
                     ),
                 }
-                # Attributes
+                # Attributes compliant with ACT / ALOHA imitation learning datasets
                 is_sim = bool(getattr(self.server, "mode", "sim") == "sim")
                 self.h5_file.attrs["sim"] = is_sim
-                self.h5_file.attrs["frequency_hz"] = 100
+                self.h5_file.attrs["frequency_hz"] = self.frequency_hz
                 self.h5_file.attrs["robot_type"] = "OpenArm_Bimanual_16DOF"
                 self.h5_file.attrs["num_joints"] = 16
                 self.h5_file.attrs["created_at"] = now.isoformat()
@@ -156,7 +183,7 @@ class JointStateExporter100Hz:
             self.start_time = time.time()
             self.last_flush = time.time()
             self.active = True
-            print(f"[Record 100Hz] 🔴 Bắt đầu Record dữ liệu HDF5 (.hdf5): {self.file_path} (UDP: {self.udp_port})")
+            print(f"[Record {self.frequency_hz:g}Hz] 🔴 Bắt đầu Record Multimodal HDF5: {self.file_path} (Images: /observations/images/chest_rgb, chest_depth)")
 
     def _clear_buffers(self):
         self._buf_qpos.clear()
@@ -167,6 +194,8 @@ class JointStateExporter100Hz:
         self._buf_time.clear()
         self._buf_time_ns.clear()
         self._buf_rel_time.clear()
+        self._buf_rgb.clear()
+        self._buf_depth.clear()
 
     def _flush_h5_buffer_locked(self):
         if not HAS_H5PY or not self.h5_file or not self._buf_qpos:
@@ -185,6 +214,16 @@ class JointStateExporter100Hz:
             ds = self.h5_datasets[key]
             ds.resize(new_size, axis=0)
             ds[old_size:new_size] = np.array(buf, dtype=np.float32)
+
+        if "chest_rgb" in self.h5_datasets and self._buf_rgb:
+            ds_rgb = self.h5_datasets["chest_rgb"]
+            ds_rgb.resize(new_size, axis=0)
+            ds_rgb[old_size:new_size] = np.stack(self._buf_rgb, axis=0)
+
+        if "chest_depth" in self.h5_datasets and self._buf_depth:
+            ds_depth = self.h5_datasets["chest_depth"]
+            ds_depth.resize(new_size, axis=0)
+            ds_depth[old_size:new_size] = np.stack(self._buf_depth, axis=0)
 
         for key, buf, dtype in [
             ("timestamp", self._buf_time, np.float64),
@@ -205,7 +244,7 @@ class JointStateExporter100Hz:
                 self._flush_h5_buffer_locked()
                 self.h5_file.flush()
                 self.h5_file.close()
-                print(f"[Record 100Hz] ⏹ Đã dừng Record và lưu file HDF5 ({self.samples} mẫu): {self.file_path}")
+                print(f"[Record {self.frequency_hz:g}Hz] ⏹ Đã dừng Record và lưu file Multimodal HDF5 ({self.samples} mẫu): {self.file_path}")
             except Exception as e:
                 print(f"[Record HDF5 Error]: {e}")
             self.h5_file = None
@@ -259,7 +298,7 @@ class JointStateExporter100Hz:
             "active": self.active,
             "recording": self.active,
             "hz": round(self.hz, 1) if self.active else 0.0,
-            "sample_rate_hz": round(self.hz, 1) if self.active else 100.0,
+            "sample_rate_hz": round(self.hz, 1) if self.active else self.frequency_hz,
             "samples": self.samples,
             "samples_recorded": self.samples,
             "duration_s": dur,
@@ -268,14 +307,14 @@ class JointStateExporter100Hz:
             "filepath": curr_name,
             "file_path": target_path or "",
             "file_size_kb": file_size_kb,
-            "format": "HDF5 (.hdf5)",
+            "format": "HDF5 Multimodal (.hdf5)",
             "udp_port": self.udp_port
         }
 
     def loop(self):
-        """High-precision 100Hz sampling loop using high-resolution monotonic timer."""
+        """Standardized Multimodal Dataset sampling loop (ACT / ALOHA format)."""
         self.running = True
-        interval = 0.010  # 10ms = 100 Hz
+        interval = 1.0 / max(1.0, self.frequency_hz)  # 20ms = 50 Hz
         next_tick = time.perf_counter()
         last_t = time.perf_counter()
 
@@ -330,6 +369,43 @@ class JointStateExporter100Hz:
                         temps.append(0.0)
                         actions.append(0.0)
 
+            # Multimodal frame acquisition (50 Hz alignment)
+            rgb_f = None
+            depth_f = None
+            if hasattr(self.server, "inference_engine") and self.server.inference_engine:
+                try:
+                    rgb_f, depth_f = self.server.inference_engine.get_latest_rgbd()
+                except Exception:
+                    pass
+            elif hasattr(self.server, "latest_rgbd"):
+                rgb_f, depth_f = self.server.latest_rgbd
+
+            # Standardized 480x640x3 uint8 RGB
+            if rgb_f is not None and isinstance(rgb_f, np.ndarray):
+                if rgb_f.shape != (480, 640, 3):
+                    try:
+                        import cv2
+                        rgb_frame = cv2.resize(rgb_f, (640, 480), interpolation=cv2.INTER_LINEAR)
+                    except Exception:
+                        rgb_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                else:
+                    rgb_frame = rgb_f.astype(np.uint8)
+            else:
+                rgb_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+            # Standardized 480x640 uint16 Depth
+            if depth_f is not None and isinstance(depth_f, np.ndarray):
+                if depth_f.shape != (480, 640):
+                    try:
+                        import cv2
+                        depth_frame = cv2.resize(depth_f, (640, 480), interpolation=cv2.INTER_NEAREST)
+                    except Exception:
+                        depth_frame = np.zeros((480, 640), dtype=np.uint16)
+                else:
+                    depth_frame = depth_f.astype(np.uint16)
+            else:
+                depth_frame = np.zeros((480, 640), dtype=np.uint16)
+
             # 1. Append to in-memory buffers for HDF5 batch write
             with self.lock:
                 if self.active:
@@ -338,6 +414,8 @@ class JointStateExporter100Hz:
                     self._buf_effort.append(efforts)
                     self._buf_temps.append(temps)
                     self._buf_action.append(actions)
+                    self._buf_rgb.append(rgb_frame)
+                    self._buf_depth.append(depth_frame)
                     self._buf_time.append(cur_time)
                     self._buf_time_ns.append(int(cur_time * 1e9))
                     self._buf_rel_time.append(float(rel_t))
@@ -352,8 +430,8 @@ class JointStateExporter100Hz:
                         row.extend(f"{v:.1f}" for v in temps)
                         self.csv_file.write(",".join(row) + "\n")
 
-                    # Batch flush to HDF5 & disk flush every 50 samples (0.5s)
-                    if len(self._buf_qpos) >= 50 or (cur_time - self.last_flush >= 1.0):
+                    # Batch flush to HDF5 & disk flush every 25 samples (0.5s @ 50Hz)
+                    if len(self._buf_qpos) >= 25 or (cur_time - self.last_flush >= 1.0):
                         self._flush_h5_buffer_locked()
                         if self.csv_file:
                             self.csv_file.flush()
@@ -374,3 +452,5 @@ class JointStateExporter100Hz:
             except Exception:
                 pass
 
+
+MultimodalDatasetExporter = JointStateExporter100Hz

@@ -61,9 +61,13 @@ def test_model_inference_engine_lifecycle():
     assert start_res["success"] is True
     assert engine.running is True
 
-    # Allow background loop to process at least 2 ticks
-    time.sleep(0.08)
+    # Allow background loop to process at least 1-2 ticks
     status = engine.get_status()
+    for _ in range(25):
+        time.sleep(0.06)
+        status = engine.get_status()
+        if status["step_count"] > 0:
+            break
     assert status["running"] is True
     assert status["step_count"] > 0
     assert status["has_future_actions"] is True

@@ -16,11 +16,13 @@ WS_PORT = 8889
 UDP_STREAM_PORT = 9870   # Inbound high-speed joint stream (from ROS 2 / teleop)
 UDP_EXPORT_PORT = 9871   # Outbound 100Hz telemetry stream broadcast
 
-# Loop frequencies
-CONTROL_FREQ = 400.0     # Hz for smooth trajectory generator & interpolation loop
-TELEMETRY_FREQ = 40.0    # Hz for WebSocket state broadcasting
-POLL_FREQ = 50.0          # Hz for hardware state query frames
-DATA_FREQUENCY_HZ = 100.0 # Hz for /openarm/joint_states and joint_commands
+# Loop frequencies (aligned with CONTEXT.md system frequency contract)
+CONTROL_FREQ = 400.0          # Hz (2.5 ms) for real-time CAN bus motor loop & spline interpolator
+TELEMETRY_FREQ = 100.0        # Hz (10.0 ms) for /joint_states and WebSocket state broadcasting
+POLL_FREQ = 50.0              # Hz for hardware state query frames
+DATA_FREQUENCY_HZ = 100.0     # Hz for /openarm/joint_states and joint_commands
+RECORDER_ALIGNMENT_HZ = 50.0  # Hz (20.0 ms) for multi-modal HDF5 recording alignment
+MODEL_INFERENCE_HZ = 50.0     # Hz (20.0 ms) for ACT model policy inference
 
 # RealSense Camera & ROS 2 ACT Pipeline Bridge configuration
 CAMERA_STREAM_PORT = int(os.environ.get("OPENARM_CAMERA_STREAM_PORT", "8890"))

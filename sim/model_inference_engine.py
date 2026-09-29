@@ -183,7 +183,8 @@ class ModelInferenceEngine:
         self.control_mode = "preview"  # 'preview' (safe 3D sim) or 'hardware' (real CAN bus)
         self.vel_scale = 1.0
         self.ensemble_m = 0.01
-        self.target_hz = 40.0
+        self.target_hz = 50.0  # 50 Hz (20 ms) standardized ACT inference contract
+        self.camera_handler: Optional[Any] = None
 
         # Ensembling & Smoothing
         self.chunk_size = 50
@@ -380,9 +381,17 @@ class ModelInferenceEngine:
                         qpos[motor_id - 1] = float(motor.q)
         return qpos
 
+    def get_latest_rgbd(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Fetch synchronized RGB-D observation frames from camera or server buffer."""
+        if self.camera_handler is not None and hasattr(self.camera_handler, 'get_frames'):
+            return self.camera_handler.get_frames()
+        if self.server and hasattr(self.server, 'latest_rgbd'):
+            return self.server.latest_rgbd
+        return None, None
+
     def infer_step(self, current_qpos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Execute one inference cycle:
+        Execute one inference cycle at standardized 50 Hz (20 ms):
         Returns:
           - future_actions: (50, 16) array in radians
           - next_cmd: (16,) target position for the immediate next timestep
@@ -394,13 +403,21 @@ class ModelInferenceEngine:
             norm_qpos = normalize_data(current_qpos, self.stats["qpos_mean"], self.stats["qpos_std"])
             qpos_t = torch.tensor(norm_qpos, dtype=torch.float32).unsqueeze(0).to(torch_dev)
 
-            # Synthetic image frame if camera feed is not directly hooked
-            h = getattr(self.model_config, "img_height", 240)
-            w = getattr(self.model_config, "img_width", 320)
-            dummy_img = torch.zeros((1, 4, h, w), dtype=torch.float32, device=torch_dev)
+            # Observation Input: Synchronized RGB-D frame from camera buffer (Zero-Phase-Shift)
+            rgb, depth = self.get_latest_rgbd()
+            if rgb is not None and depth is not None and preprocess_rgbd is not None:
+                img_tensor = preprocess_rgbd(rgb, depth, depth_min_m=0.2, depth_max_m=1.2)
+                img_tensor = img_tensor.unsqueeze(0).to(torch_dev)
+            else:
+                if not getattr(self, '_warned_camera', False):
+                    print("[ModelInferenceEngine] Info: Camera stream offline, using neutral standardized observation")
+                    self._warned_camera = True
+                h = getattr(self.model_config, "img_height", 480)
+                w = getattr(self.model_config, "img_width", 640)
+                img_tensor = torch.zeros((1, 4, h, w), dtype=torch.float32, device=torch_dev)
 
             with torch.no_grad():
-                pred_chunk_norm, _, _ = self.model(image=dummy_img, qpos=qpos_t, actions=None)
+                pred_chunk_norm, _, _ = self.model(image=img_tensor, qpos=qpos_t, actions=None)
                 pred_chunk_norm = pred_chunk_norm.squeeze(0).cpu().numpy()
 
             future_actions = unnormalize_data(pred_chunk_norm, self.stats["action_mean"], self.stats["action_std"])
@@ -505,7 +522,7 @@ class ModelInferenceEngine:
             self.server._set_single_joint_target(motor_id, float(val))
 
     def _inference_loop(self):
-        """Continuous ~40Hz loop executing model inference and future trajectory caching."""
+        """Continuous 50Hz (20ms) loop executing model inference and future trajectory caching."""
         dt = 1.0 / self.target_hz
         last_time = time.perf_counter()
         hz_measure_t = time.perf_counter()

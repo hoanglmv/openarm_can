@@ -239,15 +239,29 @@ class TrajectorySmoother:
 
 
 class BimanualOpenArmHardware:
-    """Quản lý giao tiếp CAN với 2 cánh tay robot OpenArm (16 động cơ Damiao)"""
+    """
+    Quản lý luồng lệnh góc khớp của Model AI tuân thủ kiến trúc 7 tầng (CONTEXT.md):
+    - Mặc định (use_backend=True): Gửi /joint_state_cmd (50 Hz) tới Backend Middleware qua UDP port 9870.
+      Backend tiếp nhận, đưa qua Safety Guard và Spline Interpolator (50Hz -> 400Hz) rồi mới nạp xuống CAN.
+      Tuyệt đối KHÔNG bypass Backend.
+    - Direct CAN (use_backend=False): Chỉ dùng cho mục đích Diagnostic phần cứng cô lập.
+    """
     def __init__(self,
                  can_right: str = "can0",
                  can_left: str = "can1",
                  gripper_mode: str = "pos_force",
                  invert_left_j1: bool = True,
                  gripper_unit: str = "auto",
-                 dry_run: bool = False):
+                 dry_run: bool = False,
+                 use_backend: bool = True,
+                 backend_host: str = "127.0.0.1",
+                 backend_port: int = 9870,
+                 telemetry_port: int = 9871):
         self.dry_run = dry_run
+        self.use_backend = use_backend and not dry_run
+        self.backend_host = backend_host
+        self.backend_port = backend_port
+        self.telemetry_port = telemetry_port
         self.can_right = can_right
         self.can_left = can_left
         self.gripper_mode = gripper_mode.lower()
@@ -255,8 +269,22 @@ class BimanualOpenArmHardware:
         self.gripper_unit = gripper_unit
         self.arm_right = None
         self.arm_left = None
+        self.latest_backend_qpos = np.zeros(16, dtype=np.float32)
 
-        if not dry_run:
+        if self.use_backend:
+            import socket, json, threading
+            print(f"[*] [Backend Core Hub] Model AI phát /joint_state_cmd (50 Hz) tới Backend ({backend_host}:{backend_port}) - CẤM CAN Bypass!")
+            self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.telem_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.telem_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                self.telem_sock.bind(("0.0.0.0", telemetry_port))
+                threading.Thread(target=self._telemetry_listener, daemon=True).start()
+                print(f"[*] [Backend Core Hub] Lắng nghe telemetry /joint_states từ Backend trên port {telemetry_port}")
+            except Exception as e:
+                print(f"[!] Warning: Could not bind telemetry listener on port {telemetry_port}: {e}")
+        elif not dry_run:
+            print("[!] [CẢNH BÁO KIẾN TRÚC] Đang chạy Direct SocketCAN mode (chỉ dùng cho Diagnostic phần cứng cấp thấp).")
             if not OPENARM_CAN_AVAILABLE:
                 raise ImportError("Chưa cài đặt thư viện 'openarm_can'! Vui lòng chạy trong môi trường có openarm_can.")
             print(f"[*] Đang kết nối CAN Bus: Tay Phải [{can_right}], Tay Trái [{can_left}]...")
@@ -299,6 +327,20 @@ class BimanualOpenArmHardware:
             time.sleep(0.1)
             self.refresh_all()
 
+    def _telemetry_listener(self):
+        """Lắng nghe gói tin telemetry từ Backend để cập nhật qpos hiện tại."""
+        import json
+        while True:
+            try:
+                data, _ = self.telem_sock.recvfrom(8192)
+                telem = json.loads(data.decode('utf-8'))
+                if "positions" in telem:
+                    self.latest_backend_qpos = np.array(telem["positions"][:16], dtype=np.float32)
+                elif "qpos" in telem:
+                    self.latest_backend_qpos = np.array(telem["qpos"][:16], dtype=np.float32)
+            except Exception:
+                pass
+
     def refresh_all(self):
         if not self.dry_run:
             if self.arm_right:
@@ -323,6 +365,9 @@ class BimanualOpenArmHardware:
         """Đọc vị trí hiện tại của 16 động cơ: [8 Khớp Trái, 8 Khớp Phải]"""
         if self.dry_run:
             return np.zeros(16, dtype=np.float32)
+
+        if self.use_backend:
+            return self.latest_backend_qpos.copy()
 
         self.refresh_all()
         qpos = np.zeros(16, dtype=np.float32)
@@ -374,11 +419,26 @@ class BimanualOpenArmHardware:
                               gripper_speed: float = 25.0,
                               gripper_torque_pu: float = 0.15):
         """
-        Gửi lệnh vị trí tới 16 động cơ Damiao qua CAN-FD.
-        Joint 1..7: MIT Mode với hệ số Kp/Kd tối ưu.
-        Joint 8: Hỗ trợ POS_FORCE với giới hạn lực kẹp an toàn, hoặc MIT Mode.
+        Gửi lệnh vị trí tới 16 động cơ:
+        - Mặc định: Phát luồng /joint_state_cmd (50 Hz) tới Backend Middleware Core Hub qua UDP 9870.
+          Backend chịu trách nhiệm Safety Guard và Spline Interpolator (50Hz -> 400Hz).
+        - Direct CAN: Chỉ dùng khi người dùng bật cờ --direct_can.
         """
         if self.dry_run:
+            return
+
+        if self.use_backend:
+            import json
+            payload = {
+                "source": "ACT_Policy_Inference",
+                "timestamp": time.time(),
+                "positions": [float(p) for p in target_qpos[:16]],
+            }
+            try:
+                msg = json.dumps(payload).encode('utf-8')
+                self.udp_sock.sendto(msg, (self.backend_host, self.backend_port))
+            except Exception as e:
+                print(f"[!] Lỗi gửi lệnh sang Backend: {e}")
             return
 
         # 1. Gửi tay trái (Chỉ số 0..7)
@@ -420,21 +480,32 @@ class BimanualOpenArmHardware:
 
     def disable_all(self):
         """Ngắt toàn bộ lực (Torque OFF) đưa đèn LED về màu ĐỎ an toàn"""
-        if not self.dry_run:
-            print("[*] Đang gửi lệnh ngắt mô-men tới 16 động cơ (disable_all)...")
-            if self.arm_left:
-                try:
-                    self.arm_left.disable_all()
-                    self.arm_left.recv_all(500)
-                except Exception:
-                    pass
-            if self.arm_right:
-                try:
-                    self.arm_right.disable_all()
-                    self.arm_right.recv_all(500)
-                except Exception:
-                    pass
-            print("[✓] Đã ngắt mô-men an toàn trên cả 2 cánh tay.")
+        if self.dry_run:
+            return
+        if self.use_backend:
+            import json
+            payload = {"command": "e_stop", "source": "ACT_Inference"}
+            try:
+                self.udp_sock.sendto(json.dumps(payload).encode('utf-8'), (self.backend_host, self.backend_port))
+            except Exception:
+                pass
+            print("[✓] Đã gửi tín hiệu E-Stop an toàn tới Backend.")
+            return
+
+        print("[*] Đang gửi lệnh ngắt mô-men tới 16 động cơ (disable_all)...")
+        if self.arm_left:
+            try:
+                self.arm_left.disable_all()
+                self.arm_left.recv_all(500)
+            except Exception:
+                pass
+        if self.arm_right:
+            try:
+                self.arm_right.disable_all()
+                self.arm_right.recv_all(500)
+            except Exception:
+                pass
+        print("[✓] Đã ngắt mô-men an toàn trên cả 2 cánh tay.")
 
 
 def smooth_s_curve_move(robot: BimanualOpenArmHardware,
@@ -485,6 +556,11 @@ def main():
     parser.add_argument("--invert_left_j1", action="store_true", default=True, help="Đảo chiều vật lý Motor 1 (Vai Trái J1) theo quy ước động học OpenArm (+q vươn tới trước)")
     parser.add_argument("--no_invert_left_j1", dest="invert_left_j1", action="store_false", help="Tắt đảo chiều Motor 1 nếu phần cứng đã được cấu hình trong motor firmware")
     parser.add_argument("--gripper_unit", choices=["auto", "stroke_m", "rad"], default="auto", help="Đơn vị kẹp gắp: 'auto' (tự động phát hiện), 'stroke_m' (mét: 0..0.043m), 'rad' (radian: 0..1.20 rad)")
+    parser.add_argument("--backend", action="store_true", default=True, help="Truyền lệnh và telemetry qua Backend Middleware Core Hub (UDP 9870/9871, cấm bypass)")
+    parser.add_argument("--direct_can", dest="backend", action="store_false", help="Bypass Backend để gửi trực tiếp SocketCAN (chỉ dùng cho Diagnostic phần cứng)")
+    parser.add_argument("--backend_host", type=str, default="127.0.0.1", help="Địa chỉ IP host của Backend Server")
+    parser.add_argument("--backend_port", type=int, default=9870, help="Cổng UDP nhận /joint_state_cmd của Backend (mặc định: 9870)")
+    parser.add_argument("--telemetry_port", type=int, default=9871, help="Cổng UDP phát telemetry của Backend (mặc định: 9871)")
     args = parser.parse_args()
 
     control_dt = 1.0 / max(1.0, args.control_hz)
@@ -615,7 +691,11 @@ def main():
         gripper_mode=args.gripper_mode,
         invert_left_j1=args.invert_left_j1,
         gripper_unit=gripper_unit_resolved,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        use_backend=args.backend,
+        backend_host=args.backend_host,
+        backend_port=args.backend_port,
+        telemetry_port=args.telemetry_port,
     )
     ensemble = TemporalEnsemblePolicy(chunk_size=cfg.chunk_size, action_dim=16, ensemble_m=args.ensemble_m)
     smoother = TrajectorySmoother(vel_scale=args.vel_scale, dt=control_dt)

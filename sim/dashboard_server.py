@@ -41,6 +41,7 @@ try:
         JOINT_LIMITS,
         JOINT_NAME_TO_ID,
         JOINT_NAMES,
+        RECORDER_ALIGNMENT_HZ,
         TELEMETRY_FREQ,
         UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
@@ -52,6 +53,7 @@ try:
     from http_server import CustomHTTPHandler
     from model_inference_engine import ModelInferenceEngine
     from motor_simulator import DamiaoArmSimulator
+    from spline_interpolator import BimanualSplineInterpolator
 except ImportError:
     from .config import (
         CAMERA_ALIGNED_DEPTH_TOPIC,
@@ -70,6 +72,7 @@ except ImportError:
         JOINT_LIMITS,
         JOINT_NAME_TO_ID,
         JOINT_NAMES,
+        RECORDER_ALIGNMENT_HZ,
         TELEMETRY_FREQ,
         UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
@@ -81,6 +84,7 @@ except ImportError:
     from .http_server import CustomHTTPHandler
     from .model_inference_engine import ModelInferenceEngine
     from .motor_simulator import DamiaoArmSimulator
+    from .spline_interpolator import BimanualSplineInterpolator
 
 
 # Default high-stiffness / well-damped gains tailored to each actuator's torque capability:
@@ -141,6 +145,10 @@ class OpenArmDashboardServer:
             m.kd = gains["kd"]
             m.tau_ff = 0.0
 
+        # Cubic / Quintic Spline Interpolator for 50Hz -> 400Hz smooth trajectory generation
+        initial_q_map = {m.id: m.q for m in self.motors.values()}
+        self.spline_interpolator = BimanualSplineInterpolator(initial_positions=initial_q_map)
+
         # Camera & ACT ROS 2 Bridge processes
         self.camera_process = None
         self.camera_driver_process = None
@@ -156,9 +164,9 @@ class OpenArmDashboardServer:
             "source": "None"
         }
 
-        # Continuous 100Hz Joint State Exporter (Activated upon robot connection)
+        # Continuous Multimodal Dataset Exporter (50Hz ACT format)
         export_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
-        self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=UDP_EXPORT_PORT)
+        self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=UDP_EXPORT_PORT, frequency_hz=RECORDER_ALIGNMENT_HZ)
         self.loop = None
         self.active_trajectory_id = 0
         self.trajectory_lock = threading.Lock()
@@ -907,6 +915,8 @@ class OpenArmDashboardServer:
                 if should_send_hw:
                     self.hw.send_frame(m.can_if, m.send_id, bytes([0xFF] * 7 + [0xFC]))
             m.q_target = q
+            if hasattr(self, 'spline_interpolator'):
+                self.spline_interpolator.update_joint_target(motor_id, q, dt_target=0.02)
             if getattr(self, "execution_mode", "sim") == "sim":
                 m.q = q
                 m.q_cmd = q
@@ -1603,78 +1613,77 @@ class OpenArmDashboardServer:
                         m.q_des = m.q
                         continue
 
-                    # Velocity-limited step towards target
-                    diff = m.q_target - m.q_cmd
-                    v_lim = 2.5 if m.joint_idx == 8 else self.velocity_limit
-                    max_step = v_lim * dt
-
-                    if abs(diff) <= max_step:
-                        m.q_cmd = m.q_target
-                        target_vel = 0.0
+                    # Cubic/Quintic Spline Interpolator (50Hz -> 400Hz with C^2 continuity)
+                    if hasattr(self, 'spline_interpolator'):
+                        if getattr(m, '_last_target_q', None) != m.q_target:
+                            m._last_target_q = m.q_target
+                            self.spline_interpolator.update_joint_target(motor_id, m.q_target, dt_target=0.02)
+                        q_cmd, target_vel = self.spline_interpolator.step(motor_id, dt)
+                        m.q_cmd = q_cmd
+                        m.q_des = q_cmd
                     else:
-                        m.q_cmd += math.copysign(max_step, diff)
-                        target_vel = math.copysign(v_lim, diff)
-
-                    m.q_des = m.q_cmd
+                        diff = m.q_target - m.q_cmd
+                        v_lim = 2.5 if m.joint_idx == 8 else self.velocity_limit
+                        max_step = v_lim * dt
+                        if abs(diff) <= max_step:
+                            m.q_cmd = m.q_target
+                            target_vel = 0.0
+                        else:
+                            m.q_cmd += math.copysign(max_step, diff)
+                            target_vel = math.copysign(v_lim, diff)
+                        m.q_des = m.q_cmd
 
                     # If in real mode AND execution_mode allows hardware, send CAN command.
                     # In "sim" mode, hardware transmission is blocked to guarantee safety.
                     should_send_hw = (self.mode == "real" and getattr(self, "execution_mode", "sim") in ["real", "dual"])
                     if should_send_hw:
                         if m.joint_idx == 8:
-                            # End-Effector parallel gripper: POS_FORCE mode + MIT fallback
-                            now = time.time()
-                            if now - getattr(m, '_last_posforce_tx', 0) > 0.04:
-                                m._last_posforce_tx = now
-                                # 1. Primary: POS_FORCE frame on m.send_id + 0x300
-                                posforce_can_id = m.send_id + 0x300
-                                vel_uint = 1000  # 10.0 rad/s
-                                i_uint = 1500    # 15% safe current limit (1.5 Nm)
-                                posforce_data = struct.pack("<fHH", float(m.q_cmd), vel_uint, i_uint)
-                                self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
+                            # End-Effector parallel gripper: POS_FORCE mode + MIT fallback (400 Hz)
+                            posforce_can_id = m.send_id + 0x300
+                            vel_uint = 1000  # 10.0 rad/s
+                            i_uint = 1500    # 15% safe current limit (1.5 Nm)
+                            posforce_data = struct.pack("<fHH", float(m.q_cmd), vel_uint, i_uint)
+                            self.hw.send_frame(m.can_if, posforce_can_id, posforce_data)
 
-                                # 2. Secondary: MIT mode frame fallback on m.send_id (0x08)
-                                q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
-                                dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
-                                kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
-                                kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
-                                tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
-                                d0 = (q_uint >> 8) & 0xFF
-                                d1 = q_uint & 0xFF
-                                d2 = (dq_uint >> 4) & 0xFF
-                                d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
-                                d4 = kp_uint & 0xFF
-                                d5 = (kd_uint >> 4) & 0xFF
-                                d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
-                                d7 = tau_uint & 0xFF
-                                mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
-                                self.hw.send_frame(m.can_if, m.send_id, mit_data)
+                            # Secondary: MIT mode frame fallback on m.send_id (0x08)
+                            q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                            dq_uint = double_to_uint(0.0, -m.vMax, m.vMax, 12)
+                            kp_uint = double_to_uint(30.0, 0.0, 500.0, 12)
+                            kd_uint = double_to_uint(1.0, 0.0, 5.0, 12)
+                            tau_uint = double_to_uint(0.0, -m.tMax, m.tMax, 12)
+                            d0 = (q_uint >> 8) & 0xFF
+                            d1 = q_uint & 0xFF
+                            d2 = (dq_uint >> 4) & 0xFF
+                            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                            d4 = kp_uint & 0xFF
+                            d5 = (kd_uint >> 4) & 0xFF
+                            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                            d7 = tau_uint & 0xFF
+                            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                            self.hw.send_frame(m.can_if, m.send_id, mit_data)
                         else:
-                            # 7-DOF Arm motors (MIT Mode) - rate-limited to 100 Hz (10 ms)
-                            now = time.time()
-                            if now - getattr(m, '_last_mit_tx', 0) >= 0.010:
-                                m._last_mit_tx = now
-                                motor_dir = getattr(m, 'direction', 1.0)
-                                physical_q_cmd = m.q_cmd * motor_dir
-                                physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
-                                physical_dq_cmd = target_vel * motor_dir
+                            # 7-DOF Arm motors (MIT Mode) - 400 Hz real-time output (2.5 ms)
+                            motor_dir = getattr(m, 'direction', 1.0)
+                            physical_q_cmd = m.q_cmd * motor_dir
+                            physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
+                            physical_dq_cmd = target_vel * motor_dir
 
-                                q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
-                                dq_uint = double_to_uint(physical_dq_cmd, -m.vMax, m.vMax, 12)
-                                kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
-                                kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                                tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
+                            q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
+                            dq_uint = double_to_uint(physical_dq_cmd, -m.vMax, m.vMax, 12)
+                            kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
+                            kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
+                            tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
 
-                                d0 = (q_uint >> 8) & 0xFF
-                                d1 = q_uint & 0xFF
-                                d2 = (dq_uint >> 4) & 0xFF
-                                d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
-                                d4 = kp_uint & 0xFF
-                                d5 = (kd_uint >> 4) & 0xFF
-                                d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
-                                d7 = tau_uint & 0xFF
-                                mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
-                                self.hw.send_frame(m.can_if, m.send_id, mit_data)
+                            d0 = (q_uint >> 8) & 0xFF
+                            d1 = q_uint & 0xFF
+                            d2 = (dq_uint >> 4) & 0xFF
+                            d3 = ((dq_uint & 0x0F) << 4) | ((kp_uint >> 8) & 0x0F)
+                            d4 = kp_uint & 0xFF
+                            d5 = (kd_uint >> 4) & 0xFF
+                            d6 = ((kd_uint & 0x0F) << 4) | ((tau_uint >> 8) & 0x0F)
+                            d7 = tau_uint & 0xFF
+                            mit_data = bytes([d0, d1, d2, d3, d4, d5, d6, d7])
+                            self.hw.send_frame(m.can_if, m.send_id, mit_data)
                     else:
                         m.q = m.q_cmd
 
