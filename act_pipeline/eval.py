@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Production Evaluation Pipeline for ACT (Action Chunking with Transformers)
-Evaluates trained ACT checkpoints on Bimanual OpenArm (16-DOF) RGB-D dataset for Autonomous Cooking & Stir-Frying:
+Evaluates trained ACT checkpoints on Bimanual OpenArm (16-DOF) RGB-D dataset:
 1. Reconstruction Accuracy: L1, MSE, Per-Joint MAE for 16 Damiao motors
 2. Gripper Error Analysis: Left and Right Grippers
 3. Real-Time Temporal Ensembling Simulation: Compares raw chunk vs exponential ensemble
@@ -16,7 +16,6 @@ import time
 import json
 import glob
 import argparse
-import h5py
 from typing import Dict, List, Optional, Tuple, Any
 
 # Đảm bảo mã hóa UTF-8 an toàn trên Windows và Linux
@@ -31,9 +30,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-# Đảm bảo import act_pipeline hoạt động độc lập bất kể CWD
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import h5py
 
 from act_pipeline.config import ModelConfig
 from act_pipeline.models.act_model import ACTPolicy
@@ -71,7 +68,7 @@ def evaluate_dataset_batch(
     action_std = stats["action_std"]
 
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="[Eval] Đánh giá Dataset", leave=False, dynamic_ncols=True):
+        for batch in dataloader:
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
             actions = batch["actions"].to(device, non_blocking=True)
@@ -128,7 +125,6 @@ def simulate_episode_rollout(
     device: torch.device,
     ensemble_m: float = 0.01,
     chunk_size: int = 50,
-    target_size: Optional[Tuple[int, int]] = None,
 ) -> Dict[str, Any]:
     """
     Giả lập Rollout liên tục theo thời gian thực (50Hz) trên 1 file Episode:
@@ -156,12 +152,12 @@ def simulate_episode_rollout(
         raw_pred_actions = []
         ensemble_pred_actions = []
 
-        for t in tqdm(range(T), desc=f"[Rollout] {os.path.basename(hdf5_path)}", leave=False, dynamic_ncols=True):
+        for t in range(T):
             # 1. Tiền xử lý RGB-D tại bước t
             rgb_t = raw_rgb[t] if raw_rgb.ndim == 4 else raw_rgb[t][..., :3]
             depth_t = raw_depth[t] if raw_depth is not None else None
             
-            rgbd_tensor = preprocess_rgbd(rgb_t, depth_t, target_size=target_size).unsqueeze(0).to(device) # [1, 4, H, W]
+            rgbd_tensor = preprocess_rgbd(rgb_t, depth_t).unsqueeze(0).to(device) # [1, 4, H, W]
 
             # 2. Tiền xử lý qpos
             norm_qpos = normalize_data(qpos_seq[t], stats["qpos_mean"], stats["qpos_std"])
@@ -247,43 +243,18 @@ def eval_pipeline(args):
         nheads=saved_cfg.get("nheads", 8),
         dim_feedforward=saved_cfg.get("dim_feedforward", 2048),
         dropout=0.0,
-        cvae_layers=saved_cfg.get("cvae_layers", 4),
+        cvae_layers=saved_cfg.get("cvae_layers", 2),
         latent_dim=saved_cfg.get("latent_dim", 32),
-        decoder_layers=saved_cfg.get("decoder_layers", 7),
+        decoder_layers=saved_cfg.get("decoder_layers", 4),
         chunk_size=saved_cfg.get("chunk_size", 50),
         action_dim=saved_cfg.get("action_dim", 16),
         qpos_dim=saved_cfg.get("qpos_dim", 16),
     )
-
-    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
-
-    # Tự động dò số tầng từ state_dict để tương thích cả checkpoint cũ (2/4) lẫn chuẩn paper (4/7)
-    dec_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and ("policy_decoder" in k or "decoder" in k)]
-    if len(dec_indices) > 0:
-        model_cfg.decoder_layers = max(dec_indices) + 1
-
-    cvae_indices = [int(k.split(".layers.")[1].split(".")[0]) for k in state_dict.keys() if ".layers." in k and "cvae" in k]
-    if len(cvae_indices) > 0:
-        model_cfg.cvae_layers = max(cvae_indices) + 1
-
     model = ACTPolicy(config=model_cfg).to(device)
 
-    # Tự động đồng bộ tên key (đặc biệt là 50 trainable action queries và module prefix)
-    cleaned_state_dict = {}
-    for k, v in state_dict.items():
-        new_k = k
-        if new_k.startswith("module."):
-            new_k = new_k[7:]
-        if new_k == "action_queries" and "policy_decoder.action_queries" not in state_dict:
-            new_k = "policy_decoder.action_queries"
-        cleaned_state_dict[new_k] = v
-
     # Nạp trọng số
-    try:
-        model.load_state_dict(cleaned_state_dict, strict=True)
-    except Exception as e:
-        print(f"[!] Thử nạp linh hoạt (strict=False) do tên prefix: {e}")
-        model.load_state_dict(cleaned_state_dict, strict=False)
+    state_dict = checkpoint_data["model_state_dict"] if "model_state_dict" in checkpoint_data else checkpoint_data
+    model.load_state_dict(state_dict, strict=True)
     model.eval()
     print("[✓] Đã nạp thành công 100% trọng số mô hình.")
 
@@ -320,7 +291,6 @@ def eval_pipeline(args):
         device=device,
         ensemble_m=args.ensemble_m,
         chunk_size=model_cfg.chunk_size,
-        target_size=(model_cfg.img_height, model_cfg.img_width),
     )
 
     # 6. Hiển thị Bảng Báo Cáo Chi Tiết
@@ -373,7 +343,7 @@ def eval_pipeline(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Đánh giá mô hình ACT Bimanual OpenArm")
     parser.add_argument("--checkpoint_path", type=str, default="checkpoints/act_openarm/best_checkpoint.pth", help="Đường dẫn file checkpoint .pth")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/real_cooking_stir_fry", help="Thư mục chứa các file .hdf5 kiểm thử")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/real_towel_folding", help="Thư mục chứa các file .hdf5 kiểm thử")
     parser.add_argument("--output_dir", type=str, default="evaluation_results", help="Thư mục xuất báo cáo đánh giá")
     parser.add_argument("--batch_size", type=int, default=16, help="Kích thước batch đánh giá")
     parser.add_argument("--num_workers", type=int, default=2, help="Số worker nạp dữ liệu")

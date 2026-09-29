@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Production Training Pipeline for ACT (Action Chunking with Transformers)
-Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera for Autonomous Cooking & Stir-Frying
+Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera
 
 Tính năng chính:
 - Tự động dò và tính toán Thống kê chuẩn hóa (Mean & Std) cho 16 khớp
@@ -36,9 +36,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-# Đảm bảo import act_pipeline hoạt động độc lập bất kể CWD
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from act_pipeline.config import ModelConfig, TrainConfig
 from act_pipeline.models.act_model import ACTPolicy
@@ -81,7 +78,7 @@ def evaluate(
     total_valid_steps = 0
 
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="[Val] Đánh giá", leave=False, dynamic_ncols=True):
+        for batch in dataloader:
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
             actions = batch["actions"].to(device, non_blocking=True)
@@ -326,14 +323,7 @@ def train_pipeline(args):
         train_kl_accum = 0.0
         batch_count = 0
 
-        pbar = tqdm(
-            train_loader,
-            desc=f"Epoch [{epoch:3d}/{args.epochs}]",
-            unit="batch",
-            leave=False,
-            dynamic_ncols=True,
-        )
-        for step_idx, batch in enumerate(pbar):
+        for step_idx, batch in enumerate(train_loader):
             global_step += 1
             image = batch["image"].to(device, non_blocking=True)
             qpos = batch["qpos"].to(device, non_blocking=True)
@@ -372,12 +362,6 @@ def train_pipeline(args):
             train_recon_accum += loss_dict["recon_loss"].item()
             train_kl_accum += loss_dict["kl_loss"].item()
             batch_count += 1
-
-            pbar.set_postfix({
-                "loss": f"{loss.item():.4f}",
-                "recon": f"{loss_dict['recon_loss'].item():.4f}",
-                "kl": f"{loss_dict['kl_loss'].item():.4f}",
-            })
 
             # Ghi nhận step metrics định kỳ
             if global_step % args.log_every_steps == 0:
@@ -493,7 +477,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện mô hình ACT Bimanual OpenArm RGB-D")
     
     # Dữ liệu & Đường dẫn
-    parser.add_argument("--dataset_dir", type=str, default="dataset/real_cooking_stir_fry", help="Đường dẫn thư mục chứa các file .hdf5")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/real_towel_folding", help="Đường dẫn thư mục chứa các file .hdf5")
     parser.add_argument("--output_dir", type=str, default="checkpoints/act_openarm", help="Thư mục lưu trữ checkpoints và log files")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint để khôi phục hoặc 'auto' để tìm checkpoint mới nhất")
     
@@ -516,8 +500,8 @@ def parse_args():
     parser.add_argument("--action_dim", type=int, default=16, help="Số bậc tự do 2 tay robot (16 động cơ)")
     parser.add_argument("--qpos_dim", type=int, default=16, help="Số chiều góc khớp đầu vào")
     parser.add_argument("--latent_dim", type=int, default=32, help="Số chiều vector ẩn z của CVAE")
-    parser.add_argument("--cvae_layers", type=int, default=4, help="Số layers Transformer Encoder của CVAE (Chuẩn Stanford ACT = 4)")
-    parser.add_argument("--decoder_layers", type=int, default=7, help="Số layers Transformer Decoder của Policy (Chuẩn Stanford ACT = 7)")
+    parser.add_argument("--cvae_layers", type=int, default=2, help="Số layers Transformer Encoder của CVAE")
+    parser.add_argument("--decoder_layers", type=int, default=4, help="Số layers Transformer Decoder của Policy")
     parser.add_argument("--unfreeze_backbone", action="store_true", help="Nếu đặt cờ này, sẽ fine-tune toàn bộ ResNet18 thay vì đóng băng")
 
     # Hàm mất mát Loss
@@ -532,7 +516,7 @@ def parse_args():
     parser.add_argument("--step_stride", type=int, default=1, help="Bước nhảy lấy mẫu start_t trong episode")
 
     # Đánh giá & Lưu trữ
-    parser.add_argument("--val_split", type=float, default=0.15, help="Tỷ lệ tập validation (ví dụ 0.15 = 15%%)")
+    parser.add_argument("--val_split", type=float, default=0.15, help="Tỷ lệ tập validation (ví dụ 0.15 = 15%)")
     parser.add_argument("--eval_every", type=int, default=10, help="Đánh giá validation mỗi N epochs")
     parser.add_argument("--save_every", type=int, default=50, help="Lưu checkpoint định kỳ mỗi N epochs")
     parser.add_argument("--log_every_steps", type=int, default=10, help="Ghi nhận metric mỗi N bước batch")

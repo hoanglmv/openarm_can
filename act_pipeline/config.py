@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Configuration parameters for ACT (Action Chunking with Transformers)
-Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera for Autonomous Cooking & Stir-Frying
+Bimanual OpenArm (16-DOF: 2 arms x 8 motors) + 01 Chest RGB-D Camera
 """
 
 from dataclasses import dataclass, field
@@ -25,11 +25,11 @@ class ModelConfig:
     dropout: float = 0.1
     
     # CVAE
-    cvae_layers: int = 4            # Số layer TransformerEncoder của CVAE (Chuẩn Stanford ACT paper: enc_layers = 4)
+    cvae_layers: int = 2            # Số layer TransformerEncoder của CVAE
     latent_dim: int = 32            # Kích thước latent vector z
     
     # Policy Decoder
-    decoder_layers: int = 7         # Số layer TransformerDecoder của Policy (Chuẩn Stanford ACT paper: dec_layers = 7)
+    decoder_layers: int = 4         # Số layer TransformerDecoder của Policy
     chunk_size: int = 50            # Action chunk size k=50 (1 giây tại 50Hz)
     action_dim: int = 16            # 16 khớp (8 tay trái: J1..J7 + gripper; 8 tay phải: J1..J7 + gripper)
     qpos_dim: int = 16              # 16 góc khớp hiện tại
@@ -42,7 +42,7 @@ class ModelConfig:
 @dataclass
 class TrainConfig:
     # Paths
-    dataset_dir: str = "dataset/real_cooking_stir_fry"
+    dataset_dir: str = "dataset/real_towel_folding"
     output_dir: str = "checkpoints/act_openarm"
     stats_file: Optional[str] = None
     resume_checkpoint: Optional[str] = None
@@ -81,15 +81,10 @@ class TrainConfig:
 @dataclass
 class EvalConfig:
     checkpoint_path: str = "checkpoints/act_openarm/best_checkpoint.pth"
-    dataset_dir: str = "dataset/real_cooking_stir_fry"
+    dataset_dir: str = "dataset/real_towel_folding"
     output_dir: str = "evaluation_results"
     batch_size: int = 16
     num_workers: int = 2
     temporal_ensemble: bool = True
     ensemble_m: float = 0.01        # Hệ số suy giảm trọng số exp(-m * i)
     device: str = "cuda"
-    
-    # Hardware & Real-Time Control
-    control_hz: float = 50.0        # Tần số chu kỳ điều khiển robot (Hz)
-    camera_fps: int = 60            # Tần số camera (FPS, ví dụ: 25, 30, 60)
-    non_blocking_cam: bool = True   # Chế độ đọc camera non-blocking tránh nghẽn vòng lặp
