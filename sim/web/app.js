@@ -8,7 +8,7 @@
 //   - js/three_model.js    : 3D procedural robot CAD models & parallel grippers
 //   - js/ui_sliders.js     : Joint sliders, safety locks, dashboard controls
 //   - js/ui_target.js      : Target Joint State input, units, trajectory execution
-//   - js/telemetry.js      : 16 motor cards, 3D kinematics sync, 100Hz exporter UI
+//   - js/telemetry.js      : 16 motor cards, 3D kinematics sync, ACT dataset record UI
 //   - js/dance_routines.js : Dance choreography mathematical routines
 //   - js/dance_engine.js   : Dance player state machine, tempo, basic presets
 // ==============================================================================

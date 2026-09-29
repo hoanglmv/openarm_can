@@ -42,13 +42,12 @@ try:
         JOINT_NAME_TO_ID,
         JOINT_NAMES,
         TELEMETRY_FREQ,
-        UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
         WS_PORT,
         double_to_uint,
     )
     from can_bridge import RealRobotHardwareBridge
-    from exporter import JointStateExporter100Hz
+    from dataset_recorder_manager import DatasetRecorderManager
     from http_server import CustomHTTPHandler
     from model_inference_engine import ModelInferenceEngine
     from motor_simulator import DamiaoArmSimulator
@@ -71,13 +70,12 @@ except ImportError:
         JOINT_NAME_TO_ID,
         JOINT_NAMES,
         TELEMETRY_FREQ,
-        UDP_EXPORT_PORT,
         UDP_STREAM_PORT,
         WS_PORT,
         double_to_uint,
     )
     from .can_bridge import RealRobotHardwareBridge
-    from .exporter import JointStateExporter100Hz
+    from .dataset_recorder_manager import DatasetRecorderManager
     from .http_server import CustomHTTPHandler
     from .model_inference_engine import ModelInferenceEngine
     from .motor_simulator import DamiaoArmSimulator
@@ -156,9 +154,9 @@ class OpenArmDashboardServer:
             "source": "None"
         }
 
-        # Continuous 100Hz Joint State Exporter (Activated upon robot connection)
-        export_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
-        self.exporter = JointStateExporter100Hz(self, export_dir=export_dir_path, udp_port=UDP_EXPORT_PORT)
+        # ACT RGB-D dataset recorder (sim/data_recorder.py subprocess), saves episodes to data_set/
+        dataset_dir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data_set")
+        self.dataset_recorder = DatasetRecorderManager(dataset_dir_path, on_finished=self._on_dataset_episode_finished)
         self.loop = None
         self.active_trajectory_id = 0
         self.trajectory_lock = threading.Lock()
@@ -198,17 +196,13 @@ class OpenArmDashboardServer:
         self.httpd.app = self
         self.http_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.http_thread.start()
-        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state, /api/export/*)")
+        print(f"[Dashboard] HTTP Server running on http://localhost:{HTTP_PORT} (REST API: /api/joint_state, /api/record/*)")
 
         # 7. Start high-speed UDP Joint Stream receiver (port 9870 for zero-latency ROS 2 / teleop streams)
         self.udp_thread = threading.Thread(target=self._udp_receiver_loop, daemon=True)
         self.udp_thread.start()
 
-        # 8. Start continuous 100Hz Joint State Exporter thread (waits for manual Record)
-        self.export_thread = threading.Thread(target=self.exporter.loop, daemon=True)
-        self.export_thread.start()
-
-        # 9. Start WebSocket & Telemetry Broadcaster
+        # 8. Start WebSocket & Telemetry Broadcaster
         asyncio.run(self.run_ws_server())
 
     def _start_camera_driver(self):
@@ -433,9 +427,36 @@ class OpenArmDashboardServer:
             elif sleep_time < -period:
                 next_tick = time.perf_counter()
 
+    def _dataset_record_start(self):
+        res = self.dataset_recorder.start()
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info" if res["ok"] else "error", res["message"]), self.loop
+            )
+
+    def _dataset_record_stop(self):
+        res = self.dataset_recorder.stop()
+        if hasattr(self, 'loop') and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_notice("info" if res["ok"] else "warning", res["message"]), self.loop
+            )
+
+    def _on_dataset_episode_finished(self, result):
+        """Called from the recorder reader thread once data_recorder.py exits."""
+        if result["file"]:
+            notice_type = "success"
+            msg = f"Đã lưu episode vào data_set/{os.path.basename(result['file'])} ({result['samples']} mẫu)"
+        else:
+            notice_type = "error"
+            msg = f"Ghi dataset thất bại: {result['error']}"
+        print(f"[Dataset] {msg}")
+        if hasattr(self, 'loop') and self.loop and self.running:
+            asyncio.run_coroutine_threadsafe(self.broadcast_notice(notice_type, msg), self.loop)
+
     def stop(self):
         """Clean shutdown of all background threads, processes, and sockets."""
         self.running = False
+        self.dataset_recorder.stop()
         if hasattr(self, "inference_engine") and self.inference_engine.running:
             try:
                 self.inference_engine.stop_inference()
@@ -629,7 +650,7 @@ class OpenArmDashboardServer:
         """Safely disarm robot, tear down CAN interfaces, and detach USB adapter."""
         try:
             print("[USB] Ngắt kết nối USB Robot...")
-            self.exporter.close_session()
+            self.dataset_recorder.stop()
 
             if hasattr(self, 'loop') and self.loop:
                 asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Đang ngắt kết nối USB và ngắt torque an toàn..."), self.loop)
@@ -1092,10 +1113,8 @@ class OpenArmDashboardServer:
                         self.loop
                     )
 
-        elif action in ["record_start", "export_start"]:
-            self.exporter.start_session("record")
-            if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
+        elif action == "record_start":
+            self._dataset_record_start()
 
         # -------------------------------------------------------------
         # AI MODEL INFERENCE & FUTURE TRAJECTORY ACTIONS (ACT POLICY)
@@ -1156,27 +1175,14 @@ class OpenArmDashboardServer:
                     self.loop
                 )
 
-        elif action in ["record_stop", "export_stop"]:
-            prev_samples = self.exporter.samples
-            prev_name = self.exporter.file_name or "joint_states"
-            self.exporter.close_session()
-            if hasattr(self, 'loop') and self.loop:
-                asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+        elif action == "record_stop":
+            self._dataset_record_stop()
 
-        elif action in ["record_toggle", "export_toggle"]:
-            if self.exporter.active:
-                prev_samples = self.exporter.samples
-                prev_name = self.exporter.file_name or "joint_states"
-                self.exporter.close_session()
-                if hasattr(self, 'loop') and self.loop:
-                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("success", f"Đã dừng Record và lưu file: {prev_name} ({prev_samples} mẫu)!"), self.loop)
+        elif action == "record_toggle":
+            if self.dataset_recorder.active:
+                self._dataset_record_stop()
             else:
-                self.exporter.start_session("record")
-                if hasattr(self, 'loop') and self.loop:
-                    asyncio.run_coroutine_threadsafe(self.broadcast_notice("info", "Bắt đầu Record dữ liệu góc khớp 100Hz!"), self.loop)
-
-        elif action == "export_new_session":
-            self.exporter.start_session("record")
+                self._dataset_record_start()
 
         elif action == "sync_robot_state":
             print("[Command] Sync state from physical robot requested")
@@ -1879,7 +1885,7 @@ class OpenArmDashboardServer:
                         "mode": self.mode,
                         "velocity_limit": self.velocity_limit,
                         "stream_stats": stream_info,
-                        "export_stats": self.exporter.get_stats(),
+                        "dataset_stats": self.dataset_recorder.get_stats(),
                         "inference": inference_info
                     }
                 })

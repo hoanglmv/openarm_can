@@ -185,78 +185,36 @@ function handleTelemetry(data) {
         }
     }
 
-    // 100Hz Continuous Joint State Exporter status update
-    if (data.export_stats) {
-        handleExportStats(data.export_stats);
+    // ACT dataset recorder status update
+    if (data.dataset_stats) {
+        handleDatasetStats(data.dataset_stats);
     }
 }
 
-// Joint State Record (100Hz) UI Updater
-function handleExportStats(stats) {
-    if (!stats) return;
-    const badgeText = document.getElementById("export-badge-text");
-    const headerBadge = document.getElementById("export-status-badge");
-    const dot = document.getElementById("export-dot");
-    const subInfo = document.getElementById("export-sub-info");
-    const samplesBadge = document.getElementById("export-samples-badge");
-    const recordBtn = document.getElementById("btn-record-toggle") || document.getElementById("btn-export-toggle");
-    const recordText = document.getElementById("btn-record-text");
-    const recordIcon = document.getElementById("btn-record-icon");
+// ACT Dataset Record (data_set/) UI Updater: round button, top-left of the 3D robot viewport
+function handleDatasetStats(stats) {
+    const btn = document.getElementById("btn-dataset-record");
+    const timer = document.getElementById("dataset-rec-timer");
+    const dir = stats.output_dir || "data_set";
 
-    const hz = stats.sample_rate_hz > 0 ? stats.sample_rate_hz.toFixed(1) : "100.0";
-    const samples = stats.samples_recorded !== undefined ? stats.samples_recorded : (stats.samples || 0);
-    const elapsed = stats.elapsed_sec ? stats.elapsed_sec.toFixed(1) : (samples / 100).toFixed(1);
-    const filename = stats.filepath || stats.file_name || "";
-
-    if (stats.recording && stats.active) {
-        // --- RECORDING STATE ---
-        if (headerBadge) headerBadge.className = "badge badge-export recording";
-        if (badgeText) badgeText.textContent = `REC (${samples.toLocaleString()})`;
-        if (dot) dot.className = "export-status-dot recording";
-        if (subInfo) subInfo.textContent = `Đang record: exports/${filename} • ${hz} Hz • UDP :${stats.udp_port || 9871}`;
-        if (samplesBadge) {
-            samplesBadge.className = "badge badge-danger";
-            samplesBadge.textContent = `Đang Record: ${samples.toLocaleString()} mẫu (${elapsed}s)`;
+    if (stats.recording) {
+        const elapsed = (stats.elapsed_sec || 0).toFixed(1);
+        if (btn) {
+            btn.classList.add("recording");
+            btn.title = `Đang ghi ${dir}/${stats.episode} • Bấm để dừng và lưu`;
         }
-        if (recordBtn) {
-            recordBtn.className = "btn-record-main recording";
-            recordBtn.title = "Bấm để dừng và lưu file Record";
+        if (timer) {
+            timer.classList.add("visible");
+            timer.textContent = `REC ${elapsed}s`;
         }
-        if (recordIcon) recordIcon.textContent = "";
-        if (recordText) recordText.textContent = "Dừng Record (End)";
     } else {
-        // --- IDLE / STOPPED STATE ---
-        if (headerBadge) headerBadge.className = "badge badge-export idle";
-        if (badgeText) badgeText.textContent = "REC: Sẵn sàng";
-        if (dot) dot.className = "export-status-dot idle";
-
-        const dlBtn = document.getElementById("btn-export-download");
-        const dlHeaderBtn = document.getElementById("btn-export-download-header");
-        if (filename) {
-            if (dlBtn) dlBtn.setAttribute("download", filename);
-            if (dlHeaderBtn) dlHeaderBtn.setAttribute("download", filename);
+        if (btn) {
+            btn.classList.remove("recording");
+            if (stats.last_error) btn.title = `Ghi Data • Lần trước lỗi: ${stats.last_error}`;
+            else if (stats.last_file) btn.title = `Ghi Data • Đã lưu: ${dir}/${stats.last_file} (${stats.last_samples} mẫu)`;
+            else btn.title = `Ghi Data: ghi episode vào ${dir}/`;
         }
-
-        if (samples > 0 && filename) {
-            if (subInfo) subInfo.textContent = `Đã lưu HDF5: exports/${filename} • Bấm Record để ghi phiên mới • UDP :${stats.udp_port || 9871}`;
-            if (samplesBadge) {
-                samplesBadge.className = "badge badge-success";
-                samplesBadge.textContent = `Đã lưu • ${samples.toLocaleString()} mẫu (${elapsed}s)`;
-            }
-        } else {
-            if (subInfo) subInfo.textContent = `Chưa ghi • Bấm "Bắt đầu Record" để ghi dữ liệu HDF5 (.hdf5) • UDP :${stats.udp_port || 9871}`;
-            if (samplesBadge) {
-                samplesBadge.className = "badge badge-outline";
-                samplesBadge.textContent = "Chờ bắt đầu";
-            }
-        }
-
-        if (recordBtn) {
-            recordBtn.className = "btn-record-main";
-            recordBtn.title = "Bấm để bắt đầu Record dữ liệu góc khớp";
-        }
-        if (recordIcon) recordIcon.textContent = "";
-        if (recordText) recordText.textContent = "Bắt đầu Record";
+        if (timer) timer.classList.remove("visible");
     }
 }
 

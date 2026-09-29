@@ -759,19 +759,11 @@ function setupEventHandlers() {
         });
     });
 
-    // Joint State Record actions (Start / Stop Record)
-    const btnRecordToggle = document.getElementById("btn-record-toggle") || document.getElementById("btn-export-toggle");
-    if (btnRecordToggle) {
-        btnRecordToggle.addEventListener("click", () => {
+    // ACT dataset record (sim/data_recorder.py -> data_set/)
+    const btnDatasetRecord = document.getElementById("btn-dataset-record");
+    if (btnDatasetRecord) {
+        btnDatasetRecord.addEventListener("click", () => {
             sendAction("record_toggle");
-        });
-    }
-
-    const btnExportNew = document.getElementById("btn-export-new");
-    if (btnExportNew) {
-        btnExportNew.addEventListener("click", () => {
-            sendAction("record_start");
-            showToast("info", "Đã khởi tạo phiên Record CSV mới!");
         });
     }
 }

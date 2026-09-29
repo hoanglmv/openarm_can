@@ -27,62 +27,17 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path == "/api/export/status":
+        if self.path in ["/api/record/status", "/api/record/start", "/api/record/stop"]:
             if hasattr(self.server, 'app') and self.server.app:
-                stats = self.server.app.exporter.get_stats()
+                recorder = self.server.app.dataset_recorder
+                if self.path == "/api/record/start":
+                    recorder.start()
+                elif self.path == "/api/record/stop":
+                    recorder.stop()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps(stats).encode('utf-8'))
-                return
-        elif self.path == "/api/export/download":
-            if hasattr(self.server, 'app') and self.server.app:
-                exporter = self.server.app.exporter
-                file_path = exporter.file_path or exporter.get_latest_file()
-                if file_path and os.path.exists(file_path):
-                    with exporter.lock:
-                        if getattr(exporter, 'h5_file', None):
-                            try:
-                                exporter._flush_h5_buffer_locked()
-                                exporter.h5_file.flush()
-                            except Exception:
-                                pass
-                        if getattr(exporter, 'csv_file', None):
-                            try:
-                                exporter.csv_file.flush()
-                            except Exception:
-                                pass
-                    with open(file_path, "rb") as f:
-                        data = f.read()
-                    content_type = "application/x-hdf5" if file_path.endswith(".hdf5") else "text/csv"
-                    self.send_response(200)
-                    self.send_header('Content-Type', content_type)
-                    self.send_header('Content-Disposition', f'attachment; filename="{os.path.basename(file_path)}"')
-                    self.send_header('Content-Length', str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
-                    return
-                else:
-                    self.send_response(404)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(b'{"error": "No export file found"}')
-                    return
-        elif self.path in ["/api/record/start", "/api/export/new_session"]:
-            if hasattr(self.server, 'app') and self.server.app:
-                self.server.app.exporter.start_session("record")
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
-                return
-        elif self.path == "/api/record/stop":
-            if hasattr(self.server, 'app') and self.server.app:
-                self.server.app.exporter.close_session()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
+                self.wfile.write(json.dumps(recorder.get_stats()).encode('utf-8'))
                 return
         elif self.path == "/api/kungfu/list":
             kungfu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kungfu")
@@ -159,26 +114,6 @@ class CustomHTTPHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
             return
-        elif self.path == "/api/export/toggle":
-            if hasattr(self.server, 'app') and self.server.app:
-                exporter = self.server.app.exporter
-                if exporter.active:
-                    exporter.close_session()
-                else:
-                    exporter.start_session("manual")
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(exporter.get_stats()).encode('utf-8'))
-                return
-        elif self.path == "/api/export/new_session":
-            if hasattr(self.server, 'app') and self.server.app:
-                self.server.app.exporter.start_session("manual")
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(self.server.app.exporter.get_stats()).encode('utf-8'))
-                return
 
         super().do_POST()
 

@@ -205,54 +205,70 @@ def test_gripper_d4310_and_origins():
 
 
 def test_record_workflow():
-    print("\n[TEST] Testing Joint State Record Workflow (Start / Stop / Toggle)...")
+    print("\n[TEST] Testing ACT Dataset Record Workflow (Start / Stop / Toggle)...")
+    import tempfile
     server = OpenArmDashboardServer(mode="sim")
-    
-    # 1. Must NOT auto-record on startup
-    assert not server.exporter.active, "Exporter must be IDLE on startup (no auto-record)"
-    stats_init = server.exporter.get_stats()
+    recorder = server.dataset_recorder
+
+    # 1. Must NOT auto-record on startup, and saves into data_set/
+    assert not recorder.active, "Dataset recorder must be IDLE on startup (no auto-record)"
+    stats_init = recorder.get_stats()
     assert not stats_init["recording"], "get_stats() must report recording=False"
-    print("✓ Initial state verified: Exporter is idle, waiting for user Record")
+    assert stats_init["output_dir"] == "data_set", f"Episodes must be saved to data_set/, got {stats_init['output_dir']}"
+    print("✓ Initial state verified: recorder idle, output dir data_set/")
+
+    # Replace data_recorder.py (needs ROS 2) with a stub that finalizes on SIGINT like the real one
+    tmp_dir = tempfile.mkdtemp()
+    recorder.output_dir = tmp_dir
+    stub = os.path.join(tmp_dir, "stub_recorder.py")
+    with open(stub, "w") as f:
+        f.write(
+            "import sys, time\n"
+            "args = sys.argv\n"
+            "out, ep = args[args.index('--output-dir') + 1], args[args.index('--episode') + 1]\n"
+            "print('[*] stub started', flush=True)\n"
+            "try:\n"
+            "    while True: time.sleep(0.02)\n"
+            "except KeyboardInterrupt:\n"
+            "    path = f'{out}/{ep}.hdf5'\n"
+            "    open(path, 'w').close()\n"
+            "    print(f'[Recorder] Saved 42 samples to {path} (0 rejected, Frequency: 50.0Hz)', flush=True)\n"
+        )
+    recorder.script = stub
+
+    def wait_idle(timeout=5.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not recorder.active and recorder.get_stats()["last_file"]:
+                return
+            time.sleep(0.05)
+        raise AssertionError("Recorder did not finish in time")
 
     # 2. Start Record
     asyncio.run(server.handle_action("record_start", {}, None))
-    assert server.exporter.active, "Exporter must be ACTIVE after record_start"
-    time.sleep(0.08)
-    stats_rec = server.exporter.get_stats()
-    assert stats_rec["recording"], "get_stats() must report recording=True"
-    assert "record" in stats_rec["file_name"], f"File name must include 'record': {stats_rec['file_name']}"
-    assert stats_rec["file_name"].endswith(".hdf5"), f"File name must end with .hdf5: {stats_rec['file_name']}"
-    print(f"✓ Record start verified: recording={stats_rec['recording']}, file={stats_rec['file_name']}")
+    assert recorder.active, "Recorder must be ACTIVE after record_start"
+    time.sleep(0.3)
+    stats_rec = recorder.get_stats()
+    assert stats_rec["recording"] and stats_rec["episode"].startswith("episode_")
+    print(f"✓ Record start verified: episode={stats_rec['episode']}")
 
-    # 3. Stop Record (End)
+    # 3. Stop Record -> episode finalized
     asyncio.run(server.handle_action("record_stop", {}, None))
-    assert not server.exporter.active, "Exporter must be INACTIVE after record_stop"
-    stats_end = server.exporter.get_stats()
-    assert not stats_end["recording"], "get_stats() must report recording=False after record_stop"
-    assert stats_end["file_path"] and os.path.exists(stats_end["file_path"]), f"Recorded HDF5 file must exist on disk: {stats_end['file_path']}"
-    assert stats_end["file_path"].endswith(".hdf5")
-
-    # Validate HDF5 file contents using h5py
-    import h5py
-    with h5py.File(stats_end["file_path"], "r") as h5:
-        assert "observations/qpos" in h5, "observations/qpos dataset missing in HDF5"
-        assert "observations/qvel" in h5, "observations/qvel dataset missing in HDF5"
-        assert "observations/effort" in h5, "observations/effort dataset missing in HDF5"
-        assert "action" in h5, "action dataset missing in HDF5"
-        assert "timestamp" in h5, "timestamp dataset missing in HDF5"
-        assert h5.attrs["robot_type"] == "OpenArm_Bimanual_16DOF"
-        assert h5.attrs["num_joints"] == 16
-        assert h5.attrs["frequency_hz"] == 100
-        qpos_shape = h5["observations/qpos"].shape
-        print(f"✓ HDF5 file schema verified: {stats_end['file_path']} contains qpos shape {qpos_shape}, attributes: {dict(h5.attrs)}")
-
-    print(f"✓ Record stop verified: cleanly saved HDF5 with {stats_end['samples']} samples at {stats_end['file_path']}")
+    wait_idle()
+    stats_end = recorder.get_stats()
+    assert not stats_end["recording"]
+    assert stats_end["last_samples"] == 42 and stats_end["last_error"] is None
+    assert os.path.exists(os.path.join(tmp_dir, stats_end["last_file"]))
+    print(f"✓ Record stop verified: saved {stats_end['last_file']} ({stats_end['last_samples']} samples)")
 
     # 4. Record Toggle
+    recorder.last_file = None
+    time.sleep(1.1)  # episode names have 1 s resolution
     asyncio.run(server.handle_action("record_toggle", {}, None))
-    assert server.exporter.active, "record_toggle from idle must start recording"
+    assert recorder.active, "record_toggle from idle must start recording"
+    time.sleep(0.3)
     asyncio.run(server.handle_action("record_toggle", {}, None))
-    assert not server.exporter.active, "record_toggle while recording must stop recording"
+    wait_idle()
     print("✓ Record toggle verified: start -> stop seamlessly")
 
 
