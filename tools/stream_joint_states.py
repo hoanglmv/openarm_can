@@ -135,9 +135,9 @@ def main():
         send_udp({"joints": DEFAULT_JOINTS}, args.ip, args.port)
         print("[✓] Đã gửi thành công!")
         print("\nGợi ý sử dụng:")
-        print("  python3 scripts/stream_joint_states.py --demo wave")
-        print("  python3 scripts/stream_joint_states.py --demo sine --arm left")
-        print("  python3 scripts/stream_joint_states.py --json '{\"joints\": {\"openarm_left_joint1\": 0.2, \"left_gripper\": 0.03}}'")
+        print("  python3 tools/stream_joint_states.py --demo wave")
+        print("  python3 tools/stream_joint_states.py --demo sine --arm left")
+        print("  python3 tools/stream_joint_states.py --json '{\"joints\": {\"openarm_left_joint1\": 0.2, \"left_gripper\": 0.03}}'")
 
 if __name__ == "__main__":
     main()

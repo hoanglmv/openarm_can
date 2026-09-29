@@ -5,16 +5,16 @@ Sends desired target joint states to OpenArm via high-speed UDP or REST HTTP.
 
 Usage Examples:
   # 1. Move Left Arm (in degrees) and close Gripper to 15mm:
-  python3 scripts/send_joint_state.py --deg --left 0 -20 0 45 0 10 0 --left-gripper 15
+  python3 tools/send_joint_state.py --deg --left 0 -20 0 45 0 10 0 --left-gripper 15
 
   # 2. Move Both Arms into Ready Pose (in radians):
-  python3 scripts/send_joint_state.py --left 0 -0.35 0 0.85 0 0 0 --right 0 0.35 0 0.85 0 0 0
+  python3 tools/send_joint_state.py --left 0 -0.35 0 0.85 0 0 0 --right 0 0.35 0 0.85 0 0 0
 
   # 3. Send ROS 2 style JSON dict:
-  python3 scripts/send_joint_state.py --json '{"openarm_left_joint1": 0.5, "openarm_left_joint4": 1.2}'
+  python3 tools/send_joint_state.py --json '{"openarm_left_joint1": 0.5, "openarm_left_joint4": 1.2}'
 
   # 4. Send from a JSON file:
-  python3 scripts/send_joint_state.py --file pose.json
+  python3 tools/send_joint_state.py --file pose.json
 """
 
 import sys

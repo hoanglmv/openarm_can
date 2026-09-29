@@ -4,9 +4,9 @@ OpenArm 100Hz Joint State Stream Listener
 Subscribes to the live 100Hz Joint State stream published by OpenArm Server on UDP port 9871.
 
 Usage:
-  python3 scripts/listen_joint_state_100hz.py
-  python3 scripts/listen_joint_state_100hz.py --port 9871 --hz
-  python3 scripts/listen_joint_state_100hz.py --record my_recording.csv
+  python3 tools/listen_joint_state_100hz.py
+  python3 tools/listen_joint_state_100hz.py --port 9871 --hz
+  python3 tools/listen_joint_state_100hz.py --record my_recording.csv
 """
 
 import sys

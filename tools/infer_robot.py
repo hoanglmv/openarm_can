@@ -313,7 +313,7 @@ class BimanualOpenArmHardware:
         Chuyển đổi lệnh điều khiển kẹp sang Radian motor (0.0 .. 1.20 rad):
         - Nếu đầu ra ACT là hành trình mét (<= 0.043m từ HDF5 dataset): scale sang 1.20 rad.
         - Nếu đầu ra ACT đã là Radian (> 0.043 rad): giữ nguyên.
-        (Chuẩn tương thích 100% với scripts/control_gripper.py và sim/models.py)
+        (Chuẩn tương thích 100% với tools/control_gripper.py và sim/models.py)
         """
         if abs(val) <= 0.043:
             return float((val / 0.043) * 1.20)
@@ -392,7 +392,7 @@ class BimanualOpenArmHardware:
 
             grip_left_rad = self._to_gripper_cmd_rad(target_qpos[7])
             if self.gripper_mode == "pos_force":
-                # Kẹp gắp trong POS_FORCE mode (an toàn lực kẹp 0.15 pu theo scripts/control_gripper.py)
+                # Kẹp gắp trong POS_FORCE mode (an toàn lực kẹp 0.15 pu theo tools/control_gripper.py)
                 self.arm_left.get_gripper().set_position(
                     float(grip_left_rad),
                     speed_rad_s=gripper_speed,

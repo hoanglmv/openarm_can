@@ -6,16 +6,16 @@ All movements strictly adhere to OpenArm mechanical joint limits.
 
 Usage Examples:
   # 1. Dance the classic Disco Wave at 100 BPM for 20 seconds:
-  python3 scripts/robot_dance.py --dance disco --duration 20
+  python3 tools/robot_dance.py --dance disco --duration 20
 
   # 2. Dance Penguin Pop at 110 BPM:
-  python3 scripts/robot_dance.py --dance penguin
+  python3 tools/robot_dance.py --dance penguin
 
   # 3. Tai Chi Flow at 60 BPM:
-  python3 scripts/robot_dance.py --dance taichi --duration 30
+  python3 tools/robot_dance.py --dance taichi --duration 30
 
   # 4. List all available dance routines:
-  python3 scripts/robot_dance.py --list
+  python3 tools/robot_dance.py --list
 """
 
 import sys

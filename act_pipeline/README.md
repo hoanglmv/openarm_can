@@ -226,11 +226,11 @@ python3 -m act_pipeline.eval \
 
 ## 🤖 TRIỂN KHAI ĐIỀU KHIỂN TRÊN ROBOT THẬT (INFERENCE)
 
-Script [scripts/infer_robot.py](file:///c:/Users/Admin/Desktop/20261/VinRobotics/OpenArm/openarm_can/scripts/infer_robot.py) chịu trách nhiệm nhận luồng ảnh trực tiếp từ camera RealSense, nạp trạng thái góc khớp thời gian thực qua SocketCAN, thực hiện suy luận mô hình ACT ở tần số **50 Hz (20ms/chu kỳ)** và gửi xung điều khiển xuống 16 động cơ.
+Script `tools/infer_robot.py` chịu trách nhiệm nhận luồng ảnh trực tiếp từ camera RealSense, nạp trạng thái góc khớp thời gian thực qua SocketCAN, thực hiện suy luận mô hình ACT ở tần số **50 Hz (20ms/chu kỳ)** và gửi xung điều khiển xuống 16 động cơ.
 
 ### 1. Lệnh chạy thực tế trên phần cứng
 ```bash
-python3 scripts/infer_robot.py \
+python3 tools/infer_robot.py \
     --checkpoint checkpoints/act_openarm/best_checkpoint.pth \
     --can-left can1 \
     --can-right can0 \
@@ -241,7 +241,7 @@ python3 scripts/infer_robot.py \
 ### 2. Chế độ chạy thử không cắm robot (Dry-Run Mode)
 Dùng để kiểm tra tốc độ suy luận của mô hình và luồng đọc camera RealSense mà không gửi lệnh CAN xuống động cơ:
 ```bash
-python3 scripts/infer_robot.py \
+python3 tools/infer_robot.py \
     --checkpoint checkpoints/act_openarm/best_checkpoint.pth \
     --dry-run
 ```

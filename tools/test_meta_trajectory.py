@@ -12,14 +12,14 @@ This tool demonstrates and validates motion control for the OpenArm robot:
 
 Usage examples:
   # Test multi-point trajectory playback via ROS 2
-  python3 scripts/test_meta_trajectory.py --mode trajectory
+  python3 tools/test_meta_trajectory.py --mode trajectory
 
   # Test continuous real-time teleop streaming (Meta Quest VR simulation)
-  python3 scripts/test_meta_trajectory.py --mode teleop --rate 50
+  python3 tools/test_meta_trajectory.py --mode teleop --rate 50
 
   # Test directly via UDP without ROS 2
-  python3 scripts/test_meta_trajectory.py --mode udp-trajectory
-  python3 scripts/test_meta_trajectory.py --mode udp-teleop
+  python3 tools/test_meta_trajectory.py --mode udp-trajectory
+  python3 tools/test_meta_trajectory.py --mode udp-teleop
 """
 
 import argparse

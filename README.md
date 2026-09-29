@@ -6,28 +6,91 @@ Hệ thống bao gồm:
 - **Thư viện C++ Core & Python SDK (`openarm_can`)**: Giao tiếp hiệu năng cao, độ trễ thấp với phần cứng động cơ.
 - **Công cụ dòng lệnh chẩn đoán (`openarm-can-cli`)**: Quét bus CAN (discover), giám sát tham số thời gian thực (monitor), cấu hình tham số động cơ (RID).
 - **Web Dashboard & 3D Digital Twin (`sim/server.py` + `sim/web/`)**: Giao diện điều khiển trực quan qua trình duyệt web với mô hình 3D song sinh số (Three.js), điều khiển thanh trượt từng khớp có khóa an toàn, phím tắt đóng/mở kẹp, giám sát lực - nhiệt độ - tần số CAN ở tần số cao.
-- **Script điều khiển tay kẹp độc lập (`scripts/control_gripper.py`)**: Script dòng lệnh hỗ trợ test chu kỳ đóng/mở, tương tác bàn phím, tinh chỉnh lực kẹp an toàn.
+- **Công cụ điều khiển tay kẹp độc lập (`tools/control_gripper.py`)**: Script dòng lệnh hỗ trợ test chu kỳ đóng/mở, tương tác bàn phím, tinh chỉnh lực kẹp an toàn.
 
 ---
 
 ## Mục lục
 
-1. [Yêu cầu phần cứng](#1-yêu-cầu-phần-cứng)
-2. [Cài đặt trên Ubuntu thuần (Native Linux)](#2-cài-đặt-trên-ubuntu-thuần-native-linux)
-3. [Cài đặt trên Windows sử dụng WSL2](#3-cài-đặt-trên-windows-sử-dụng-wsl2)
-4. [Biên dịch Thư viện C++ & Cài đặt Python SDK](#4-biên-dịch-thư-viện-c--cài-đặt-python-sdk)
-5. [Hướng dẫn Sử dụng Hệ thống](#5-hướng-dẫn-sử-dụng-hệ-thống)
+1. [🚀 Cài Đặt Nhanh 1-Click (Khuyên Dùng Cho Mọi Người)](#1--cài-đặt-nhanh-1-click-khuyên-dùng-cho-mọi-người)
+   - [Trường Hợp A: Windows 10/11 sử dụng WSL2](#trường-hợp-a-windows-1011-sử-dụng-wsl2)
+   - [Trường Hợp B: Ubuntu thuần (Native Linux 22.04 / 24.04 LTS)](#trường-hợp-b-ubuntu-thuần-native-linux-2204--2404-lts)
+2. [Yêu cầu phần cứng](#2-yêu-cầu-phần-cứng)
+3. [Cài đặt Thủ công trên Ubuntu thuần (Native Linux)](#3-cài-đặt-thủ-công-trên-ubuntu-thuần-native-linux)
+4. [Cài đặt Thủ công trên Windows sử dụng WSL2](#4-cài-đặt-thủ-công-trên-windows-sử-dụng-wsl2)
+5. [Biên dịch Thư viện C++ & Cài đặt Python SDK](#5-biên-dịch-thư-viện-c--cài-đặt-python-sdk)
+6. [Hướng dẫn Sử dụng Hệ thống](#6-hướng-dẫn-sử-dụng-hệ-thống)
    - [Cách 1: Giao diện Web Dashboard & 3D Digital Twin (Khuyên dùng)](#cách-1-giao-diện-web-dashboard--3d-digital-twin-khuyên-dùng)
    - [Cách 2: Điều khiển tay kẹp Gripper bằng Script](#cách-2-điều-khiển-tay-kẹp-gripper-bằng-script)
    - [Cách 3: Sử dụng CLI chẩn đoán (`openarm-can-cli`)](#cách-3-sử-dụng-cli-chẩn-đoán-openarm-can-cli)
    - [Cách 4: Lập trình điều khiển bằng C++ & Python](#cách-4-lập-trình-điều-khiển-bằng-c--python)
-   - [Cách 5: Ghi dữ liệu ROS 2 thành HDF5](#cách-5-ghi-dữ-liệu-ros-2-thành-hdf5)
-6. [Bảng ánh xạ Khớp & CAN ID](#6-bảng-ánh-xạ-khớp--can-id)
-7. [Xử lý sự cố thường gặp (Troubleshooting)](#7-xử-lý-sự-cố-thường-gặp-troubleshooting)
+   - [Cách 5: Suy Luận Model AI (ACT) & Đánh Giá Không Chạm Phần Cứng](#cách-5-suy-luận-model-ai-act--đánh-giá-không-chạm-phần-cứng)
+   - [Cách 6: Ghi dữ liệu ROS 2 thành HDF5](#cách-6-ghi-dữ-liệu-ros-2-thành-hdf5)
+7. [Bảng ánh xạ Khớp & CAN ID](#7-bảng-ánh-xạ-khớp--can-id)
+8. [Xử lý sự cố thường gặp (Troubleshooting)](#8-xử-lý-sự-cố-thường-gặp-troubleshooting)
 
 ---
 
-## 1. Yêu cầu phần cứng
+## 1. 🚀 Cài Đặt Nhanh 1-Click (Khuyên Dùng Cho Mọi Người)
+
+Để mọi thành viên có thể tải về và chạy ngay dự án mà không cần cài đặt phức tạp từng dòng lệnh, hệ thống đã cung cấp sẵn **2 scripts tự động hóa toàn bộ quá trình** (cài đặt APT, nạp SocketCAN, tạo Python virtualenv, cài PyTorch/AI, biên dịch thư viện C++ và thiết lập quyền kết nối USB 1-Click):
+
+### Trường Hợp A: Windows 10/11 sử dụng WSL2
+
+Mở terminal **WSL2 (Ubuntu 22.04 hoặc 24.04)**, di chuyển vào thư mục dự án và chạy:
+
+```bash
+chmod +x scripts/setup_wsl.sh
+./scripts/setup_wsl.sh
+```
+
+> **Script `scripts/setup_wsl.sh` sẽ tự động thực hiện:**
+> 1. Kiểm tra môi trường WSL2 và công cụ `usbipd-win` trên Windows host.
+> 2. Cài đặt đầy đủ gói hệ thống (C++ Compiler, CMake, Ninja, CAN-utils, Python3).
+> 3. Nạp các kernel module CAN vào WSL2 (`vhci-hcd`, `can`, `can_raw`, `vcan`, `peak_usb`).
+> 4. Tạo giao diện mạng ảo `vcan0` để chạy mô phỏng 3D ngay cả khi chưa cắm robot thật.
+> 5. Cấp quyền sudoers tự động để nút **🔌 Connect USB Robot** trên Web UI hoạt động 1-Click.
+> 6. Khởi tạo môi trường Python `.venv`, cài đặt PyTorch (tự nhận diện GPU/CPU) và `requirements.txt`.
+> 7. Biên dịch thư viện C++ Core và cài đặt Python package `openarm_can`.
+
+### Trường Hợp B: Ubuntu thuần (Native Linux 22.04 / 24.04 LTS)
+
+Mở **Terminal** trên máy Ubuntu, di chuyển vào thư mục dự án và chạy:
+
+```bash
+chmod +x scripts/setup_ubuntu.sh
+./scripts/setup_ubuntu.sh
+```
+
+> **Script `scripts/setup_ubuntu.sh` sẽ tự động thực hiện:**
+> 1. Kiểm tra hệ điều hành Ubuntu (22.04 / 24.04 LTS).
+> 2. Cài đặt các gói biên dịch C++, CMake, Ninja, CAN utils, Python3.
+> 3. Tự động nạp kernel modules `can`, `can_raw`, `vcan`, `peak_usb` và lưu tự nạp khi khởi động lại (`/etc/modules-load.d/`).
+> 4. Khởi tạo `vcan0` sẵn sàng cho môi trường mô phỏng.
+> 5. Cấp quyền sudoers không cần mật khẩu cho các lệnh mạng SocketCAN.
+> 6. Khởi tạo môi trường ảo Python `.venv`, cài đặt PyTorch (tự nhận diện GPU CUDA / CPU) và `requirements.txt`.
+> 7. Biên dịch C++ library và cài đặt Python package `openarm_can`.
+
+---
+
+### Khởi động Hệ Thống Sau Khi Cài Đặt Xong:
+
+Sau khi script chạy xong, bạn chỉ cần gõ 2 lệnh để khởi chạy toàn bộ hệ thống:
+
+```bash
+# 1. Kích hoạt môi trường Python
+source .venv/bin/activate
+
+# 2. Khởi chạy máy chủ Dashboard
+python3 sim/server.py
+```
+
+Mở trình duyệt Web và truy cập vào:
+👉 **[http://localhost:8888](http://localhost:8888)**
+
+---
+
+## 2. Yêu cầu phần cứng
 
 - **Cánh tay robot**: Robot OpenArm (1 tay đơn hoặc 2 tay đối xứng Bimanual).
 - **Bộ chuyển đổi USB-CAN**: Thiết bị hỗ trợ **CAN-FD** trên SocketCAN Linux:
@@ -40,11 +103,11 @@ Hệ thống bao gồm:
 
 ---
 
-## 2. Cài đặt trên Ubuntu thuần (Native Linux)
+## 3. Cài đặt Thủ công trên Ubuntu thuần (Native Linux)
 
 Áp dụng cho máy tính cài đặt Ubuntu trực tiếp (Dual boot, Mini PC, PC công nghiệp IPC).
 
-### Bước 2.1: Cài đặt các gói phụ thuộc
+### Bước 3.1: Cài đặt các gói phụ thuộc
 
 Mở Terminal và chạy lệnh:
 
@@ -68,7 +131,7 @@ Cài đặt thư viện Python bổ trợ cho Web Dashboard:
 pip install websockets
 ```
 
-### Bước 2.2: Cấu hình cổng CAN-FD
+### Bước 3.2: Cấu hình cổng CAN-FD
 
 Cắm thiết bị USB-CAN (ví dụ PCAN-USB Pro FD) vào cổng USB máy tính. Kiểm tra xem hệ thống đã nhận diện chưa:
 
@@ -104,11 +167,11 @@ sudo openarm-can-configure-socketcan can1 -fd
 
 ---
 
-## 3. Cài đặt trên Windows sử dụng WSL2
+## 4. Cài đặt Thủ công trên Windows sử dụng WSL2
 
 Áp dụng khi bạn dùng máy tính Windows 10 / 11 và chạy môi trường điều khiển trong WSL2 Ubuntu.
 
-### Bước 3.1: Chuẩn bị WSL2 trên Windows
+### Bước 4.1: Chuẩn bị WSL2 trên Windows
 
 1. Mở PowerShell với quyền Administrator và cài đặt WSL2 (nếu chưa có):
    ```powershell
@@ -120,7 +183,7 @@ sudo openarm-can-configure-socketcan can1 -fd
    pip install websockets
    ```
 
-### Bước 3.2: Cài đặt công cụ `usbipd-win` trên Windows
+### Bước 4.2: Cài đặt công cụ `usbipd-win` trên Windows
 
 Để chuyển tín hiệu USB của PCAN-USB từ Windows vào WSL2, ta dùng công cụ mã nguồn mở Microsoft `usbipd-win`:
 
@@ -132,7 +195,7 @@ sudo openarm-can-configure-socketcan can1 -fd
 
 2. Khởi động lại máy tính (hoặc khởi động lại WSL bằng `wsl --shutdown`) nếu được yêu cầu.
 
-### Bước 3.3: Gắn (Attach) thiết bị USB-CAN vào WSL2
+### Bước 4.3: Gắn (Attach) thiết bị USB-CAN vào WSL2
 
 1. Cắm USB-CAN vào cổng USB của máy tính Windows.
 2. Mở **PowerShell (Administrator)** trên Windows và liệt kê thiết bị USB:
@@ -154,7 +217,7 @@ sudo openarm-can-configure-socketcan can1 -fd
    ```
    *(Thay `1-3` bằng đúng BUSID trên máy của bạn)*.
 
-### Bước 3.4: Nạp Kernel Module và Kích hoạt CAN trên WSL2
+### Bước 4.4: Nạp Kernel Module và Kích hoạt CAN trên WSL2
 
 Chuyển sang cửa sổ terminal **WSL2 (Ubuntu)**:
 
@@ -184,7 +247,7 @@ sudo ip link set can1 up
 
 ---
 
-## 4. Biên dịch Thư viện C++ & Cài đặt Python SDK
+## 5. Biên dịch Thư viện C++ & Cài đặt Python SDK
 
 Clone mã nguồn dự án:
 
@@ -193,7 +256,7 @@ git clone https://github.com/enactic/openarm_can.git
 cd openarm_can
 ```
 
-### 4.1. Biên dịch Thư viện C++
+### 5.1. Biên dịch Thư viện C++
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -GNinja
@@ -204,7 +267,7 @@ sudo ldconfig
 
 Sau khi cài đặt, công cụ chẩn đoán `openarm-can-cli` và thư viện `libopenarm-can.so` sẽ sẵn sàng trên hệ thống.
 
-### 4.2. Cài đặt Python SDK (`openarm_can`)
+### 5.2. Cài đặt Python SDK (`openarm_can`)
 
 ```bash
 cd python
@@ -219,20 +282,20 @@ python3 -c "import openarm_can as oa; print('OpenArm CAN SDK Version:', oa.__ver
 
 ---
 
-## 5. Hướng dẫn Sử dụng Hệ thống
+## 6. Hướng dẫn Sử dụng Hệ thống
 
 ### Cách 1: Giao diện Web Dashboard & 3D Digital Twin (Khuyên dùng)
 
-Giao diện trực quan tích hợp đầy đủ mô hình 3D cử động theo thời gian thực, điều khiển từng khớp có khóa an toàn, điều khiển thanh kẹp ngang, đồ thị đo đạc lực và nhiệt độ.
+Giao diện trực quan tích hợp đầy đủ mô hình 3D cử động theo thời gian thực (nội suy LERP 60 FPS mượt mà), điều khiển từng khớp có khóa an toàn, điều khiển thanh kẹp ngang, đồ thị đo đạc lực và nhiệt độ.
 
 1. **Khởi chạy máy chủ Dashboard**:
    ```bash
    python3 sim/server.py
    ```
-   - Server tự động phát hiện phần cứng:
-     - Nếu có `can0`/`can1`: Tự động chạy ở **REAL ROBOT HARDWARE MODE**.
-     - Nếu chưa cắm USB: Tự động chạy ở **SIMULATION MODE (vcan0)** để bạn chạy thử nghiệm phần mềm an toàn.
-   - Khi cắm hoặc rút USB, server sẽ tự động chuyển đổi chế độ nóng (Hotplug) mà không cần tắt mở lại server.
+   - Server hỗ trợ **2 chế độ vận hành chính**:
+     - **Chế độ Chỉ Mô Phỏng (Simulation Only)**: Dành cho chạy thử nghiệm thuật toán, suy luận AI ACT, điều khiển giao diện 3D Digital Twin mà không can thiệp robot vật lý.
+     - **Chế độ Chạy Cả 2 (Dual: Mô Phỏng & Robot Thật)**: Gửi lệnh điều khiển đồng bộ xuống 16 động cơ phần cứng và cập nhật mô hình 3D trên Web theo telemetry phản hồi thực tế.
+   - Khi cắm hoặc rút USB-CAN, server sẽ tự động chuyển đổi chế độ nóng (Hotplug) mà không cần tắt mở lại server.
 
 2. **Mở trình duyệt Web**:
    Truy cập vào địa chỉ:
@@ -241,7 +304,8 @@ Giao diện trực quan tích hợp đầy đủ mô hình 3D cử động theo 
    ```
 
 3. **Các tính năng chính trên giao diện**:
-   - **Mô hình 3D Digital Twin**: Dựng lại cánh tay robot OpenArm bằng Three.js, tự động xoay các khớp theo phản hồi thực tế từ robot.
+   - **Chuyển đổi chế độ hoạt động**: Chọn giữa **Chỉ mô phỏng** hoặc **Chạy cả hai (Mô phỏng & Robot thật)** ngay trên thanh điều hướng đầu trang.
+   - **Mô hình 3D Digital Twin**: Dựng lại cánh tay robot OpenArm bằng Three.js, trang bị thuật toán nội suy làm mượt chuyển động LERP 60 FPS, không bị giật lag.
    - **Thanh điều khiển End-Effector Grippers (J8 - Thanh kẹp ngang)**:
      - Nút **Đóng (0mm)**: Đóng kẹp hoàn toàn.
      - Nút **50% (21.5mm)**: Mở kẹp một nửa hành trình.
@@ -253,7 +317,7 @@ Giao diện trực quan tích hợp đầy đủ mô hình 3D cử động theo 
      - Tích hợp công tắc **Khóa an toàn (Lock/Unlock)** trên từng khớp để tránh sơ ý chạm vào thanh trượt.
      - Nút chuyển tab xem riêng **Tay Trái (Left)**, **Tay Phải (Right)** hoặc **Đồng bộ cả hai tay (Dual-Arm Sync)**.
    - **Bộ giới hạn vận tốc an toàn (Speed Profile)**:
-     - Giới hạn vận tốc mặc định `0.25 rad/s` (~14°/s) giúp cánh tay chuyển động mượt mà, chống rung lắc cơ khí.
+     - Giới hạn vận tốc mặc định `0.25 rad/s` (~14°/s) ở chế độ robot thật giúp cánh tay chuyển động mượt mà, chống rung lắc cơ khí.
    - **Đồng bộ trạng thái ban đầu (Sync Robot State)**:
      - Bấm nút **Sync Robot State** để đọc vị trí thực tế của robot trước khi kích hoạt, tránh tình trạng robot bị giật góc khi bấm Enable.
 
@@ -265,16 +329,16 @@ Nếu bạn chỉ cần kiểm tra hoặc điều khiển thanh kẹp ngang J8 (
 
 ```bash
 # Test tự động 3 chu kỳ đóng - mở (cổng can1 cho tay trái):
-python3 scripts/control_gripper.py -i can1 --action test
+python3 tools/control_gripper.py -i can1 --action test
 
 # Mở kẹp hoàn toàn (43 mm):
-python3 scripts/control_gripper.py -i can1 --action open
+python3 tools/control_gripper.py -i can1 --action open
 
 # Đóng kẹp (0 mm):
-python3 scripts/control_gripper.py -i can1 --action close
+python3 tools/control_gripper.py -i can1 --action close
 
 # Chế độ tương tác bàn phím (nhập 'o' để mở, 'c' để đóng, hoặc số mm tùy ý):
-python3 scripts/control_gripper.py -i can1 --action interactive
+python3 tools/control_gripper.py -i can1 --action interactive
 ```
 
 ---
@@ -356,7 +420,34 @@ int main() {
 
 ---
 
-### Cách 5: Ghi dữ liệu ROS 2 thành HDF5
+### Cách 5: Suy Luận Model AI (ACT) & Đánh Giá Không Chạm Phần Cứng (Zero-Risk Shadow Preview)
+
+Tính năng phục vụ nghiên cứu và kiểm thử mô hình học tăng cường / bắt chước (Imitation Learning - ACT) an toàn tuyệt đối:
+- **Nguyên lý hoạt động**: Lấy dữ liệu cảm biến thực tế (ảnh RGB-D từ RealSense / ROS 2 topic và góc khớp thực tế qua SocketCAN) làm đầu vào (Input) cho mô hình ACT. Khi mô hình dự đoán chuỗi hành động kế tiếp (Output Action Chunk), hệ thống sẽ **chỉ mô phỏng trực quan lên giao diện 3D Web Dashboard mà HOÀN TOÀN KHÔNG gửi tín hiệu điều khiển xuống cánh tay robot thật**.
+- **Lợi ích**: Giúp mentor, kỹ sư và nhóm nghiên cứu kiểm tra hành vi, độ ổn định của model trước khi cấp quyền điều khiển cơ khí, triệt tiêu 100% rủi ro va chạm hoặc rơi tự do.
+
+#### Lựa chọn 5.1: Chạy trực quan ngay trên Web Dashboard
+1. Khởi động máy chủ: `python3 sim/server.py` và truy cập `http://localhost:8888`.
+2. Tại bảng điều khiển **AI Model (ACT) Inference Preview** ở cột bên phải:
+   - Điền đường dẫn checkpoint: ví dụ `dataset/act_openarm_model.pth`.
+   - Chọn nguồn Camera quan sát (`RealSense USB` hoặc `ROS 2 Topic Bridge`).
+   - Bấm **Start Shadow Preview**: Trên mô hình 3D sẽ xuất hiện mô hình song sinh số **Shadow Robot (bóng mờ bán trong suốt)** và **đường cong quỹ đạo chuyển động dự đoán 32 bước (Future Trajectory)** tương ứng với suy luận của AI.
+
+#### Lựa chọn 5.2: Chạy kiểm thử độc lập từ dòng lệnh với cờ `--dry_run`
+Sử dụng script suy luận chuyên dụng với cờ mô phỏng không gửi tín hiệu CAN:
+
+```bash
+python3 tools/infer_robot.py \
+    --checkpoint dataset/act_openarm_model.pth \
+    --camera realsense \
+    --dry_run \
+    --control_hz 50.0 \
+    --max_timesteps 1000
+```
+
+---
+
+### Cách 6: Ghi dữ liệu ROS 2 thành HDF5
 
 Data Recorder chỉ nhận dữ liệu từ các ROS 2 topic sau:
 
@@ -406,7 +497,7 @@ File HDF5 chứa `observations/qpos`, `observations/qvel`,
 
 ---
 
-## 6. Bảng ánh xạ Khớp & CAN ID
+## 7. Bảng ánh xạ Khớp & CAN ID
 
 Hệ thống OpenArm Dual-Arm sử dụng tổng cộng 16 nút CAN phân bố trên 2 kênh CAN-FD riêng biệt:
 
@@ -431,7 +522,7 @@ Hệ thống OpenArm Dual-Arm sử dụng tổng cộng 16 nút CAN phân bố t
 
 ---
 
-## 7. Xử lý sự cố thường gặp (Troubleshooting)
+## 8. Xử lý sự cố thường gặp (Troubleshooting)
 
 ### 1. Lỗi `No such device` hoặc cổng CAN bị mất trên WSL2
 - **Nguyên nhân**: Khi máy tính Windows vào chế độ Sleep hoặc cáp USB bị lỏng, kết nối USB trong WSL2 sẽ bị ngắt tự động.

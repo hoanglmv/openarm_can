@@ -91,7 +91,7 @@ def main():
         print("Gợi ý:")
         print("  1. Chạy script này trong môi trường ROS 2 (source /opt/ros/.../setup.bash)")
         print("  2. Hoặc chạy bên trong Docker container ROS 2 (ví dụ: openarm_ros2)")
-        print("  3. Nếu không có ROS 2, bạn có thể dùng script test thuần Python: python3 scripts/stream_joint_states.py")
+        print("  3. Nếu không có ROS 2, bạn có thể dùng script test thuần Python: python3 tools/stream_joint_states.py")
         sys.exit(1)
 
     rclpy.init()

@@ -123,5 +123,5 @@ echo -e "${BOLD}${GREEN}========================================================
 echo -e "Bạn có thể kiểm tra motor bằng các lệnh sau:"
 echo -e " 1. Quét tìm motor trên bus:      ${CYAN}openarm-can-cli -i can0 discover${NC}"
 echo -e " 2. Theo dõi trạng thái motor:    ${CYAN}openarm-can-cli -i can0 monitor${NC}"
-echo -e " 3. Chạy script test Python:       ${CYAN}python3 scripts/test_robot.py --interface can0${NC}"
+echo -e " 3. Chạy script test Python:       ${CYAN}python3 tools/test_robot.py --interface can0${NC}"
 echo -e " 4. Ngắt kết nối USB khi xong:     ${CYAN}usbipd detach --busid ${BUSID}${NC}"
