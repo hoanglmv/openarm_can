@@ -60,9 +60,10 @@ def main():
     print(f"[i] Vị trí kẹp ban đầu: {cur_mm:.1f} mm ({current_pos:.4f} rad), Nhiệt độ: {motor.get_state_tmos():.1f} °C")
 
     def move_gripper(target_pos, desc=""):
-        # Convert stroke in meters (0.0 .. 0.043) to motor target radians (0.0 .. 1.20 rad)
+        # Convert stroke in meters (0.0 .. 0.043) to motor target radians (0.0 closed .. -1.20 rad open),
+        # same mapping as gripper_stroke_to_rad in sim/config.py
         if target_pos <= 0.043:
-            rad = (target_pos / 0.043) * 1.20
+            rad = (max(0.0, target_pos) / 0.043) * -1.20
             stroke_mm = target_pos * 1000.0
         else:
             rad = target_pos

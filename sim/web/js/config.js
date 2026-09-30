@@ -4,7 +4,7 @@
 // ==============================================================================
 
 const LEFT_JOINTS = [
-    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -1.3963, max: 3.4907, default: 0.0 },
+    { id: 1, name: "L-Joint 1 (Shoulder Pitch)", arm: "left",  idx: 0, type: "DM8009", min: -3.4907, max: 1.3963, default: 0.0 },
     { id: 2, name: "L-Joint 2 (Shoulder Roll)",  arm: "left",  idx: 1, type: "DM8009", min: -3.3161, max: 0.1745, default: 0.0 },
     { id: 3, name: "L-Joint 3 (Arm Twist)",      arm: "left",  idx: 2, type: "DM4340", min: -1.5708, max: 1.5708, default: 0.0 },
     { id: 4, name: "L-Joint 4 (Elbow Pitch)",    arm: "left",  idx: 3, type: "DM4340", min:  0.0000, max: 2.4435, default: 0.0 },
@@ -39,7 +39,7 @@ const JOINT_NAMES = [
 ];
 
 const MECHANICAL_LIMITS = {
-    1:  { name: "L-J1 Vai Pitch", minRad: -1.3963, maxRad: 3.4907,  minDeg: -80.0,  maxDeg: 200.0,  isGripper: false },
+    1:  { name: "L-J1 Vai Pitch", minRad: -3.4907, maxRad: 1.3963,  minDeg: -200.0, maxDeg: 80.0,  isGripper: false },
     2:  { name: "L-J2 Vai Roll",  minRad: -3.3161, maxRad: 0.1745,  minDeg: -190.0, maxDeg: 10.0,   isGripper: false },
     3:  { name: "L-J3 Bắp Xoay",  minRad: -1.5708, maxRad: 1.5708,  minDeg: -90.0,  maxDeg: 90.0,   isGripper: false },
     4:  { name: "L-J4 Khuỷu Pitch",minRad: 0.0000, maxRad: 2.4435,  minDeg: 0.0,    maxDeg: 140.0,  isGripper: false },

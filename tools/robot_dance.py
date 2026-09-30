@@ -33,7 +33,7 @@ UDP_PORT = 9870
 # OpenArm Mechanical Limits (radians & mm)
 JOINT_LIMITS = {
     # Left Arm
-    1: (-1.3963, 3.4907),  # J1 Shoulder Pitch
+    1: (-3.4907, 1.3963),  # J1 Shoulder Pitch (mirrored, official URDF convention)
     2: (-3.3161, 0.1745),  # J2 Shoulder Roll
     3: (-1.5708, 1.5708),  # J3 Arm Twist
     4: (0.0000, 2.4435),   # J4 Elbow Pitch
@@ -257,6 +257,9 @@ def main():
 
             # 1. Compute dance pose
             raw_angles = routine["func"](elapsed, bpm)
+            # Routines are authored symmetrically (+J1 swings either arm forward);
+            # Left J1 is mirrored in the official URDF convention used by the backend.
+            raw_angles[0] = -raw_angles[0]
 
             # 2. Strict limit clamping
             clamped = [clamp_joint(i + 1, val) for i, val in enumerate(raw_angles)]

@@ -114,7 +114,7 @@ function buildJointSliders() {
                     } else { // sync
                         const leftMotorId = LEFT_JOINTS[j.idx].id;
                         const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                        const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                        const mirrorSign = (j.idx === 0 || j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
                         sendAction("set_mit", { id: leftMotorId, q: val });
                         sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign });
                     }
@@ -132,7 +132,7 @@ function buildJointSliders() {
                 } else {
                     const leftMotorId = LEFT_JOINTS[j.idx].id;
                     const rightMotorId = RIGHT_JOINTS[j.idx].id;
-                    const mirrorSign = (j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
+                    const mirrorSign = (j.idx === 0 || j.idx === 1 || j.idx === 2 || j.idx === 4 || j.idx === 6) ? -1.0 : 1.0;
                     sendAction("set_mit", { id: leftMotorId, q: val });
                     sendAction("set_mit", { id: rightMotorId, q: val * mirrorSign });
                 }

@@ -95,7 +95,7 @@ def generate_sample_waypoints(duration: float = 6.0, rate_hz: float = 100.0):
 
 
 def run_ros2_streaming_waypoints(
-    topic: str = "/openarm/teleop/joint_commands",
+    topic: str = "/teleop/joint_commands",
     duration: float = 6.0,
     rate_hz: float = 100.0,
 ):
@@ -158,7 +158,7 @@ def run_ros2_streaming_waypoints(
 
 
 def run_ros2_teleop(
-    topic: str = "/openarm/teleop/joint_commands",
+    topic: str = "/teleop/joint_commands",
     rate_hz: float = 100.0,
     duration: float = 15.0,
 ):
@@ -322,7 +322,7 @@ def main():
     )
     parser.add_argument(
         "--topic",
-        default="/openarm/teleop/joint_commands",
+        default="/teleop/joint_commands",
         help="ROS 2 topic to publish to (default: /openarm/teleop/joint_commands)",
     )
     parser.add_argument("--host", default="127.0.0.1", help="UDP host (default: 127.0.0.1)")

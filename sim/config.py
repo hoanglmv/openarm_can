@@ -75,10 +75,13 @@ def uint_to_double(x: int, x_min: float, x_max: float, bits: int) -> float:
     return norm * span + x_min
 
 
+# Joint convention: every arm joint angle (ROS 2 topics, datasets, UI, CAN frames) follows the
+# official OpenArm URDF, i.e. joint angle == physical motor angle. Mirrored joints between the
+# arms (e.g. Left/Right J1, J2) therefore have mirrored limits, exactly as in the URDF.
 # Mechanical Joint Limits defined for OpenArm 7-DOF + Gripper
 JOINT_LIMITS = {
     # Left Arm (IDs 1..7) & Left Gripper (ID 8)
-    1: (-1.3963, 3.4907),
+    1: (-3.4907, 1.3963),   # Left J1: Shoulder Pitch, mirrored mount (official URDF convention)
     2: (-3.3161, 0.17453),  # Left J2: Shoulder Roll (-3.3161 .. 0.17453 rad)
     3: (-1.5708, 1.5708),
     4: (0.0, 2.4435),
@@ -109,12 +112,32 @@ JOINT_ORIGINS = {
     "joint7": {"x": 0.0, "y": 0.0, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
 }
 
-# Motor physical mounting direction multiplier (+1.0: normal, -1.0: inverted physical mounting)
-# On OpenArm, Left Shoulder Pitch (Motor 1) is mechanically mirrored relative to Right Shoulder Pitch (Motor 9).
-# Setting -1.0 ensures that a positive angle (+q) moves both left and right arms forward.
-MOTOR_DIRECTIONS = {
-    1: -1.0,  # Left J1 (Shoulder Pitch): Inverted physical mounting so +q pushes forward
-}
+# Gripper: linear finger stroke (m) <-> motor angle (rad), both grippers identical.
+# 0.0 m (closed) <-> 0.0 rad, GRIPPER_MAX_STROKE_M (fully open) <-> GRIPPER_OPEN_RAD.
+GRIPPER_MAX_STROKE_M = 0.043
+GRIPPER_OPEN_RAD = -1.20
+
+
+def gripper_stroke_to_rad(stroke_m: float, invert: bool = False) -> float:
+    """Finger stroke (m, clamped to 0..GRIPPER_MAX_STROKE_M) -> gripper motor angle (rad)."""
+    ratio = max(0.0, min(1.0, stroke_m / GRIPPER_MAX_STROKE_M))
+    if invert:
+        ratio = 1.0 - ratio
+    return ratio * GRIPPER_OPEN_RAD
+
+
+def gripper_rad_to_stroke(q_rad: float, invert: bool = False) -> float:
+    """Gripper motor angle (rad) -> finger stroke (m); inverse of gripper_stroke_to_rad."""
+    ratio = max(0.0, min(1.0, q_rad / GRIPPER_OPEN_RAD))
+    if invert:
+        ratio = 1.0 - ratio
+    return ratio * GRIPPER_MAX_STROKE_M
+
+
+def gripper_rad_rate_to_stroke_rate(dq_rad: float, invert: bool = False) -> float:
+    """Gripper motor velocity (rad/s) -> finger stroke velocity (m/s)."""
+    rate = dq_rad * GRIPPER_MAX_STROKE_M / GRIPPER_OPEN_RAD
+    return -rate if invert else rate
 
 # Standard ROS 2 (MoveIt / sensor_msgs.JointState) naming mapping to OpenArm Motor IDs
 JOINT_NAME_TO_ID = {

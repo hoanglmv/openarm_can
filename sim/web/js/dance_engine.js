@@ -37,6 +37,13 @@ function formatTimer(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
+// Dance routines and presets are authored symmetrically (+J1 swings either arm forward).
+// Joint angles follow the official OpenArm URDF, where Left J1 (motor 1) is mirrored,
+// so the left shoulder pitch is negated when a symmetric pose is sent.
+function symmetricToUrdf(motorId, q) {
+    return motorId === 1 ? -q : q;
+}
+
 function tickDance() {
     danceTime += 0.05; // 50ms tick
     const routine = DANCE_ROUTINES[currentDanceKey] || DANCE_ROUTINES.disco;
@@ -47,7 +54,7 @@ function tickDance() {
     // 2. Strict safety clamping against OpenArm Mechanical Limits
     const safePositions = [];
     for (let i = 1; i <= 16; i++) {
-        const rawVal = rawPose[i - 1];
+        const rawVal = symmetricToUrdf(i, rawPose[i - 1]);
         const lim = MECHANICAL_LIMITS[i];
         if (!lim) {
             safePositions.push(rawVal);
@@ -292,7 +299,7 @@ function triggerPreset(preset) {
         // Ready stance: Both arms raised forward at chest height
         [1, 9].forEach(baseId => {
             const isLeftArm = (baseId === 1);
-            sendAction("set_mit", { id: baseId + 0, q: 0.35 });
+            sendAction("set_mit", { id: baseId + 0, q: symmetricToUrdf(baseId, 0.35) });
             sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.20 : 0.20 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.20 });
@@ -310,7 +317,7 @@ function triggerPreset(preset) {
         presetTimer = setInterval(() => {
             t += 0.05;
             const waveAngle = Math.sin(t * 3.5) * 0.40;
-            sendAction("set_mit", { id: 1, q: 1.10 });
+            sendAction("set_mit", { id: 1, q: symmetricToUrdf(1, 1.10) });
             sendAction("set_mit", { id: 2, q: -0.50 });
             sendAction("set_mit", { id: 3, q: 0.00 });
             sendAction("set_mit", { id: 4, q: 1.50 });
@@ -322,7 +329,7 @@ function triggerPreset(preset) {
         // Handshake / Grippers reach toward center
         [1, 9].forEach(baseId => {
             const isLeftArm = (baseId === 1);
-            sendAction("set_mit", { id: baseId + 0, q: 0.50 });
+            sendAction("set_mit", { id: baseId + 0, q: symmetricToUrdf(baseId, 0.50) });
             sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.15 : 0.15 });
             sendAction("set_mit", { id: baseId + 2, q: 0.00 });
             sendAction("set_mit", { id: baseId + 3, q: 1.30 });
@@ -341,7 +348,7 @@ function triggerPreset(preset) {
                 // Reach forward & open grippers
                 [1, 9].forEach(baseId => {
                     const isLeftArm = (baseId === 1);
-                    sendAction("set_mit", { id: baseId + 0, q: 0.45 });
+                    sendAction("set_mit", { id: baseId + 0, q: symmetricToUrdf(baseId, 0.45) });
                     sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -0.25 : 0.25 });
                     sendAction("set_mit", { id: baseId + 3, q: 1.10 });
                     sendAction("set_mit", { id: baseId + 5, q: -0.30 });
@@ -355,7 +362,7 @@ function triggerPreset(preset) {
             } else {
                 // Lift box upward
                 [1, 9].forEach(baseId => {
-                    sendAction("set_mit", { id: baseId + 0, q: 0.80 });
+                    sendAction("set_mit", { id: baseId + 0, q: symmetricToUrdf(baseId, 0.80) });
                     sendAction("set_mit", { id: baseId + 3, q: 1.45 });
                     sendAction("set_mit", { id: baseId + 5, q: -0.45 });
                 });
@@ -371,7 +378,7 @@ function triggerPreset(preset) {
 
             [1, 9].forEach(baseId => {
                 const isLeftArm = (baseId === 1);
-                sendAction("set_mit", { id: baseId + 0, q: q1 });
+                sendAction("set_mit", { id: baseId + 0, q: symmetricToUrdf(baseId, q1) });
                 sendAction("set_mit", { id: baseId + 1, q: isLeftArm ? -q2 : q2 });
                 sendAction("set_mit", { id: baseId + 3, q: q4 });
             });

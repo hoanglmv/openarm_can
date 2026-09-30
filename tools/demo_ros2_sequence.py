@@ -20,6 +20,7 @@ try:
     from rclpy.node import Node
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
     from sensor_msgs.msg import JointState
+    from std_msgs.msg import Float64MultiArray
 except ImportError:
     print("[ERROR] rclpy không tìm thấy. Hãy source ROS 2: source /opt/ros/<distro>/setup.bash")
     sys.exit(1)
@@ -137,11 +138,16 @@ def run_sequence():
         history=HistoryPolicy.KEEP_LAST,
         depth=10,
     )
-    pub = node.create_publisher(JointState, "/openarm/teleop/joint_commands", qos)
+    # Arm joints (named) go to the JointState teleop alias; grippers to their own topics.
+    pub = node.create_publisher(JointState, "/teleop/joint_commands", qos)
+    gripper_pubs = {
+        "left_gripper": node.create_publisher(Float64MultiArray, "/openarm/teleop/left_gripper", qos),
+        "right_gripper": node.create_publisher(Float64MultiArray, "/openarm/teleop/right_gripper", qos),
+    }
 
     print("\n" + "=" * 65)
     print("🤖 KHỞI ĐỘNG CHUỖI HÀNH ĐỘNG DEMO OPENARM BIMANUAL (7 BƯỚC)")
-    print("   Topic: /openarm/teleop/joint_commands (Zero-Latency)")
+    print("   Topics: /teleop/joint_commands + /openarm/teleop/{left,right}_gripper")
     print("=" * 65)
 
     time.sleep(1.0)
@@ -151,12 +157,22 @@ def run_sequence():
             print(f"\n▶ Đang thực thi {item['name']}...")
             msg = JointState()
             msg.header.stamp = node.get_clock().now().to_msg()
-            msg.name = item["joints"]["name"]
-            msg.position = [float(p) for p in item["joints"]["position"]]
+            sent = 0
+            for name, position in zip(item["joints"]["name"], item["joints"]["position"]):
+                if name in gripper_pubs:
+                    gripper_pubs[name].publish(Float64MultiArray(data=[float(position)]))
+                    sent += 1
+                    continue
+                # Poses are authored symmetrically (+J1 swings either arm forward);
+                # Left J1 is mirrored in the official URDF convention.
+                msg.name.append(name)
+                msg.position.append(-float(position) if name == "left_j1" else float(position))
 
             # Bắn lệnh tới robot
-            pub.publish(msg)
-            print(f"   ✓ Đã gửi {len(msg.position)} góc mục tiêu.")
+            if msg.name:
+                pub.publish(msg)
+                sent += len(msg.name)
+            print(f"   ✓ Đã gửi {sent} góc mục tiêu.")
             print(f"   ⏳ Giữ tư thế trong {item['duration']} giây để robot di chuyển mượt mà...")
 
             # Đợi với spin để xử lý event ROS 2

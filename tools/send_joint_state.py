@@ -36,7 +36,7 @@ def deg2rad(val: float) -> float:
 # OpenArm Mechanical Joint Limits (min, max, name)
 JOINT_LIMITS_DEG = {
     # Left Arm
-    "left_1": (-80.0, 200.0, "Left J1 (Vai Pitch)"),
+    "left_1": (-200.0, 80.0, "Left J1 (Vai Pitch)"),
     "left_2": (-190.0, 10.0, "Left J2 (Vai Roll)"),
     "left_3": (-90.0, 90.0, "Left J3 (Bắp Xoay)"),
     "left_4": (0.0, 140.0, "Left J4 (Khuỷu Pitch)"),
@@ -117,7 +117,7 @@ def main():
         epilog="""
 Giới hạn khớp cơ học an toàn (Mechanical Joint Limits):
   Tay Trái (Left Arm):
-    J1: [-80.0° ~ +200.0°]  ([-1.40 ~ +3.49] rad)
+    J1: [-200.0° ~ +80.0°]  ([-3.49 ~ +1.40] rad)
     J2: [-190.0° ~ +10.0°]  ([-3.32 ~ +0.17] rad)
     J3: [-90.0° ~ +90.0°]   ([-1.57 ~ +1.57] rad)
     J4: [0.0° ~ +140.0°]    ([0.00 ~ +2.44] rad)

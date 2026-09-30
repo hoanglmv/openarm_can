@@ -163,6 +163,9 @@ class EpisodeWriter:
             dtype=np.float32,
         )
         self.file.attrs["action_representation"] = "absolute_joint_position"
+        # Arm joints: rad, official OpenArm URDF convention. Grippers: finger stroke in m.
+        self.file.attrs["joint_convention"] = "openarm_urdf"
+        self.file.attrs["gripper_unit"] = "stroke_m"
         self.file.attrs["joint_names_json"] = json.dumps(self.joint_names)
         self.file.attrs["complete"] = False
         self.file.attrs["created_at"] = datetime.now().astimezone().isoformat()

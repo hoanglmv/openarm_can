@@ -133,7 +133,8 @@ function computeProceduralArmFK(isLeft, q1, q2, q3, q4, q5, q6, q7) {
     const sign = isLeft ? -1.0 : 1.0;
 
     // Transformation angles
-    const yaw = sign * q1;
+    // Left J1 is already mirrored in the URDF joint convention.
+    const yaw = q1;
     const pitch1 = q2;
     const roll1 = sign * q3;
     const pitch2 = q4;

@@ -26,17 +26,18 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Giới hạn khớp cơ học OpenArm (16 khớp)
+# Giới hạn khớp cơ học OpenArm (16 khớp), theo quy ước URDF chính thức (góc khớp = góc motor).
+# Khớp tay tính bằng rad, gripper tính bằng hành trình ngón kẹp (m).
 JOINT_LIMITS = {
     # Tay trái: J1..J7 + Gripper
-    0: (-1.40, 3.49),
+    0: (-3.49, 1.40),
     1: (-3.32, 0.17),
     2: (-1.57, 1.57),
     3: (0.00, 2.44),
     4: (-1.57, 1.57),
     5: (-0.79, 0.79),
     6: (-1.57, 1.57),
-    7: (0.00, 1.25),   # Hỗ trợ cả mét (0..0.043) hoặc radian motor (0..1.20)
+    7: (0.00, 0.043),  # Gripper: hành trình 0..0.043 m
     # Tay phải: J1..J7 + Gripper
     8:  (-1.40, 3.49),
     9:  (-0.17, 3.32),
@@ -45,7 +46,7 @@ JOINT_LIMITS = {
     12: (-1.57, 1.57),
     13: (-0.79, 0.79),
     14: (-1.57, 1.57),
-    15: (0.00, 1.25),
+    15: (0.00, 0.043),
 }
 
 JOINT_NAMES = [
@@ -186,11 +187,13 @@ def validate_single_hdf5(file_path: str, expected_hz: float = 50.0) -> Validatio
                 min_lim, max_lim = JOINT_LIMITS[j_idx]
                 j_min = float(np.min(qpos_sample[:, j_idx]))
                 j_max = float(np.max(qpos_sample[:, j_idx]))
-                # Cho phép dung sai 0.1 rad
-                if j_min < (min_lim - 0.15) or j_max > (max_lim + 0.15):
+                is_gripper = j_idx in (7, 15)
+                # Dung sai: 0.15 rad cho khớp tay, 2 mm cho gripper
+                tol, unit = (0.002, "m") if is_gripper else (0.15, "rad")
+                if j_min < (min_lim - tol) or j_max > (max_lim + tol):
                     res.add_warning(
-                        f"Khớp {JOINT_NAMES[j_idx]} (idx {j_idx}) có góc ngoài dải an toàn: "
-                        f"[{j_min:.3f}, {j_max:.3f}] vs giới hạn [{min_lim:.3f}, {max_lim:.3f}] rad"
+                        f"Khớp {JOINT_NAMES[j_idx]} (idx {j_idx}) có giá trị ngoài dải an toàn: "
+                        f"[{j_min:.3f}, {j_max:.3f}] vs giới hạn [{min_lim:.3f}, {max_lim:.3f}] {unit}"
                     )
 
             # 6. KIỂM TRA TẦN SỐ THỰC TẾ DỰA TRÊN TIMESTAMPS (NẾU CÓ)

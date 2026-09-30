@@ -377,7 +377,7 @@ class ModelInferenceEngine:
                 for motor_id in range(1, 17):
                     motor = self.server.motors.get(motor_id)
                     if motor:
-                        qpos[motor_id - 1] = float(motor.q)
+                        qpos[motor_id - 1] = float(motor.joint_position())
         return qpos
 
     def infer_step(self, current_qpos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

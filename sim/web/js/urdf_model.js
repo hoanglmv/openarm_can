@@ -144,10 +144,6 @@ function updateOpenArmUrdfJoint(motor, immediate = false) {
     let value = Number(motor.q);
     if (!Number.isFinite(value)) return true;
 
-    // The backend normalizes the mirrored physical left shoulder direction.
-    // OpenArm v1 URDF retains the original left-joint coordinate convention.
-    if (motor.id === 1) value = -value;
-
     // Gripper state is already expressed as a 0..0.043 metre stroke.
     if (motor.id === 8 || motor.id === 16) {
         value = Math.max(0.0, Math.min(0.044, Math.abs(value)));
@@ -210,7 +206,8 @@ function updateOpenArmJointVisual(motor) {
         const jEntry = armJoints[jointIndex];
         if (!jEntry || !jEntry.group) return false;
 
-        if (jointIndex === 0) jEntry.group.rotation.x = -angle;
+        // Left J1 is mirrored in the URDF convention (+q swings the left arm backward).
+        if (jointIndex === 0) jEntry.group.rotation.x = isLeft ? angle : -angle;
         else if (jointIndex === 1) jEntry.group.rotation.z = angle;
         else if (jointIndex === 2) jEntry.group.rotation.y = isLeft ? angle : -angle;
         else if (jointIndex === 3) jEntry.group.rotation.x = -angle;

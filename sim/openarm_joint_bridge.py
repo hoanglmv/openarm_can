@@ -5,12 +5,13 @@ OpenArm ROS 2 Streaming Joint Commands Bridge:
    - /openarm/joint_states (sensor_msgs/msg/JointState)
    - /openarm/joint_commands (sensor_msgs/msg/JointState)
 2. Subscribes to real-time streaming joint commands (Meta Quest VR / Teleop):
-   - /openarm/teleop/joint_commands (sensor_msgs/msg/JointState - 14 arm joints:
-     left j1..j7 then right j1..j7, or any subset when joint names are given)
-   - /teleop/joint_commands (sensor_msgs/msg/JointState - alias)
-   - /meta/joint_states (sensor_msgs/msg/JointState - alias for Meta Quest teleop)
-   - /openarm/teleop/left_gripper (sensor_msgs/msg/JointState - position[0])
-   - /openarm/teleop/right_gripper (sensor_msgs/msg/JointState - position[0])
+   - /openarm/teleop/joint_commands (std_msgs/msg/Float64MultiArray - 14 arm joints:
+     left j1..j7 then right j1..j7)
+   - /openarm/teleop/left_gripper (std_msgs/msg/Float64MultiArray - data[0])
+   - /openarm/teleop/right_gripper (std_msgs/msg/Float64MultiArray - data[0])
+   - /teleop/joint_commands (sensor_msgs/msg/JointState - alias, arm joints only)
+   - /meta/joint_states (sensor_msgs/msg/JointState - alias for Meta Quest teleop, arm joints only)
+   All joint angles use the official OpenArm URDF convention (joint angle == motor angle).
    Arm and gripper targets are merged into the 16-joint order and forwarded to the
    OpenArm high-speed UDP engine (port 9870), which drives /openarm/joint_commands.
 """
@@ -19,7 +20,7 @@ import argparse
 import json
 import socket
 import time
-from typing import Dict
+from typing import Dict, Optional, Sequence
 
 from config import JOINT_NAME_TO_ID
 
@@ -29,9 +30,10 @@ try:
     from rclpy.node import Node
     from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import JointState
+    from std_msgs.msg import Float64MultiArray
 except ImportError:
     import sys
-    print("[ROS Bridge] ROS 2 (rclpy/sensor_msgs) not found. ROS 2 bridge disabled.")
+    print("[ROS Bridge] ROS 2 (rclpy/sensor_msgs/std_msgs) not found. ROS 2 bridge disabled.")
     sys.exit(0)
 
 JOINT_NAMES = [
@@ -69,6 +71,11 @@ class OpenArmJointBridge(Node):
             depth=5,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
+        qos_state_pub = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         qos_sub = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
@@ -76,7 +83,7 @@ class OpenArmJointBridge(Node):
         )
 
         # 1. State Publishers (OpenArm -> ROS 2)
-        self.state_pub = self.create_publisher(JointState, state_topic, qos_pub)
+        self.state_pub = self.create_publisher(JointState, state_topic, qos_state_pub)
         self.command_pub = self.create_publisher(JointState, command_topic, qos_pub)
 
         # 2. Command Subscribers (Meta Quest VR / Teleop Streaming Joint Commands -> OpenArm)
@@ -84,31 +91,31 @@ class OpenArmJointBridge(Node):
         self.teleop_targets: Dict[int, float] = {}
 
         self.teleop_sub = self.create_subscription(
-            JointState,
+            Float64MultiArray,
             teleop_topic,
-            self._handle_teleop_arm_command,
+            self._handle_teleop_arm_array,
             qos_sub,
         )
         self.teleop_short_sub = self.create_subscription(
             JointState,
             "/teleop/joint_commands",
-            self._handle_teleop_arm_command,
+            self._handle_teleop_arm_joint_state,
             qos_sub,
         )
         self.meta_sub = self.create_subscription(
             JointState,
             meta_topic,
-            self._handle_teleop_arm_command,
+            self._handle_teleop_arm_joint_state,
             qos_sub,
         )
         self.left_gripper_sub = self.create_subscription(
-            JointState,
+            Float64MultiArray,
             left_gripper_topic,
             lambda msg: self._handle_teleop_gripper(msg, LEFT_GRIPPER_ID),
             qos_sub,
         )
         self.right_gripper_sub = self.create_subscription(
-            JointState,
+            Float64MultiArray,
             right_gripper_topic,
             lambda msg: self._handle_teleop_gripper(msg, RIGHT_GRIPPER_ID),
             qos_sub,
@@ -135,8 +142,9 @@ class OpenArmJointBridge(Node):
         self.get_logger().info("🚀 OpenArm ROS 2 Streaming Joint Commands Bridge Ready (Zero-Latency)")
         self.get_logger().info(f"   [PUB] State topic: {state_topic}")
         self.get_logger().info(f"   [PUB] Command topic: {command_topic}")
-        self.get_logger().info(f"   [SUB] Teleop Commands (14 arm joints): {teleop_topic} & /teleop/joint_commands")
-        self.get_logger().info(f"   [SUB] Teleop Grippers: {left_gripper_topic} & {right_gripper_topic}")
+        self.get_logger().info(f"   [SUB] Teleop Commands (Float64MultiArray, 14 arm joints): {teleop_topic}")
+        self.get_logger().info(f"   [SUB] Teleop Grippers (Float64MultiArray): {left_gripper_topic} & {right_gripper_topic}")
+        self.get_logger().info("   [SUB] Teleop Commands alias (JointState): /teleop/joint_commands")
         self.get_logger().info(f"   [SUB] Meta Quest VR: {meta_topic}")
         self.get_logger().info(f"   [UDP] Target OpenArm Engine: {udp_target_host}:{udp_target_port}")
         self.get_logger().info("==================================================================")
@@ -190,26 +198,35 @@ class OpenArmJointBridge(Node):
                 throttle_duration_sec=5.0,
             )
 
-    def _handle_teleop_arm_command(self, msg: JointState):
+    def _handle_teleop_arm_array(self, msg: Float64MultiArray):
+        """Receive the 14 arm joint targets (left j1..j7, right j1..j7) as a Float64MultiArray."""
+        self._apply_teleop_arm_positions(msg.data)
+
+    def _handle_teleop_arm_joint_state(self, msg: JointState):
+        """Receive arm joint targets as a JointState (alias topics). Named joints may be any subset."""
+        names = msg.name if msg.name and len(msg.name) == len(msg.position) else None
+        self._apply_teleop_arm_positions(msg.position, names)
+
+    def _apply_teleop_arm_positions(self, positions: Sequence[float], names: Optional[Sequence[str]] = None):
         """
-        Receive the 14 arm joint targets from Meta Quest VR / Teleop controller.
+        Merge arm joint targets from the Meta Quest VR / Teleop controller.
         Gripper joints are ignored here; they come from the dedicated gripper topics.
         """
-        if not msg.position:
+        if not positions:
             return
 
-        if msg.name and len(msg.name) == len(msg.position):
+        if names:
             updates = {}
-            for name, position in zip(msg.name, msg.position):
+            for name, position in zip(names, positions):
                 motor_id = JOINT_NAME_TO_ID.get(str(name).lower())
                 if motor_id in ARM_JOINT_IDS:
                     updates[motor_id] = float(position)
-        elif len(msg.position) == len(ARM_JOINT_IDS):
-            updates = dict(zip(ARM_JOINT_IDS, (float(p) for p in msg.position)))
+        elif len(positions) == len(ARM_JOINT_IDS):
+            updates = dict(zip(ARM_JOINT_IDS, (float(p) for p in positions)))
         else:
             self.get_logger().warning(
                 f"Rejected teleop arm command: expected {len(ARM_JOINT_IDS)} positions "
-                f"(or named joints), got {len(msg.position)}",
+                f"(or named joints), got {len(positions)}",
                 throttle_duration_sec=2.0,
             )
             return
@@ -219,11 +236,11 @@ class OpenArmJointBridge(Node):
         self.teleop_targets.update(updates)
         self._forward_teleop_targets()
 
-    def _handle_teleop_gripper(self, msg: JointState, motor_id: int):
-        """Receive a single gripper target (position[0]) from the teleop controller."""
-        if not msg.position:
+    def _handle_teleop_gripper(self, msg: Float64MultiArray, motor_id: int):
+        """Receive a single gripper target (data[0]) from the teleop controller."""
+        if not msg.data:
             return
-        self.teleop_targets[motor_id] = float(msg.position[0])
+        self.teleop_targets[motor_id] = float(msg.data[0])
         self._forward_teleop_targets()
 
     def _forward_teleop_targets(self):

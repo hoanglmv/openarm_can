@@ -244,14 +244,12 @@ class BimanualOpenArmHardware:
                  can_right: str = "can0",
                  can_left: str = "can1",
                  gripper_mode: str = "pos_force",
-                 invert_left_j1: bool = True,
                  gripper_unit: str = "auto",
                  dry_run: bool = False):
         self.dry_run = dry_run
         self.can_right = can_right
         self.can_left = can_left
         self.gripper_mode = gripper_mode.lower()
-        self.invert_left_j1 = invert_left_j1
         self.gripper_unit = gripper_unit
         self.arm_right = None
         self.arm_left = None
@@ -310,13 +308,13 @@ class BimanualOpenArmHardware:
 
     def _to_gripper_cmd_rad(self, val: float) -> float:
         """
-        Chuyển đổi lệnh điều khiển kẹp sang Radian motor (0.0 .. 1.20 rad):
-        - Nếu đầu ra ACT là hành trình mét (<= 0.043m từ HDF5 dataset): scale sang 1.20 rad.
+        Chuyển đổi lệnh điều khiển kẹp sang Radian motor (0.0 rad đóng .. -1.20 rad mở hết):
+        - Nếu đầu ra ACT là hành trình mét (<= 0.043m từ HDF5 dataset): scale sang -1.20 rad.
         - Nếu đầu ra ACT đã là Radian (> 0.043 rad): giữ nguyên.
-        (Chuẩn tương thích 100% với tools/control_gripper.py và sim/models.py)
+        (Cùng ánh xạ với gripper_stroke_to_rad trong sim/config.py)
         """
         if abs(val) <= 0.043:
-            return float((val / 0.043) * 1.20)
+            return float((max(0.0, val) / 0.043) * -1.20)
         return float(val)
 
     def get_qpos(self) -> np.ndarray:
@@ -331,12 +329,7 @@ class BimanualOpenArmHardware:
         if self.arm_left:
             left_arm_motors = self.arm_left.get_arm().get_motors()
             for i, m in enumerate(left_arm_motors[:7]):
-                raw_pos = m.get_position()
-                # Khớp 0 (Vai Trái J1): Áp dụng MOTOR_DIRECTIONS[1] = -1.0 nếu invert_left_j1 bật
-                if i == 0 and self.invert_left_j1:
-                    qpos[0] = -raw_pos
-                else:
-                    qpos[i] = raw_pos
+                qpos[i] = m.get_position()
 
             left_grip_motors = self.arm_left.get_gripper().get_motors()
             if len(left_grip_motors) > 0:
@@ -383,11 +376,7 @@ class BimanualOpenArmHardware:
 
         # 1. Gửi tay trái (Chỉ số 0..7)
         if self.arm_left:
-            left_cmds = [
-                -target_qpos[0] if (i == 0 and self.invert_left_j1) else target_qpos[i]
-                for i in range(7)
-            ]
-            left_arm_params = [oa.MITParam(kp_arm, kd_arm, left_cmds[i], 0.0, 0.0) for i in range(7)]
+            left_arm_params = [oa.MITParam(kp_arm, kd_arm, target_qpos[i], 0.0, 0.0) for i in range(7)]
             self.arm_left.get_arm().mit_control_all(left_arm_params)
 
             grip_left_rad = self._to_gripper_cmd_rad(target_qpos[7])
@@ -482,8 +471,6 @@ def main():
     parser.add_argument("--camera_height", type=int, default=480, help="Chiều cao ảnh camera (mặc định: 480)")
     parser.add_argument("--blocking_cam", action="store_true", help="Bắt buộc chờ frame mới từ camera (mặc định: False - dùng non-blocking poll)")
     parser.add_argument("--stop_duration", type=float, default=1.0, help="Thời gian bất động tại Home để nhận diện dừng tự nhiên (giây, mặc định: 1.0s)")
-    parser.add_argument("--invert_left_j1", action="store_true", default=True, help="Đảo chiều vật lý Motor 1 (Vai Trái J1) theo quy ước động học OpenArm (+q vươn tới trước)")
-    parser.add_argument("--no_invert_left_j1", dest="invert_left_j1", action="store_false", help="Tắt đảo chiều Motor 1 nếu phần cứng đã được cấu hình trong motor firmware")
     parser.add_argument("--gripper_unit", choices=["auto", "stroke_m", "rad"], default="auto", help="Đơn vị kẹp gắp: 'auto' (tự động phát hiện), 'stroke_m' (mét: 0..0.043m), 'rad' (radian: 0..1.20 rad)")
     args = parser.parse_args()
 
@@ -607,13 +594,12 @@ def main():
             gripper_unit_resolved = "stroke_m"
         else:
             gripper_unit_resolved = "rad"
-    print(f"[*] Đơn vị Gripper hoạt động : {gripper_unit_resolved.upper()} (Đảo chiều Vai Trái J1: {args.invert_left_j1})")
+    print(f"[*] Đơn vị Gripper hoạt động : {gripper_unit_resolved.upper()}")
 
     robot = BimanualOpenArmHardware(
         can_right=args.can_right,
         can_left=args.can_left,
         gripper_mode=args.gripper_mode,
-        invert_left_j1=args.invert_left_j1,
         gripper_unit=gripper_unit_resolved,
         dry_run=args.dry_run
     )

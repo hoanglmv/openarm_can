@@ -382,8 +382,8 @@ time.sleep(0.1)
 
 # Lấy đối tượng tay kẹp và điều khiển
 gripper = arm.get_gripper()
-# Mở kẹp: vị trí target_pos theo radian (0.0 rad: Đóng, 1.15 rad: Mở), giới hạn lực 0.15 pu
-gripper.set_position(0.575, speed_rad_s=10.0, torque_pu=0.15)
+# Mở kẹp một nửa: vị trí motor theo radian (0.0 rad: Đóng, -1.20 rad: Mở hết 43 mm), giới hạn lực 0.15 pu
+gripper.set_position(-0.60, speed_rad_s=10.0, torque_pu=0.15)
 
 time.sleep(1.0)
 
@@ -451,7 +451,8 @@ python3 tools/infer_robot.py \
 
 Data Recorder chỉ nhận dữ liệu từ các ROS 2 topic sau:
 
-- `/openarm/joint_states`: trạng thái 16 khớp.
+- `/openarm/joint_states`: trạng thái 16 khớp (nguồn `qpos`, `qvel`, `effort`).
+- `/openarm/joint_commands`: mục tiêu 16 khớp (nguồn `action`).
 - `/camera/act/rgb`: ảnh RGB.
 - `/camera/act/depth`: depth map đã căn chỉnh với ảnh RGB.
 
@@ -493,26 +494,37 @@ Có thể thay đổi thời lượng và thư mục lưu:
 
 File HDF5 chứa `observations/qpos`, `observations/qvel`,
 `observations/effort`, `observations/images/chest_rgb`,
-`observations/images/chest_depth`, `action` và `timestamp_ns`.
+`observations/images/chest_depth`, `action` và `timestamp_ns`. Khớp tay tính bằng
+rad theo quy ước URDF chính thức, gripper tính bằng hành trình kẹp (m), xem
+[dev/ROS2_INTERFACE.md](dev/ROS2_INTERFACE.md).
 
 ---
 
 ### Cách 7: Điều khiển Teleop / Kính Meta Quest VR qua ROS 2 (Zero-Latency Streaming)
 
-Hệ thống hỗ trợ cơ chế stream danh sách Joint Command (`sensor_msgs/msg/JointState`) trực tiếp từ kính VR Meta Quest hoặc thiết bị Teleop với độ trễ xấp xỉ 0 (Zero-latency):
+Thiết bị teleop (kính Meta Quest VR, joystick...) gửi góc khớp trực tiếp qua ROS 2,
+gần như không có độ trễ. Đặc tả đầy đủ các topic, đơn vị, giới hạn và quy ước góc nằm
+trong [dev/ROS2_INTERFACE.md](dev/ROS2_INTERFACE.md).
 
-1. **Khởi chạy ROS 2 Bridge:**
-   ```bash
-   python3 sim/openarm_joint_bridge.py
-   ```
-   Bridge lắng nghe lệnh tại:
-   - `/openarm/teleop/joint_commands` (chuẩn)
-   - `/teleop/joint_commands` (alias)
-   - `/meta/joint_states` (alias kính Meta Quest)
+1. **Khởi chạy:** ROS 2 bridge (`sim/openarm_joint_bridge.py`) được `sim/server.py`
+   tự khởi động. Bridge lắng nghe:
+   - `/openarm/teleop/joint_commands` (`std_msgs/msg/Float64MultiArray`): 14 góc khớp
+     tay (rad), left J1..J7 rồi right J1..J7, theo quy ước URDF chính thức.
+   - `/openarm/teleop/left_gripper`, `/openarm/teleop/right_gripper`
+     (`std_msgs/msg/Float64MultiArray`): `data[0]` là hành trình kẹp (m, 0..0.043).
+   - `/teleop/joint_commands`, `/meta/joint_states` (`sensor_msgs/msg/JointState`, alias
+     theo tên khớp, chỉ khớp tay).
 
-2. **Bắn lệnh đơn lẻ (CLI test):**
+2. **Bắn lệnh thử (CLI test):**
    ```bash
-   ros2 topic pub --once /openarm/teleop/joint_commands sensor_msgs/msg/JointState "{name: ['left_j1', 'left_j4', 'left_gripper'], position: [0.2, 0.85, 0.025]}"
+   # 14 khớp tay (tay phải về 0)
+   ros2 topic pub --once --qos-reliability best_effort /openarm/teleop/joint_commands \
+     std_msgs/msg/Float64MultiArray \
+     "{data: [0.4, -0.4, 0.8, 0.5, 0.6, 0.3, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+
+   # Mở hết gripper trái (43 mm)
+   ros2 topic pub --once --qos-reliability best_effort /openarm/teleop/left_gripper \
+     std_msgs/msg/Float64MultiArray "{data: [0.043]}"
    ```
 
 3. **Stream chuỗi cử động / waypoints (100 Hz):**
@@ -532,24 +544,27 @@ Hệ thống hỗ trợ cơ chế stream danh sách Joint Command (`sensor_msgs/
 
 Hệ thống OpenArm Dual-Arm sử dụng tổng cộng 16 nút CAN phân bố trên 2 kênh CAN-FD riêng biệt:
 
-| Khớp | Tên Khớp | CAN Interface | Send CAN ID | Feedback CAN ID | Chế độ Điều khiển | Loại Động cơ |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Left J1** | Khớp vai (Pitch) | `can1` | `0x01` | `0x11` | MIT Mode | DM4310 / DM8009 |
-| **Left J2** | Khớp vai (Roll) | `can1` | `0x02` | `0x12` | MIT Mode | DM4310 |
-| **Left J3** | Khớp bắp tay (Twist) | `can1` | `0x03` | `0x13` | MIT Mode | DM4310 |
-| **Left J4** | Khớp khuỷu tay (Pitch) | `can1` | `0x04` | `0x14` | MIT Mode | DM4310 |
-| **Left J5** | Khớp cẳng tay (Twist) | `can1` | `0x05` | `0x15` | MIT Mode | DM4310 |
-| **Left J6** | Khớp cổ tay (Pitch) | `can1` | `0x06` | `0x16` | MIT Mode | DM4310 |
-| **Left J7** | Khớp cổ tay (Roll) | `can1` | `0x07` | `0x17` | MIT Mode | DM4310 |
-| **Left J8** | **Tay kẹp ngang (Gripper)** | `can1` | `0x08` | `0x18` | **POS_FORCE** (`0x308`) | DM4310 |
-| **Right J1**| Khớp vai (Pitch) | `can0` | `0x09` | `0x19` | MIT Mode | DM4310 / DM8009 |
-| **Right J2**| Khớp vai (Roll) | `can0` | `0x0A` | `0x1A` | MIT Mode | DM4310 |
-| **Right J3**| Khớp bắp tay (Twist) | `can0` | `0x0B` | `0x1B` | MIT Mode | DM4310 |
-| **Right J4**| Khớp khuỷu tay (Pitch) | `can0` | `0x0C` | `0x1C` | MIT Mode | DM4310 |
-| **Right J5**| Khớp cẳng tay (Twist) | `can0` | `0x0D` | `0x1D` | MIT Mode | DM4310 |
-| **Right J6**| Khớp cổ tay (Pitch) | `can0` | `0x0E` | `0x1E` | MIT Mode | DM4310 |
-| **Right J7**| Khớp cổ tay (Roll) | `can0` | `0x0F` | `0x1F` | MIT Mode | DM4310 |
-| **Right J8**| **Tay kẹp ngang (Gripper)** | `can0` | `0x10` | `0x20` | **POS_FORCE** (`0x310`) | DM4310 |
+| Khớp | Tên Khớp | ROS 2 `name` | CAN Interface | Send CAN ID | Feedback CAN ID | Chế độ Điều khiển | Loại Động cơ |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Left J1** | Khớp vai (Pitch) | `left_j1` | `can1` | `0x01` | `0x11` | MIT Mode | DM8009 |
+| **Left J2** | Khớp vai (Roll) | `left_j2` | `can1` | `0x02` | `0x12` | MIT Mode | DM8009 |
+| **Left J3** | Khớp bắp tay (Twist) | `left_j3` | `can1` | `0x03` | `0x13` | MIT Mode | DM4340 |
+| **Left J4** | Khớp khuỷu tay (Pitch) | `left_j4` | `can1` | `0x04` | `0x14` | MIT Mode | DM4340 |
+| **Left J5** | Khớp cẳng tay (Twist) | `left_j5` | `can1` | `0x05` | `0x15` | MIT Mode | DM4310 |
+| **Left J6** | Khớp cổ tay (Pitch) | `left_j6` | `can1` | `0x06` | `0x16` | MIT Mode | DM4310 |
+| **Left J7** | Khớp cổ tay (Roll) | `left_j7` | `can1` | `0x07` | `0x17` | MIT Mode | DM4310 |
+| **Left J8** | **Tay kẹp ngang (Gripper)** | `left_gripper` | `can1` | `0x08` | `0x18` | **POS_FORCE** (`0x308`) | DM4310 |
+| **Right J1** | Khớp vai (Pitch) | `right_j1` | `can0` | `0x01` | `0x11` | MIT Mode | DM8009 |
+| **Right J2** | Khớp vai (Roll) | `right_j2` | `can0` | `0x02` | `0x12` | MIT Mode | DM8009 |
+| **Right J3** | Khớp bắp tay (Twist) | `right_j3` | `can0` | `0x03` | `0x13` | MIT Mode | DM4340 |
+| **Right J4** | Khớp khuỷu tay (Pitch) | `right_j4` | `can0` | `0x04` | `0x14` | MIT Mode | DM4340 |
+| **Right J5** | Khớp cẳng tay (Twist) | `right_j5` | `can0` | `0x05` | `0x15` | MIT Mode | DM4310 |
+| **Right J6** | Khớp cổ tay (Pitch) | `right_j6` | `can0` | `0x06` | `0x16` | MIT Mode | DM4310 |
+| **Right J7** | Khớp cổ tay (Roll) | `right_j7` | `can0` | `0x07` | `0x17` | MIT Mode | DM4310 |
+| **Right J8** | **Tay kẹp ngang (Gripper)** | `right_gripper` | `can0` | `0x08` | `0x18` | **POS_FORCE** (`0x308`) | DM4310 |
+
+Hai tay nằm trên hai bus CAN riêng nên dùng chung dải ID `0x01`..`0x08`. Giới hạn, đơn vị
+và quy ước góc của từng khớp: xem [dev/ROS2_INTERFACE.md](dev/ROS2_INTERFACE.md).
 
 ---
 
@@ -574,7 +589,7 @@ Hệ thống OpenArm Dual-Arm sử dụng tổng cộng 16 nút CAN phân bố t
 - **Nguyên nhân**: Khi kẹp đi đến cữ chặn cơ khí cuối, động cơ gặp vật cản và kích hoạt cờ quá tải (`error_code >= 8`). Nếu hệ thống gửi mã xóa lỗi `0xFB`, firmware DaMiao sẽ chuyển động cơ về chế độ Disabled (tắt lực).
 - **Khắc phục**: 
   - Code trong `sim/server.py` đã tự động xử lý gửi `0xFB` kèm `0xFC` để kích hoạt lại lực tức thời.
-  - Dải góc cơ khí của kẹp là dải góc dương `0.0 rad` đến `+1.15 rad`. Nếu cơ khí bị đảo chiều, bạn chỉ cần bấm nút **⇄ Đảo chiều** trên giao diện web để hoán đổi chiều Đóng/Mở chuẩn xác.
+  - Dải góc motor của kẹp là `0.0 rad` (đóng) đến `-1.20 rad` (mở hết 43 mm). Lệnh và trạng thái kẹp trên ROS 2 dùng hành trình (m, `0.0`..`0.043`), backend tự quy đổi. Nếu cơ khí bị đảo chiều, bấm nút **⇄ Đảo chiều** trên giao diện web để hoán đổi chiều Đóng/Mở.
 
 ### 4. Robot bị giật khi bấm `Enable All`
 - **Nguyên nhân**: Giá trị đặt ban đầu khác với góc thực tế cơ khí của robot trước khi cấp điện.

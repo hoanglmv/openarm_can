@@ -36,6 +36,7 @@ try:
         CAMERA_WIDTH,
         CONTROL_FREQ,
         DATA_FREQUENCY_HZ,
+        GRIPPER_MAX_STROKE_M,
         HTTP_PORT,
         JOINT_BRIDGE_PORT,
         JOINT_LIMITS,
@@ -45,6 +46,7 @@ try:
         UDP_STREAM_PORT,
         WS_PORT,
         double_to_uint,
+        gripper_stroke_to_rad,
     )
     from can_bridge import RealRobotHardwareBridge
     from dataset_recorder_manager import DatasetRecorderManager
@@ -64,6 +66,7 @@ except ImportError:
         CAMERA_WIDTH,
         CONTROL_FREQ,
         DATA_FREQUENCY_HZ,
+        GRIPPER_MAX_STROKE_M,
         HTTP_PORT,
         JOINT_BRIDGE_PORT,
         JOINT_LIMITS,
@@ -73,6 +76,7 @@ except ImportError:
         UDP_STREAM_PORT,
         WS_PORT,
         double_to_uint,
+        gripper_stroke_to_rad,
     )
     from .can_bridge import RealRobotHardwareBridge
     from .dataset_recorder_manager import DatasetRecorderManager
@@ -396,12 +400,12 @@ class OpenArmDashboardServer:
                     action = []
                     for motor_id in range(1, 17):
                         motor = self.motors[motor_id]
-                        # The ACT dataset stores all 16 motor axes, including
-                        # both gripper motors, in their native angular units.
-                        qpos.append(float(motor.q))
-                        qvel.append(float(motor.dq))
+                        # Joint space: arm joints in rad, grippers as finger stroke in m
+                        # (effort stays the raw motor torque in Nm).
+                        qpos.append(float(motor.joint_position()))
+                        qvel.append(float(motor.joint_velocity()))
                         effort.append(float(motor.tau))
-                        action.append(float(motor.q_target))
+                        action.append(float(motor.joint_target()))
                 payload = json.dumps(
                     {
                         "timestamp_ns": time.time_ns(),
@@ -832,9 +836,8 @@ class OpenArmDashboardServer:
     def _send_gripper_command(self, m, pos_m: float):
         """
         Send robust gripper command to physical robot / sim.
-        Maps linear stroke (0.0 .. 0.043 m) to motor angle:
-          - Left Gripper (Motor 8, can1): 0.0 rad (closed, 0mm) to -1.20 rad (open 43 mm)
-          - Right Gripper (Motor 16, can0): 0.0 rad (closed, 0mm) to +1.20 rad (open 43 mm)
+        Maps linear stroke (0.0 .. GRIPPER_MAX_STROKE_M) to motor angle
+        (0.0 rad closed .. GRIPPER_OPEN_RAD fully open), identical for both grippers.
         Uses POS_FORCE mode (CAN ID send_id + 0x300) with safe torque limit (1.5 Nm)
         and MIT mode fallback.
         """
@@ -843,15 +846,8 @@ class OpenArmDashboardServer:
             print(f"[Safety] Ignored gripper command for motor {m.id}: physical position is not synchronized yet")
             return False
 
-        safe_pos = min(0.043, max(0.0, pos_m))
-        stroke_ratio = safe_pos / 0.043
-        invert = self.gripper_invert.get(m.id, False)
-
-        # Both Left Arm Gripper (Motor 8) and Right Arm Gripper (Motor 16):
-        # 0.0 rad (closed, 0mm) to -1.20 rad (open, 43mm)
-        ratio = (1.0 - stroke_ratio) if invert else stroke_ratio
-        sign = -1.0 * getattr(m, 'direction', 1.0)
-        rad_target = sign * ratio * 1.20
+        safe_pos = min(GRIPPER_MAX_STROKE_M, max(0.0, pos_m))
+        rad_target = gripper_stroke_to_rad(safe_pos, self.gripper_invert.get(m.id, False))
 
         if not m.enabled:
             m.enabled = True
@@ -1453,14 +1449,6 @@ class OpenArmDashboardServer:
                 m.invert = self.gripper_invert[target_id]
             print(f"[Gripper] Motor {target_id} invert set to: {self.gripper_invert[target_id]}")
 
-        elif action == "set_motor_direction":
-            target_id = int(payload.get("id", 1))
-            dir_val = float(payload.get("direction", -1.0 if target_id == 1 else 1.0))
-            m = self.motors.get(target_id)
-            if m:
-                m.direction = dir_val
-                print(f"[Direction] Motor {target_id} ({m.name}) physical direction set to {dir_val}")
-
         elif action == "run_cli":
             cmd = payload.get("cmd", "")
             target_iface = self.can0_if if self.mode == "real" else "vcan0"
@@ -1660,16 +1648,11 @@ class OpenArmDashboardServer:
                             now = time.time()
                             if now - getattr(m, '_last_mit_tx', 0) >= 0.010:
                                 m._last_mit_tx = now
-                                motor_dir = getattr(m, 'direction', 1.0)
-                                physical_q_cmd = m.q_cmd * motor_dir
-                                physical_tau_ff = getattr(m, 'tau_ff', 0.0) * motor_dir
-                                physical_dq_cmd = target_vel * motor_dir
-
-                                q_uint = double_to_uint(physical_q_cmd, -m.pMax, m.pMax, 16)
-                                dq_uint = double_to_uint(physical_dq_cmd, -m.vMax, m.vMax, 12)
+                                q_uint = double_to_uint(m.q_cmd, -m.pMax, m.pMax, 16)
+                                dq_uint = double_to_uint(target_vel, -m.vMax, m.vMax, 12)
                                 kp_uint = double_to_uint(m.kp, 0.0, 500.0, 12)
                                 kd_uint = double_to_uint(m.kd, 0.0, 5.0, 12)
-                                tau_uint = double_to_uint(physical_tau_ff, -m.tMax, m.tMax, 12)
+                                tau_uint = double_to_uint(getattr(m, 'tau_ff', 0.0), -m.tMax, m.tMax, 12)
 
                                 d0 = (q_uint >> 8) & 0xFF
                                 d1 = q_uint & 0xFF

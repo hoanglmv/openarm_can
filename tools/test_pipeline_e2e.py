@@ -275,15 +275,14 @@ def run_pipeline_test(target_device: str = "auto"):
         print("PHẦN 5: KIỂM THỬ TOÀN DIỆN KẾT NỐI PHẦN CỨNG & INFERENCE ROBOT 50HZ")
         print("-" * 70)
         cam = CameraHandler(camera_type="mock", camera_fps=60, img_width=424, img_height=240)
-        hw = BimanualOpenArmHardware(can_right="can0", can_left="can1", invert_left_j1=True, gripper_unit="stroke_m", dry_run=True)
+        hw = BimanualOpenArmHardware(can_right="can0", can_left="can1", gripper_unit="stroke_m", dry_run=True)
         ensemble = TemporalEnsemblePolicy(chunk_size=50, action_dim=16, ensemble_m=0.01)
         smoother = TrajectorySmoother(vel_scale=1.0, dt=0.02)
 
         # 1. Kiểm tra đối soát thuộc tính phần cứng
         assert hw.can_right == "can0", f"Cổng CAN tay phải sai: {hw.can_right}"
         assert hw.can_left == "can1", f"Cổng CAN tay trái sai: {hw.can_left}"
-        assert hw.invert_left_j1 is True, "Cờ invert_left_j1 chưa bật"
-        assert abs(hw._to_gripper_cmd_rad(0.043) - 1.20) < 1e-4, "Sai hàm quy đổi hành trình kẹp (0.043m -> 1.20 rad)"
+        assert abs(hw._to_gripper_cmd_rad(0.043) - (-1.20)) < 1e-4, "Sai hàm quy đổi hành trình kẹp (0.043m -> -1.20 rad)"
         assert abs(hw._to_gripper_cmd_rad(0.0) - 0.0) < 1e-4, "Sai hàm quy đổi kẹp đóng (0.0m -> 0.0 rad)"
         assert hw.get_qpos().shape == (16,), "Shape góc qpos sai lệch khác 16 phần tử"
         print(" [✓] Logic cấu hình phần cứng CAN Bus (can0/can1), Motor ID & Gripper: ĐỒNG BỘ 100%!")
